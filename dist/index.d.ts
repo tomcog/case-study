@@ -1,0 +1,18 @@
+export { Player as CaseStudyPlayer } from "./Player.js";
+export { Builder as CaseStudyBuilder } from "./Builder.js";
+export { ProjectPreviewCard as CaseStudyCard } from "./ui/ProjectPreviewCard.js";
+export { CaseStudyProvider, useCaseStudyConfig } from "./config.js";
+export type { CaseStudyConfig, CaseStudyAssets, ImageCaption } from "./config.js";
+export { Stage, ScreenView, bleedBg, backdropFor, DEFAULT_CONTENT, STAGE_W, STAGE_H } from "./core.js";
+export type { CaseStudyContent, Screen, ScreenLayout, Theme, Metric, OverviewItem, GalleryImage, ProjectPreview, } from "./core.js";
+export { migrate, withAssetBase, loadProject, previewCard, SCHEMA_VERSION } from "./project.js";
+export { DEFAULT_ACCENT, DEFAULT_INK } from "./theme.js";
+export { ImageField, Field, inputStyle, primaryBtn, ghostBtn } from "./editors.js";
+export { CaseStudyThumb } from "./ui/CaseStudyThumb.js";
+export type { ThumbFrame } from "./ui/CaseStudyThumb.js";
+export { CaseStudyLink } from "./ui/CaseStudyLink.js";
+export { Lightbox, LightboxTrigger } from "./ui/Lightbox.js";
+export { LogoMark } from "./ui/LogoMark.js";
+export { PhoneMockup } from "./ui/PhoneMockup.js";
+export { ComputerFrame } from "./ui/ComputerFrame.js";
+export { renderStyledText } from "./ui/renderStyledText.js";

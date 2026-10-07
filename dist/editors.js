@@ -1,0 +1,84 @@
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { useState, useRef } from "react";
+import { Plus, Trash2, ChevronDown, FolderOpen, Image as ImageIcon, Layers } from "lucide-react";
+import { RED as ACCENT, DEFAULT_ACCENT } from "./theme.js";
+import { useCaseStudyConfig } from "./config.js";
+import { ImageLibraryModal } from "./ui/ImageLibraryModal.js";
+import { ProjectPreviewCard } from "./ui/ProjectPreviewCard.js";
+export function MetricsEditor({ metrics, onChange }) {
+    return (_jsx(Field, { label: "Metrics", children: _jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: [metrics.map((m, i) => (_jsxs("div", { style: { display: "flex", gap: 6 }, children: [_jsx("input", { value: m.value, onChange: (e) => onChange(metrics.map((x, j) => j === i ? { ...x, value: e.target.value } : x)), placeholder: "\u221263%", style: { ...inputStyle, width: 70 } }), _jsx("input", { value: m.label, onChange: (e) => onChange(metrics.map((x, j) => j === i ? { ...x, label: e.target.value } : x)), placeholder: "Label", style: inputStyle }), _jsx("button", { onClick: () => onChange(metrics.filter((_, j) => j !== i)), style: iconBtn(false), children: _jsx(Trash2, { size: 14 }) })] }, m.id))), _jsxs("button", { onClick: () => onChange([...metrics, { id: `m-${Date.now()}`, value: "00", label: "Metric" }]), style: { ...ghostBtn, justifyContent: "center" }, children: [_jsx(Plus, { size: 14 }), " Add metric"] })] }) }));
+}
+export function ImageField({ value, onChange, overlay, onOverlayChange, label = "Image" }) {
+    const { assets } = useCaseStudyConfig();
+    const [showLibrary, setShowLibrary] = useState(false);
+    const fileInputRef = useRef(null);
+    const [uploading, setUploading] = useState(false);
+    const handleFile = async (file) => {
+        if (!file.type.startsWith("image/") || !assets?.upload)
+            return;
+        setUploading(true);
+        const path = await assets.upload(file).catch(() => null);
+        setUploading(false);
+        if (path)
+            onChange(path);
+    };
+    return (_jsxs(Field, { label: label, children: [showLibrary && (_jsx(ImageLibraryModal, { onSelect: (path) => { onChange(path); setShowLibrary(false); }, onClose: () => setShowLibrary(false) })), value && (_jsxs("div", { style: { position: "relative", marginBottom: 8, borderRadius: 6, overflow: "hidden", border: "1px solid #dcd8d2", background: "#4a4a4a" }, children: [_jsx("img", { src: value, alt: "", style: { display: "block", width: "100%", height: 120, objectFit: "contain" }, onError: (e) => { e.currentTarget.style.display = "none"; } }), onOverlayChange && (_jsx("button", { onClick: () => onOverlayChange(!overlay), title: overlay ? "Disable gradient overlay" : "Enable gradient overlay", style: { position: "absolute", top: 6, left: 6, width: 26, height: 26, borderRadius: 999, border: "none", background: overlay ? ACCENT : "rgba(20,18,16,0.7)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }, children: _jsx(Layers, { size: 13 }) })), _jsx("button", { onClick: () => onChange(""), title: "Remove image", style: { position: "absolute", top: 6, right: 6, width: 26, height: 26, borderRadius: 999, border: "none", background: "rgba(20,18,16,0.7)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }, children: _jsx(Trash2, { size: 13 }) })] })), _jsx("input", { value: value, onChange: (e) => onChange(e.target.value), placeholder: "https://\u2026 or /images/\u2026", style: inputStyle }), (assets?.upload || assets?.list) && (_jsxs("div", { style: { display: "flex", gap: 6, marginTop: 6 }, children: [assets.upload && (_jsxs("button", { onClick: () => fileInputRef.current?.click(), style: { ...ghostBtn, flex: 1, justifyContent: "center" }, children: [_jsx(ImageIcon, { size: 14 }), " ", uploading ? "Uploading…" : "Upload"] })), assets.list && (_jsxs("button", { onClick: () => setShowLibrary(true), style: { ...ghostBtn, flex: 1, justifyContent: "center" }, children: [_jsx(FolderOpen, { size: 14 }), " Browse"] }))] })), _jsx("input", { ref: fileInputRef, type: "file", accept: "image/*", style: { display: "none" }, onChange: (e) => { const f = e.target.files?.[0]; if (f)
+                    handleFile(f); e.target.value = ""; } })] }));
+}
+export function OverviewEditor({ items, onChange, label = "Index items" }) {
+    return (_jsx(Field, { label: label, children: _jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [items.map((it, i) => (_jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6, border: "1px solid #e3e0db", borderRadius: 8, padding: 8 }, children: [_jsxs("div", { style: { display: "flex", gap: 6, alignItems: "center" }, children: [_jsx("span", { style: { fontSize: 11, color: "#8a857d", fontVariantNumeric: "tabular-nums" }, children: String(i + 1).padStart(2, "0") }), _jsx("textarea", { value: it.label, onChange: (e) => onChange(items.map((x, j) => j === i ? { ...x, label: e.target.value } : x)), placeholder: "Label", rows: 1, style: { ...inputStyle, resize: "vertical" } }), _jsx("button", { onClick: () => onChange(items.filter((_, j) => j !== i)), style: iconBtn(false), children: _jsx(Trash2, { size: 14 }) })] }), _jsx("textarea", { value: it.body, onChange: (e) => onChange(items.map((x, j) => j === i ? { ...x, body: e.target.value } : x)), rows: 2, placeholder: "Description", style: { ...inputStyle, resize: "vertical" } })] }, it.id))), _jsxs("button", { onClick: () => onChange([...items, { id: `o-${Date.now()}`, label: "Section", body: "Describe this section." }]), style: { ...ghostBtn, justifyContent: "center" }, children: [_jsx(Plus, { size: 14 }), " Add item"] })] }) }));
+}
+export function GalleryEditor({ images, onChange }) {
+    const set = (i, patch) => onChange(images.map((x, j) => j === i ? { ...x, ...patch } : x));
+    return (_jsx(Field, { label: "Images", children: _jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 12 }, children: [images.map((img, i) => (_jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6, border: "1px solid #e3e0db", borderRadius: 8, padding: 8 }, children: [_jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }, children: [_jsx("input", { value: img.number ?? String(i + 1).padStart(2, "0"), onChange: (e) => set(i, { number: e.target.value }), title: "Index label \u2014 clear it to hide the number for this image", style: { ...inputStyle, width: 56, padding: "5px 8px", fontVariantNumeric: "tabular-nums", fontWeight: 600 } }), _jsx("button", { onClick: () => onChange(images.filter((_, j) => j !== i)), style: iconBtn(false), children: _jsx(Trash2, { size: 14 }) })] }), _jsx(ImageField, { value: img.url, onChange: (url) => set(i, { url }) }), _jsx("textarea", { value: img.caption, onChange: (e) => set(i, { caption: e.target.value }), rows: 1, placeholder: "Caption", style: { ...inputStyle, resize: "vertical" } })] }, img.id))), _jsxs("button", { onClick: () => onChange([...images, { id: `g-${Date.now()}`, url: "", caption: "Caption" }]), style: { ...ghostBtn, justifyContent: "center" }, children: [_jsx(Plus, { size: 14 }), " Add image"] })] }) }));
+}
+export function StatEditor({ stat, onChange }) {
+    const s = stat ?? { id: "b-stat", value: "", label: "" };
+    return (_jsx(Field, { label: "Stat", children: _jsxs("div", { style: { display: "flex", gap: 6 }, children: [_jsx("input", { value: s.value, onChange: (e) => onChange({ ...s, value: e.target.value }), placeholder: "\u221263%", style: { ...inputStyle, width: 80 } }), _jsx("input", { value: s.label, onChange: (e) => onChange({ ...s, label: e.target.value }), placeholder: "Label", style: inputStyle })] }) }));
+}
+export function Field({ label, children, collapsible = false }) {
+    const [open, setOpen] = useState(true);
+    const labelStyle = { fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "#8a857d", marginBottom: 7 };
+    if (collapsible) {
+        return (_jsxs("div", { style: { marginBottom: 16 }, children: [_jsxs("button", { onClick: () => setOpen((v) => !v), style: { ...labelStyle, display: "flex", alignItems: "center", gap: 6, width: "100%", padding: 0, border: "none", background: "none", cursor: "pointer" }, children: [_jsx(ChevronDown, { size: 13, style: { transform: open ? "none" : "rotate(-90deg)", transition: "transform 0.15s" } }), label] }), open && children] }));
+    }
+    return (_jsxs("div", { style: { marginBottom: 16 }, children: [_jsx("div", { style: labelStyle, children: label }), children] }));
+}
+const SWATCHES = ["#ffffff", "#0f0f10", DEFAULT_ACCENT];
+export function ColorInput({ label, value, onChange }) {
+    return (_jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6, fontSize: 11, color: "#8a857d" }, children: [label, _jsx("input", { type: "color", value: value, onChange: (e) => onChange(e.target.value), style: { width: 44, height: 30, border: "1px solid #dcd8d2", borderRadius: 6, padding: 2, cursor: "pointer", background: "#fff" } }), _jsx("div", { style: { display: "flex", gap: 5 }, children: SWATCHES.map((c) => {
+                    const active = value.toLowerCase() === c.toLowerCase();
+                    return (_jsx("button", { type: "button", title: c, onClick: () => onChange(c), style: {
+                            width: 16, height: 16, borderRadius: 4, padding: 0, cursor: "pointer",
+                            background: c, border: "1px solid #cfcbc4",
+                            boxShadow: active ? `0 0 0 2px #fff, 0 0 0 3px ${ACCENT}` : "none",
+                        } }, c));
+                }) })] }));
+}
+export const inputStyle = {
+    width: "100%", fontSize: 13, padding: "8px 10px", border: "1px solid #dcd8d2",
+    borderRadius: 6, outline: "none", color: "#1a1a1a", background: "#fff", fontFamily: "inherit",
+};
+export const primaryBtn = {
+    display: "flex", alignItems: "center", gap: 8, background: ACCENT, color: "#fff",
+    border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer",
+};
+export const ghostBtn = {
+    display: "flex", alignItems: "center", gap: 6, background: "#fff", color: "#5a554e",
+    border: "1px dashed #cfcbc4", borderRadius: 8, padding: "9px 12px", fontSize: 13, cursor: "pointer",
+};
+export function iconBtn(disabled) {
+    return {
+        width: 34, height: 34, borderRadius: 6, border: "1px solid #dcd8d2", background: "#fff",
+        color: disabled ? "#cfcbc4" : "#5a554e", cursor: disabled ? "default" : "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+    };
+}
+// ─── Thumbnail settings (deck-level) ──────────────────────────────
+// Authors the preview card shown on the Projects page (/projects) for this
+// case study — image / eyebrow / title / body — plus a show-on-Projects toggle.
+export function PreviewCardSettings({ preview, onChange, onClose, isCaseStudy, onToggleCaseStudy }) {
+    const show = preview.show !== false;
+    return (_jsxs(_Fragment, { children: [_jsx("div", { onClick: onClose, style: { position: "fixed", inset: 0, zIndex: 90 } }), _jsxs("div", { style: { position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 91, width: 340, maxHeight: "80vh", overflowY: "auto", background: "#fff", border: "1px solid #e3e0db", borderRadius: 10, boxShadow: "0 18px 44px rgba(0,0,0,0.16)", padding: 16, textAlign: "left" }, children: [onToggleCaseStudy && _jsxs("button", { onClick: onToggleCaseStudy, style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, width: "100%", padding: "10px 10px", marginBottom: 14, borderRadius: 6, border: "1px solid #e3e0db", background: "#fff", cursor: "pointer", textAlign: "left" }, children: [_jsxs("span", { children: [_jsx("span", { style: { display: "block", fontSize: 12, fontWeight: 600, color: "#1a1a1a" }, children: "Case study" }), _jsx("span", { style: { display: "block", fontSize: 11, color: "#8c8c8c", marginTop: 2 }, children: "An in-depth piece \u2014 links read \u201CView the case study\u201D." })] }), _jsx("span", { style: { position: "relative", flexShrink: 0, display: "inline-block", width: 38, height: 22, marginTop: 1, borderRadius: 999, background: isCaseStudy ? ACCENT : "#dcd8d2", transition: "background 0.15s" }, children: _jsx("span", { style: { position: "absolute", top: 3, left: isCaseStudy ? 19 : 3, width: 16, height: 16, borderRadius: 999, background: "#fff", transition: "left 0.15s" } }) })] }), _jsx("div", { style: { fontSize: 13, fontWeight: 600, marginBottom: 4 }, children: "Projects page card" }), _jsx("div", { style: { fontSize: 11, color: "#8c8c8c", marginBottom: 14 }, children: "The preview card shown on the Projects page. Clicking it opens this project." }), _jsxs("button", { onClick: () => onChange({ show: !show }), style: { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "8px 10px", marginBottom: 14, borderRadius: 6, border: "1px solid #e3e0db", background: "#fff", cursor: "pointer" }, children: [_jsx("span", { style: { fontSize: 12, fontWeight: 600, color: "#1a1a1a" }, children: "Show on Projects page" }), _jsx("span", { style: { position: "relative", display: "inline-block", width: 38, height: 22, borderRadius: 999, background: show ? ACCENT : "#dcd8d2", transition: "background 0.15s" }, children: _jsx("span", { style: { position: "absolute", top: 3, left: show ? 19 : 3, width: 16, height: 16, borderRadius: 999, background: "#fff", transition: "left 0.15s" } }) })] }), _jsx(ImageField, { label: "Image", value: preview.image ?? "", onChange: (v) => onChange({ image: v }), overlay: preview.imageOverlay === true, onOverlayChange: (v) => onChange({ imageOverlay: v }) }), _jsx(Field, { label: "Eyebrow", children: _jsx("input", { value: preview.eyebrow ?? "", onChange: (e) => onChange({ eyebrow: e.target.value }), placeholder: "e.g. Case Study", style: inputStyle }) }), _jsx(Field, { label: "Title", children: _jsx("input", { value: preview.title ?? "", onChange: (e) => onChange({ title: e.target.value }), placeholder: "Project title", style: inputStyle }) }), _jsx(Field, { label: "Body", children: _jsx("textarea", { value: preview.body ?? "", onChange: (e) => onChange({ body: e.target.value }), rows: 3, placeholder: "Short description", style: { ...inputStyle, resize: "vertical" } }) }), _jsx(ImageField, { label: "Slide logo (Intro / Title Card, top-left)", value: preview.logo ?? "", onChange: (v) => onChange({ logo: v }) }), _jsx(ImageField, { label: "Card logo (Projects page card \u2014 falls back to slide logo)", value: preview.cardLogo ?? "", onChange: (v) => onChange({ cardLogo: v }) }), _jsx("div", { style: { fontSize: 11, fontWeight: 600, color: "#8c8c8c", margin: "12px 0 8px" }, children: "PREVIEW" }), _jsx("div", { style: { background: "#f3f1ed", borderRadius: 8, padding: 12 }, children: _jsx(ProjectPreviewCard, { image: preview.image, imageOverlay: preview.imageOverlay, eyebrow: preview.eyebrow, title: preview.title, body: preview.body, logo: preview.cardLogo || preview.logo }) })] })] }));
+}
+//# sourceMappingURL=editors.js.map
