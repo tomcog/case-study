@@ -7,7 +7,7 @@ A project is one JSON object (`CaseStudyContent`): an ordered list of `screens` 
 ## Install
 
 ```bash
-npm install github:tomcog/case-study#v0.1.0 motion
+npm install https://github.com/tomcog/case-study/archive/refs/tags/v0.1.0.tar.gz motion
 ```
 
 Peer dependencies: `react`, `react-dom` (18 or 19), `motion` (11+).
