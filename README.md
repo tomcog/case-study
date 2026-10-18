@@ -49,11 +49,29 @@ Slides and builder chrome read two CSS variables, red and near-black by default:
 
 A screen's own `accent` (metrics, gallery numbers, and so on) is stored in the project as a hex value.
 
+## ProjectBuilder
+
+The standalone app for creating, managing and editing projects, apart from any site that shows them.
+
+```bash
+npm install
+npm run dev     # ProjectBuilder at http://localhost:5187
+```
+
+Each project lives in `projects/<id>/`: `project.json` plus an `images/` folder. That folder is the only copy of the project. The id comes from the name you give a new project and never changes, even if you rename it, because other sites load projects by id. Duplicate makes an independent copy with its own id and images.
+
+Editing autosaves to those files, and only works under `npm run dev`. Commit as you go. `npm run build:app` builds a read-only site into `app-dist/`, with the projects and a generated `projects/index.json`, for other sites to load projects from:
+
+```ts
+const project = await loadProject("/case-study/projects/simplescreen-crc/project.json", { assetBase: "https://<projectbuilder site>" });
+```
+
 ## Develop
 
 ```bash
 npm install
-npm run dev     # tsc --watch → dist/
+npm run watch   # tsc --watch → dist/
+npm run check   # type-check the package and the app
 ```
 
 Apps link it with `"@tomcog/case-study": "file:../case-study"` and `resolve.dedupe: ["react", "react-dom", "motion"]` in their Vite config. `dist/` is committed because npm 11 doesn't run a git dependency's `prepare` script unless it's approved, so installs from GitHub use the committed build. Rebuild before tagging a release.
