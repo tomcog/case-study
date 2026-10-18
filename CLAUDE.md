@@ -17,7 +17,7 @@ npm run check     # type-check the package and the app
 npm run build:app # read-only ProjectBuilder site → app-dist/ (gitignored)
 ```
 
-There are no tests and no linter. `npm run check` is the only check. To see a package change running, use `npm run dev`. To see it inside a host app, link the package from the app with `"@tomcog/case-study": "file:../case-study"` and `resolve.dedupe: ["react", "react-dom", "motion"]` in its Vite config.
+There are no tests and no linter. `npm run check` is the only check. To see a package change running, use `npm run dev`. To see it inside a host app, link the package from the app with `"@tomcog/case-study": "file:../ProjectBuilder"` and `resolve.dedupe: ["react", "react-dom", "motion"]` in its Vite config.
 
 ## dist/ is committed
 

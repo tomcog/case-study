@@ -74,4 +74,4 @@ npm run watch   # tsc --watch → dist/
 npm run check   # type-check the package and the app
 ```
 
-Apps link it with `"@tomcog/case-study": "file:../case-study"` and `resolve.dedupe: ["react", "react-dom", "motion"]` in their Vite config. `dist/` is committed because npm 11 doesn't run a git dependency's `prepare` script unless it's approved, so installs from GitHub use the committed build. Rebuild before tagging a release.
+Apps link it with `"@tomcog/case-study": "file:../ProjectBuilder"` and `resolve.dedupe: ["react", "react-dom", "motion"]` in their Vite config. `dist/` is committed because npm 11 doesn't run a git dependency's `prepare` script unless it's approved, so installs from GitHub use the committed build. Rebuild before tagging a release.
