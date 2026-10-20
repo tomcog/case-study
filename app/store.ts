@@ -1,4 +1,4 @@
-import { loadProject, migrate, type CaseStudyAssets, type CaseStudyContent, type Screen } from "../src/index.js";
+import { loadProject, migrate, type CaseStudyAssets, type CaseStudyContent, type ProjectSummary } from "../src/index.js";
 
 // ─── Talking to projects/ ──────────────────────────────────────────
 // Reads work anywhere the app is served. Writes go to the dev server's
@@ -6,14 +6,7 @@ import { loadProject, migrate, type CaseStudyAssets, type CaseStudyContent, type
 
 export const canEdit = import.meta.env.DEV;
 
-export interface ProjectRow {
-  id: string;
-  title: string;
-  screens: number;
-  cover: Screen | null; // first screen, drawn as the tile thumbnail
-  show: boolean;        // preview.show: listed on the host site's Projects page
-  updatedAt: number;
-}
+export type ProjectRow = ProjectSummary;
 
 export async function listProjects(): Promise<ProjectRow[]> {
   const res = await fetch("/projects/index.json", { cache: "no-store" });

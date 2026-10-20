@@ -1,4 +1,4 @@
-import type { CaseStudyContent } from "./core.js";
+import type { CaseStudyContent, Screen } from "./core.js";
 export declare const SCHEMA_VERSION = 1;
 /** Bring any saved project up to the current shape. Never throws: unknown or
  * empty input falls back to the starter deck. Older projects (saved before
@@ -27,3 +27,26 @@ export declare function previewCard(project: CaseStudyContent): {
     logo: string | undefined;
     show: boolean;
 };
+/** One row of a project source's index.json (written by ProjectBuilder). */
+export interface ProjectSummary {
+    id: string;
+    title: string;
+    screens: number;
+    cover: Screen | null;
+    show: boolean;
+    updatedAt: number;
+}
+/** Projects published by a ProjectBuilder site at `base` (e.g.
+ * "https://projects.tomcoggia.com"; "" for the same origin). Asset paths come
+ * back absolute, so images load from that site. */
+export declare function projectSource(base: string): {
+    url: (id: string) => string;
+    /** Every published project, newest first. */
+    list(opts?: {
+        signal?: AbortSignal;
+    }): Promise<ProjectSummary[]>;
+    get: (id: string, opts?: {
+        signal?: AbortSignal;
+    }) => Promise<CaseStudyContent>;
+};
+export type ProjectSource = ReturnType<typeof projectSource>;

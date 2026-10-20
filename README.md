@@ -33,11 +33,17 @@ import { CaseStudyPlayer, CaseStudyBuilder, CaseStudyCard, CaseStudyProvider, lo
 
 ## Projects from another site
 
+ProjectBuilder (below) is the one source for projects. It publishes them at `https://projects.tomcoggia.com`, and any app reads them with `projectSource`:
+
 ```ts
-const project = await loadProject("/tc/data/content/page-123.json", { assetBase: "https://www.tomcoggia.com" });
+const projects = projectSource("https://projects.tomcoggia.com");
+const rows = await projects.list();            // index.json: id, title, cover, show, …
+const project = await projects.get("augmedix"); // fetched, migrated, image paths made absolute
 ```
 
-`loadProject` fetches, runs `migrate()` (fills defaults and stamps `schemaVersion`), and with `assetBase` rewrites site-relative paths like `/images/x.png` to absolute URLs so they load from the site that owns them. Fetch the JSON through a same-origin proxy (a Vite `server.proxy` in dev, a Vercel rewrite in production) so no CORS headers are needed.
+The published files are served with `Access-Control-Allow-Origin: *`, so no proxy is needed. To see unpublished edits, point the source at ProjectBuilder's dev server (`http://localhost:5187`), which allows any origin too.
+
+`loadProject(url, { assetBase })` is the lower-level call underneath: it fetches, runs `migrate()` (fills defaults and stamps `schemaVersion`), and with `assetBase` rewrites site-relative paths like `/images/x.png` to absolute URLs on that site.
 
 ## Theming
 
@@ -60,11 +66,7 @@ npm run dev     # ProjectBuilder at http://localhost:5187
 
 Each project lives in `projects/<id>/`: `project.json` plus an `images/` folder. That folder is the only copy of the project. The id comes from the name you give a new project and never changes, even if you rename it, because other sites load projects by id. Duplicate makes an independent copy with its own id and images.
 
-Editing autosaves to those files, and only works under `npm run dev`. Commit as you go. `npm run build:app` builds a read-only site into `app-dist/`, with the projects and a generated `projects/index.json`, for other sites to load projects from:
-
-```ts
-const project = await loadProject("/case-study/projects/simplescreen-crc/project.json", { assetBase: "https://<projectbuilder site>" });
-```
+Editing autosaves to those files, and only works under `npm run dev`. Commit as you go: pushing to `main` publishes. Vercel runs `npm run build:app` (see `vercel.json`), which builds a read-only site into `app-dist/` with the projects and a generated `projects/index.json`, served at `https://projects.tomcoggia.com` for other apps to load with `projectSource`.
 
 ## Develop
 

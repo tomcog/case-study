@@ -11,7 +11,8 @@ export type {
   CaseStudyContent, Screen, ScreenLayout, Theme, Metric, OverviewItem, GalleryImage, ProjectPreview,
 } from "./core.js";
 
-export { migrate, withAssetBase, loadProject, previewCard, SCHEMA_VERSION } from "./project.js";
+export { migrate, withAssetBase, loadProject, previewCard, projectSource, SCHEMA_VERSION } from "./project.js";
+export type { ProjectSummary, ProjectSource } from "./project.js";
 export { DEFAULT_ACCENT, DEFAULT_INK } from "./theme.js";
 
 // Building blocks the host app may reuse in its own screens (e.g. a project index editor).

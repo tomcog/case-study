@@ -1,6 +1,6 @@
 {
   "name": "@tomcog/case-study",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Case study (mini project) builder and immersive player for React apps",
   "type": "module",
   "license": "UNLICENSED",

@@ -16,19 +16,26 @@ export function migrate(raw) {
     return { ...p, screens, schemaVersion: SCHEMA_VERSION };
 }
 const isRelative = (u) => !!u && u.startsWith("/") && !u.startsWith("//");
-/** Rewrite every site-relative asset path in a project to an absolute URL on
- * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
- * Absolute URLs and empty fields are left alone. Returns a new object. */
-export function withAssetBase(project, base) {
+const absolutizer = (base) => {
     const root = base.replace(/\/+$/, "");
-    const abs = (u) => (isRelative(u) ? root + u : u);
-    const screen = (s) => ({
+    return (u) => (isRelative(u) ? root + u : u);
+};
+const screenWithAssetBase = (base) => {
+    const abs = absolutizer(base);
+    return (s) => ({
         ...s,
         imageUrl: abs(s.imageUrl),
         imageUrl2: abs(s.imageUrl2),
         videoUrl: abs(s.videoUrl),
         images: s.images?.map((img) => ({ ...img, url: abs(img.url) ?? "" })),
     });
+};
+/** Rewrite every site-relative asset path in a project to an absolute URL on
+ * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
+ * Absolute URLs and empty fields are left alone. Returns a new object. */
+export function withAssetBase(project, base) {
+    const abs = absolutizer(base);
+    const screen = screenWithAssetBase(base);
     const pv = project.preview;
     return {
         ...project,
@@ -53,6 +60,26 @@ export function previewCard(project) {
     return {
         image: p.image, imageOverlay: p.imageOverlay, eyebrow: p.eyebrow, title: p.title, body: p.body,
         logo: p.cardLogo || p.logo, show: p.show !== false,
+    };
+}
+/** Projects published by a ProjectBuilder site at `base` (e.g.
+ * "https://projects.tomcoggia.com"; "" for the same origin). Asset paths come
+ * back absolute, so images load from that site. */
+export function projectSource(base) {
+    const root = base.replace(/\/+$/, "");
+    const url = (id) => `${root}/projects/${id}/project.json`;
+    return {
+        url,
+        /** Every published project, newest first. */
+        async list(opts = {}) {
+            const res = await fetch(`${root}/projects/index.json`, { signal: opts.signal, cache: "no-cache" });
+            if (!res.ok)
+                throw new Error(`Couldn't list projects (${res.status}): ${root}`);
+            const rows = await res.json();
+            const screen = screenWithAssetBase(root);
+            return rows.map((row) => ({ ...row, cover: row.cover && screen(row.cover) }));
+        },
+        get: (id, opts = {}) => loadProject(url(id), { ...opts, assetBase: root }),
     };
 }
 //# sourceMappingURL=project.js.map

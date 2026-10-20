@@ -4,7 +4,7 @@ export { Builder as CaseStudyBuilder } from "./Builder.js";
 export { ProjectPreviewCard as CaseStudyCard } from "./ui/ProjectPreviewCard.js";
 export { CaseStudyProvider, useCaseStudyConfig } from "./config.js";
 export { Stage, ScreenView, bleedBg, backdropFor, DEFAULT_CONTENT, STAGE_W, STAGE_H } from "./core.js";
-export { migrate, withAssetBase, loadProject, previewCard, SCHEMA_VERSION } from "./project.js";
+export { migrate, withAssetBase, loadProject, previewCard, projectSource, SCHEMA_VERSION } from "./project.js";
 export { DEFAULT_ACCENT, DEFAULT_INK } from "./theme.js";
 // Building blocks the host app may reuse in its own screens (e.g. a project index editor).
 export { ImageField, Field, inputStyle, primaryBtn, ghostBtn } from "./editors.js";

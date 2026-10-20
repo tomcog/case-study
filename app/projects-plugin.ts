@@ -138,6 +138,9 @@ export function projectsPlugin(dir: string): Plugin {
           res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" }).end(JSON.stringify(body));
         };
 
+        // Other apps' dev servers read projects from here too (projectSource), so reads are open to any origin.
+        if (req.method === "GET" && path.startsWith("/projects/")) res.setHeader("Access-Control-Allow-Origin", "*");
+
         if (req.method === "GET" && path === "/projects/index.json") return reply(200, index());
 
         // Read from disk on every request: files saved since the server started are never stale.

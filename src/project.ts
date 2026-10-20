@@ -21,19 +21,28 @@ export function migrate(raw: unknown): CaseStudyContent {
 
 const isRelative = (u?: string) => !!u && u.startsWith("/") && !u.startsWith("//");
 
-/** Rewrite every site-relative asset path in a project to an absolute URL on
- * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
- * Absolute URLs and empty fields are left alone. Returns a new object. */
-export function withAssetBase(project: CaseStudyContent, base: string): CaseStudyContent {
+const absolutizer = (base: string) => {
   const root = base.replace(/\/+$/, "");
-  const abs = (u?: string) => (isRelative(u) ? root + u : u);
-  const screen = (s: Screen): Screen => ({
+  return (u?: string) => (isRelative(u) ? root + u : u);
+};
+
+const screenWithAssetBase = (base: string) => {
+  const abs = absolutizer(base);
+  return (s: Screen): Screen => ({
     ...s,
     imageUrl: abs(s.imageUrl),
     imageUrl2: abs(s.imageUrl2),
     videoUrl: abs(s.videoUrl),
     images: s.images?.map((img) => ({ ...img, url: abs(img.url) ?? "" })),
   });
+};
+
+/** Rewrite every site-relative asset path in a project to an absolute URL on
+ * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
+ * Absolute URLs and empty fields are left alone. Returns a new object. */
+export function withAssetBase(project: CaseStudyContent, base: string): CaseStudyContent {
+  const abs = absolutizer(base);
+  const screen = screenWithAssetBase(base);
   const pv = project.preview;
   return {
     ...project,
@@ -61,3 +70,35 @@ export function previewCard(project: CaseStudyContent) {
     logo: p.cardLogo || p.logo, show: p.show !== false,
   };
 }
+
+/** One row of a project source's index.json (written by ProjectBuilder). */
+export interface ProjectSummary {
+  id: string;
+  title: string;
+  screens: number;
+  cover: Screen | null; // first screen, for a thumbnail
+  show: boolean;        // preview.show: listed on a site's projects index
+  updatedAt: number;
+}
+
+/** Projects published by a ProjectBuilder site at `base` (e.g.
+ * "https://projects.tomcoggia.com"; "" for the same origin). Asset paths come
+ * back absolute, so images load from that site. */
+export function projectSource(base: string) {
+  const root = base.replace(/\/+$/, "");
+  const url = (id: string) => `${root}/projects/${id}/project.json`;
+  return {
+    url,
+    /** Every published project, newest first. */
+    async list(opts: { signal?: AbortSignal } = {}): Promise<ProjectSummary[]> {
+      const res = await fetch(`${root}/projects/index.json`, { signal: opts.signal, cache: "no-cache" });
+      if (!res.ok) throw new Error(`Couldn't list projects (${res.status}): ${root}`);
+      const rows: ProjectSummary[] = await res.json();
+      const screen = screenWithAssetBase(root);
+      return rows.map((row) => ({ ...row, cover: row.cover && screen(row.cover) }));
+    },
+    get: (id: string, opts: { signal?: AbortSignal } = {}) => loadProject(url(id), { ...opts, assetBase: root }),
+  };
+}
+
+export type ProjectSource = ReturnType<typeof projectSource>;
