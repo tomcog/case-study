@@ -266,17 +266,66 @@ code {
 }
 
 .tile__actions {
-  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-segmented-md-track-gap);
 }
 
-/* Delete is an icon; armed (click again to confirm) it fills red, so the row
-   keeps its width. */
-.tile__delete,
-.tile__delete:hover {
+/* A project action: the component library's Segment (Figma 672:13902) at MD,
+   drawn as a button of its own. Every value is the library's segment token,
+   and the ground is the segmented track's, since a lone segment has none. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-segmented-md-icon-gap);
+  height: var(--ui-segmented-md-height);
+  min-width: var(--ui-segmented-md-height);
+  padding: 0 var(--ui-segmented-md-padding-x);
+  border: none;
+  border-radius: var(--ui-segmented-radius);
+  background: var(--ui-segmented-track-bg, var(--ui-surface-pale));
+  color: var(--ui-text-default);
+  font-family: inherit;
+  font-size: var(--ui-segmented-md-font-size);
+  font-weight: var(--ui-segmented-font-weight);
+  line-height: var(--ui-segmented-md-line-height);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--ui-motion-fast) ease, color var(--ui-motion-fast) ease;
+}
+
+.pill svg {
+  flex-shrink: 0;
+  width: var(--ui-segmented-md-icon-size);
+  height: var(--ui-segmented-md-icon-size);
+  opacity: var(--ui-segmented-icon-opacity);
+}
+
+.pill:hover {
+  color: var(--ui-action);
+}
+
+.pill:active {
+  background: color-mix(in srgb, var(--ui-text-default) 12%, var(--ui-segmented-track-bg, var(--ui-surface-pale)));
+}
+
+.pill--icon {
+  justify-content: center;
+  padding: 0;
+}
+
+.pill--icon svg {
+  opacity: var(--ui-segmented-icon-only-opacity);
+}
+
+/* Delete is red; armed (click again to confirm) it fills red. */
+.pill--danger,
+.pill--danger:hover {
   color: var(--accent);
 }
 
-.tile__delete.is-armed {
+.pill--danger.is-armed {
   background: var(--accent);
   color: #fff;
 }

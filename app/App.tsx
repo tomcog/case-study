@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
-import { Card, Segment, SegmentedControl } from "@tomcoggia/ui";
+import { Card } from "@tomcoggia/ui";
 import {
   CaseStudyBuilder, CaseStudyPlayer, CaseStudyProvider, Stage, ScreenView, bleedBg, backdropFor,
   type CaseStudyContent, type Screen,
@@ -204,21 +204,31 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
         <p className="tile__meta">
           <code>{row.id}</code> · {row.screens} {row.screens === 1 ? "screen" : "screens"} · {ago(row.updatedAt)}
         </p>
-        <SegmentedControl size="md" actions aria-label={`${row.title} actions`} className="tile__actions">
-          {canEdit && <Segment icon={<Pencil />} onClick={() => go(`#/${row.id}/edit`)}>Edit</Segment>}
-          <Segment icon={<Play />} onClick={() => go(`#/${row.id}`)}>Play</Segment>
+        <div className="tile__actions">
           {canEdit && (
-            <Segment
-              icon={row.draft ? <Globe /> : <EyeOff />}
+            <a className="pill" href={`#/${row.id}/edit`}>
+              <Pencil /> Edit
+            </a>
+          )}
+          <a className="pill" href={`#/${row.id}`}>
+            <Play /> Play
+          </a>
+          {canEdit && (
+            <button
+              className="pill"
               onClick={() => onPublish(row.draft)}
               title={row.draft ? "Include it in the published site on the next push" : "Leave it out of the published site"}
             >
-              {row.draft ? "Publish" : "Unpublish"}
-            </Segment>
+              {row.draft ? <Globe /> : <EyeOff />} {row.draft ? "Publish" : "Unpublish"}
+            </button>
           )}
-          {canEdit && <Segment icon={<Copy />} onClick={onDuplicate} title="Make an independent copy">Duplicate</Segment>}
-          {canEdit && <DeleteSegment onDelete={onDelete} />}
-        </SegmentedControl>
+          {canEdit && (
+            <button className="pill pill--icon" onClick={onDuplicate} title="Duplicate: make an independent copy" aria-label="Duplicate">
+              <Copy />
+            </button>
+          )}
+          {canEdit && <DeleteButton onDelete={onDelete} />}
+        </div>
       </div>
     </Card>
   );
@@ -259,7 +269,7 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (title: str
 }
 
 // Asks before deleting: the first click arms it ("Delete?"), a second click within 3 seconds deletes.
-function DeleteSegment({ onDelete }: { onDelete: () => void }) {
+function DeleteButton({ onDelete }: { onDelete: () => void }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
     if (!armed) return;
@@ -267,15 +277,14 @@ function DeleteSegment({ onDelete }: { onDelete: () => void }) {
     return () => window.clearTimeout(t);
   }, [armed]);
   return (
-    <Segment
-      className={`tile__delete${armed ? " is-armed" : ""}`}
-      icon={<Trash2 />}
-      hideLabel
+    <button
+      className={`pill pill--icon pill--danger${armed ? " is-armed" : ""}`}
       onClick={() => (armed ? onDelete() : setArmed(true))}
       title={armed ? "Click again to delete" : "Delete the project and its images"}
+      aria-label={armed ? "Confirm delete" : "Delete"}
     >
-      {armed ? "Delete?" : "Delete"}
-    </Segment>
+      <Trash2 />
+    </button>
   );
 }
 
