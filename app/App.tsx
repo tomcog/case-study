@@ -199,7 +199,6 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
             <h2 className="tile__title">{row.title}</h2>
           )}
           {row.draft && <span className="badge" title="Not published: other sites can't load it">Draft</span>}
-          {canEdit && !renaming && <DeleteButton onDelete={onDelete} />}
         </div>
         <p className="tile__meta">
           <code>{row.id}</code> · {row.screens} {row.screens === 1 ? "screen" : "screens"} · {ago(row.updatedAt)}
@@ -227,6 +226,7 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
               <Copy size={14} /> Duplicate
             </button>
           )}
+          {canEdit && <DeleteButton onDelete={onDelete} />}
         </div>
       </div>
     </article>

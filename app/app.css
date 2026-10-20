@@ -75,11 +75,6 @@ code {
   font-size: 13px;
 }
 
-.btn--danger {
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
 .btn--danger:hover,
 .btn--danger.is-armed {
   border-color: var(--accent);
@@ -270,6 +265,7 @@ code {
 
 .badge {
   flex-shrink: 0;
+  margin-left: auto;
   padding: 2px 8px;
   border-radius: 999px;
   background: #efece7;
