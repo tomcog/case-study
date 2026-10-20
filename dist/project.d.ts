@@ -15,9 +15,8 @@ export declare function loadProject(url: string, opts?: {
     assetBase?: string;
     signal?: AbortSignal;
 }): Promise<CaseStudyContent>;
-/** The preview card a project authors for itself (props for ProjectPreviewCard),
- * plus its show-on-index flag (default true). The card logo falls back to the
- * slide logo. */
+/** The preview card a project authors for itself (props for ProjectPreviewCard).
+ * The card logo falls back to the slide logo. */
 export declare function previewCard(project: CaseStudyContent): {
     image: string | undefined;
     imageOverlay: boolean | undefined;
@@ -25,7 +24,6 @@ export declare function previewCard(project: CaseStudyContent): {
     title: string | undefined;
     body: string | undefined;
     logo: string | undefined;
-    show: boolean;
 };
 /** One row of a project source's index.json (written by ProjectBuilder). */
 export interface ProjectSummary {
@@ -33,12 +31,13 @@ export interface ProjectSummary {
     title: string;
     screens: number;
     cover: Screen | null;
-    show: boolean;
+    draft: boolean;
     updatedAt: number;
 }
 /** Projects published by a ProjectBuilder site at `base` (e.g.
  * "https://projects.tomcoggia.com"; "" for the same origin). Asset paths come
- * back absolute, so images load from that site. */
+ * back absolute, so images load from that site. Which projects a site shows is
+ * the site's choice; publishing only makes them available. */
 export declare function projectSource(base: string): {
     url: (id: string) => string;
     /** Every published project, newest first. */

@@ -37,11 +37,13 @@ ProjectBuilder (below) is the one source for projects. It publishes them at `htt
 
 ```ts
 const projects = projectSource("https://projects.tomcoggia.com");
-const rows = await projects.list();            // index.json: id, title, cover, show, …
+const rows = await projects.list();            // index.json: id, title, screens, cover, …
 const project = await projects.get("augmedix"); // fetched, migrated, image paths made absolute
 ```
 
-The published files are served with `Access-Control-Allow-Origin: *`, so no proxy is needed. To see unpublished edits, point the source at ProjectBuilder's dev server (`http://localhost:5187`), which allows any origin too.
+The published files are served with `Access-Control-Allow-Origin: *`, so no proxy is needed. To see unpublished edits, point the source at ProjectBuilder's dev server (`http://localhost:5187`), which allows any origin too. Its list includes drafts, marked `draft: true`.
+
+Publishing a project only makes it available. Each site decides which published projects it shows, where, and in what order, by keeping its own list of ids (tomcoggia-com stores one `projectId` per presentation page).
 
 `loadProject(url, { assetBase })` is the lower-level call underneath: it fetches, runs `migrate()` (fills defaults and stamps `schemaVersion`), and with `assetBase` rewrites site-relative paths like `/images/x.png` to absolute URLs on that site.
 
@@ -66,7 +68,7 @@ npm run dev     # ProjectBuilder at http://localhost:5187
 
 Each project lives in `projects/<id>/`: `project.json` plus an `images/` folder. That folder is the only copy of the project. The id comes from the name you give a new project and never changes, even if you rename it, because other sites load projects by id. Duplicate makes an independent copy with its own id and images.
 
-Editing autosaves to those files, and only works under `npm run dev`. Commit as you go: pushing to `main` publishes. Vercel runs `npm run build:app` (see `vercel.json`), which builds a read-only site into `app-dist/` with the projects and a generated `projects/index.json`, served at `https://projects.tomcoggia.com` for other apps to load with `projectSource`.
+Editing autosaves to those files, and only works under `npm run dev`. New projects and duplicates start as drafts; use Publish on the project list when one is ready. Commit as you go: pushing to `main` publishes everything that isn't a draft. Vercel runs `npm run build:app` (see `vercel.json`), which builds a read-only site into `app-dist/` with the projects and a generated `projects/index.json`, served at `https://projects.tomcoggia.com` for other apps to load with `projectSource`.
 
 ## Develop
 

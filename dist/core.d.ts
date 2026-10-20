@@ -53,11 +53,13 @@ export interface ProjectPreview {
     body?: string;
     logo?: string;
     cardLogo?: string;
+    /** @deprecated Ignored. Each site that shows projects picks which ones itself. */
     show?: boolean;
 }
 export interface CaseStudyContent {
     schemaVersion?: number;
     title?: string;
+    draft?: boolean;
     screens: Screen[];
     preview?: ProjectPreview;
 }

@@ -105,5 +105,6 @@
     }
   ],
   "schemaVersion": 1,
-  "title": "Test Project"
+  "title": "Test Project",
+  "draft": true
 }

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Copy, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import {
   CaseStudyBuilder, CaseStudyPlayer, CaseStudyProvider, Stage, ScreenView, bleedBg, backdropFor,
   type CaseStudyContent, type Screen,
 } from "../src/index.js";
 import {
   beaconProject, canEdit, createProject, deleteProject, duplicateProject, getProject, listProjects,
-  projectAssets, renameProject, saveProject, type ProjectRow,
+  projectAssets, publishProject, renameProject, saveProject, type ProjectRow,
 } from "./store";
 
 // ─── ProjectBuilder ────────────────────────────────────────────────
@@ -115,6 +115,7 @@ function ProjectList() {
             key={row.id}
             row={row}
             onRename={(title) => act(() => renameProject(row.id, title))}
+            onPublish={(published) => act(() => publishProject(row.id, published))}
             onDuplicate={() => act(() => duplicateProject(row.id, `${row.title} copy`))}
             onDelete={() => act(() => deleteProject(row.id))}
           />
@@ -166,9 +167,10 @@ function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string) => v
 // Mirrors freeId() in projects-plugin.ts (the server adds a suffix if the id is taken).
 const slugPreview = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "project";
 
-function ProjectTile({ row, onRename, onDuplicate, onDelete }: {
+function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
   row: ProjectRow;
   onRename: (title: string) => void;
+  onPublish: (published: boolean) => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
@@ -196,7 +198,7 @@ function ProjectTile({ row, onRename, onDuplicate, onDelete }: {
           ) : (
             <h2 className="tile__title">{row.title}</h2>
           )}
-          {!row.show && <span className="badge" title="Project settings: not shown on the Projects page">Hidden</span>}
+          {row.draft && <span className="badge" title="Not published: other sites can't load it">Draft</span>}
           {canEdit && !renaming && <DeleteButton onDelete={onDelete} />}
         </div>
         <p className="tile__meta">
@@ -211,6 +213,15 @@ function ProjectTile({ row, onRename, onDuplicate, onDelete }: {
           <a className="btn btn--small" href={`#/${row.id}`}>
             <Play size={14} /> Play
           </a>
+          {canEdit && (
+            <button
+              className="btn btn--small"
+              onClick={() => onPublish(row.draft)}
+              title={row.draft ? "Include it in the published site on the next push" : "Leave it out of the published site"}
+            >
+              {row.draft ? <Globe size={14} /> : <EyeOff size={14} />} {row.draft ? "Publish" : "Unpublish"}
+            </button>
+          )}
           {canEdit && (
             <button className="btn btn--small" onClick={onDuplicate} title="Make an independent copy">
               <Copy size={14} /> Duplicate

@@ -52,19 +52,19 @@ export async function loadProject(url, opts = {}) {
     const project = migrate(await res.json());
     return opts.assetBase ? withAssetBase(project, opts.assetBase) : project;
 }
-/** The preview card a project authors for itself (props for ProjectPreviewCard),
- * plus its show-on-index flag (default true). The card logo falls back to the
- * slide logo. */
+/** The preview card a project authors for itself (props for ProjectPreviewCard).
+ * The card logo falls back to the slide logo. */
 export function previewCard(project) {
     const p = project.preview ?? {};
     return {
         image: p.image, imageOverlay: p.imageOverlay, eyebrow: p.eyebrow, title: p.title, body: p.body,
-        logo: p.cardLogo || p.logo, show: p.show !== false,
+        logo: p.cardLogo || p.logo,
     };
 }
 /** Projects published by a ProjectBuilder site at `base` (e.g.
  * "https://projects.tomcoggia.com"; "" for the same origin). Asset paths come
- * back absolute, so images load from that site. */
+ * back absolute, so images load from that site. Which projects a site shows is
+ * the site's choice; publishing only makes them available. */
 export function projectSource(base) {
     const root = base.replace(/\/+$/, "");
     const url = (id) => `${root}/projects/${id}/project.json`;

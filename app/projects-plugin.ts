@@ -9,16 +9,17 @@ import { basename, extname, join, resolve } from "node:path";
 //
 //   GET  /projects/index.json                       one row per project, built from disk
 //   GET  /projects/<id>/…                           project files, straight from disk
-//   POST /__projects/create     { title, data }     → { id }  new folder, id from the title
-//   POST /__projects/save       { id, data }        → overwrites project.json
+//   POST /__projects/create     { title, data }     → { id }  new folder, id from the title, a draft
+//   POST /__projects/save       { id, data }        → overwrites project.json (keeps its draft flag)
+//   POST /__projects/publish    { id, published }   → sets or clears the draft flag
 //   POST /__projects/rename     { id, title }       → sets the title (the id never changes)
-//   POST /__projects/duplicate  { id, title }       → { id }  copies the folder, images included
+//   POST /__projects/duplicate  { id, title }       → { id }  copies the folder, images included, as a draft
 //   POST /__projects/delete     { id }              → removes the folder
 //   POST /__projects/upload     { id, fileName, dataUrl } → { path }  into projects/<id>/images/
 //   GET  /__projects/images?id=<id>                 image names in projects/<id>/images/
 //
 // A build copies projects/ into the output with a static index.json, giving a
-// read-only site that other apps can load projects from.
+// read-only site that other apps can load projects from. Drafts are left out.
 
 const MIME: Record<string, string> = {
   ".json": "application/json",
@@ -45,9 +46,13 @@ export function projectsPlugin(dir: string): Plugin {
     writeFileSync(projectFile(id), `${JSON.stringify(data, null, 2)}\n`);
   };
 
-  // What the project list needs, without loading every project in full.
-  function index() {
+  const isDraft = (id: string) => read(id).draft === true;
+
+  // What the project list needs, without loading every project in full. The
+  // published index leaves drafts out.
+  function index({ drafts }: { drafts: boolean }) {
     return ids()
+      .filter((id) => drafts || !isDraft(id))
       .map((id) => {
         const data = read(id);
         return {
@@ -55,7 +60,7 @@ export function projectsPlugin(dir: string): Plugin {
           title: data.title || data.preview?.title || id,
           screens: data.screens?.length ?? 0,
           cover: data.screens?.[0] ?? null,
-          show: data.preview?.show !== false,
+          draft: data.draft === true,
           updatedAt: statSync(projectFile(id)).mtimeMs,
         };
       })
@@ -82,7 +87,7 @@ export function projectsPlugin(dir: string): Plugin {
   function handle(path: string, input: any): [number, unknown] {
     if (path === "/__projects/create") {
       const id = freeId(input.title ?? "");
-      write(id, { ...input.data, title: input.title });
+      write(id, { ...input.data, title: input.title, draft: true });
       return [200, { id }];
     }
 
@@ -91,7 +96,12 @@ export function projectsPlugin(dir: string): Plugin {
     const { id } = input;
 
     if (path === "/__projects/save") {
-      write(id, input.data);
+      // Publishing is set from the list, so an editor's save never changes it.
+      write(id, { ...input.data, draft: isDraft(id) });
+      return [200, { ok: true }];
+    }
+    if (path === "/__projects/publish") {
+      write(id, { ...read(id), draft: !input.published });
       return [200, { ok: true }];
     }
     if (path === "/__projects/rename") {
@@ -103,7 +113,7 @@ export function projectsPlugin(dir: string): Plugin {
       if (existsSync(imagesDir(id))) cpSync(imagesDir(id), imagesDir(copy), { recursive: true });
       // Point the copy at its own images, so editing or deleting either project leaves the other alone.
       const text = readFileSync(projectFile(id), "utf8").split(`/projects/${id}/`).join(`/projects/${copy}/`);
-      write(copy, { ...JSON.parse(text), title: input.title });
+      write(copy, { ...JSON.parse(text), title: input.title, draft: true });
       return [200, { id: copy }];
     }
     if (path === "/__projects/delete") {
@@ -141,7 +151,7 @@ export function projectsPlugin(dir: string): Plugin {
         // Other apps' dev servers read projects from here too (projectSource), so reads are open to any origin.
         if (req.method === "GET" && path.startsWith("/projects/")) res.setHeader("Access-Control-Allow-Origin", "*");
 
-        if (req.method === "GET" && path === "/projects/index.json") return reply(200, index());
+        if (req.method === "GET" && path === "/projects/index.json") return reply(200, index({ drafts: true }));
 
         // Read from disk on every request: files saved since the server started are never stale.
         if (req.method === "GET" && path.startsWith("/projects/")) {
@@ -175,8 +185,12 @@ export function projectsPlugin(dir: string): Plugin {
 
     writeBundle() {
       if (!existsSync(dir)) return;
-      cpSync(dir, join(outDir, "projects"), { recursive: true, filter: (src) => basename(src) !== ".DS_Store" });
-      writeFileSync(join(outDir, "projects", "index.json"), `${JSON.stringify(index(), null, 2)}\n`);
+      const drafts = new Set(ids().filter(isDraft).map((id) => join(dir, id)));
+      cpSync(dir, join(outDir, "projects"), {
+        recursive: true,
+        filter: (src) => basename(src) !== ".DS_Store" && !drafts.has(src),
+      });
+      writeFileSync(join(outDir, "projects", "index.json"), `${JSON.stringify(index({ drafts: false }), null, 2)}\n`);
     },
   };
 }

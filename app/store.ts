@@ -30,6 +30,7 @@ async function post<T = { ok: true }>(action: string, body: unknown): Promise<T>
 export const createProject = (title: string) => post<{ id: string }>("create", { title, data: migrate(null) });
 export const saveProject = (id: string, data: CaseStudyContent) => post("save", { id, data });
 export const renameProject = (id: string, title: string) => post("rename", { id, title });
+export const publishProject = (id: string, published: boolean) => post("publish", { id, published });
 export const duplicateProject = (id: string, title: string) => post<{ id: string }>("duplicate", { id, title });
 export const deleteProject = (id: string) => post("delete", { id });
 

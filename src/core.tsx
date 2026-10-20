@@ -75,12 +75,14 @@ export interface ProjectPreview {
   body?: string;
   logo?: string;         // logo shown on the presentation slides (Intro / Title Card, top-left)
   cardLogo?: string;     // logo shown on the Projects page preview card (falls back to `logo`)
-  show?: boolean;        // show this project's card on the Projects page (default true)
+  /** @deprecated Ignored. Each site that shows projects picks which ones itself. */
+  show?: boolean;
 }
 
 export interface CaseStudyContent {
   schemaVersion?: number; // see migrate() in project.ts; absent = saved before versioning
   title?: string;         // the project's name, for apps that don't keep it elsewhere
+  draft?: boolean;        // ProjectBuilder: left out of the published build (default false)
   screens: Screen[];
   preview?: ProjectPreview; // the Projects-page preview card, authored here
 }

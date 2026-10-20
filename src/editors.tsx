@@ -232,7 +232,7 @@ export function iconBtn(disabled: boolean): React.CSSProperties {
 
 // ─── Thumbnail settings (deck-level) ──────────────────────────────
 // Authors the preview card shown on the Projects page (/projects) for this
-// case study — image / eyebrow / title / body — plus a show-on-Projects toggle.
+// case study — image / eyebrow / title / body.
 export function PreviewCardSettings({ preview, onChange, onClose, isCaseStudy, onToggleCaseStudy }: {
   preview: ProjectPreview;
   onChange: (patch: Partial<ProjectPreview>) => void;
@@ -240,7 +240,6 @@ export function PreviewCardSettings({ preview, onChange, onClose, isCaseStudy, o
   isCaseStudy?: boolean;
   onToggleCaseStudy?: () => void;
 }) {
-  const show = preview.show !== false;
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 90 }} />
@@ -260,14 +259,6 @@ export function PreviewCardSettings({ preview, onChange, onClose, isCaseStudy, o
 
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Projects page card</div>
         <div style={{ fontSize: 11, color: "#8c8c8c", marginBottom: 14 }}>The preview card shown on the Projects page. Clicking it opens this project.</div>
-
-        <button onClick={() => onChange({ show: !show })}
-          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "8px 10px", marginBottom: 14, borderRadius: 6, border: "1px solid #e3e0db", background: "#fff", cursor: "pointer" }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a" }}>Show on Projects page</span>
-          <span style={{ position: "relative", display: "inline-block", width: 38, height: 22, borderRadius: 999, background: show ? ACCENT : "#dcd8d2", transition: "background 0.15s" }}>
-            <span style={{ position: "absolute", top: 3, left: show ? 19 : 3, width: 16, height: 16, borderRadius: 999, background: "#fff", transition: "left 0.15s" }} />
-          </span>
-        </button>
 
         <ImageField label="Image" value={preview.image ?? ""} onChange={(v) => onChange({ image: v })} overlay={preview.imageOverlay === true} onOverlayChange={(v) => onChange({ imageOverlay: v })} />
 
