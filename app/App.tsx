@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { Card } from "@tomcoggia/ui";
 import {
   CaseStudyBuilder, CaseStudyPlayer, CaseStudyProvider, Stage, ScreenView, bleedBg, backdropFor,
   type CaseStudyContent, type Screen,
@@ -176,7 +177,7 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
 }) {
   const [renaming, setRenaming] = useState(false);
   return (
-    <article className="tile">
+    <Card variant="flat" className="tile">
       <a href={`#/${row.id}`} className="tile__thumb" aria-label={`Play ${row.title}`}>
         <Thumb screen={row.cover} />
         <span className="tile__play"><Play size={18} /></span>
@@ -229,7 +230,7 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
           {canEdit && <DeleteButton onDelete={onDelete} />}
         </div>
       </div>
-    </article>
+    </Card>
   );
 }
 

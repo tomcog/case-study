@@ -75,6 +75,10 @@ code {
   font-size: 13px;
 }
 
+.btn--danger {
+  color: var(--accent);
+}
+
 .btn--danger:hover,
 .btn--danger.is-armed {
   border-color: var(--accent);
@@ -169,11 +173,9 @@ code {
   gap: 24px;
 }
 
+/* Fill and radius come from the component library's flat Card. */
 .tile {
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
 }
 
 .tile__thumb {
