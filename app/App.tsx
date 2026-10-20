@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
-import { Card } from "@tomcoggia/ui";
+import { Card, Segment, SegmentedControl } from "@tomcoggia/ui";
 import {
   CaseStudyBuilder, CaseStudyPlayer, CaseStudyProvider, Stage, ScreenView, bleedBg, backdropFor,
   type CaseStudyContent, type Screen,
@@ -204,31 +204,21 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
         <p className="tile__meta">
           <code>{row.id}</code> · {row.screens} {row.screens === 1 ? "screen" : "screens"} · {ago(row.updatedAt)}
         </p>
-        <div className="tile__actions">
+        <SegmentedControl size="md" actions aria-label={`${row.title} actions`} className="tile__actions">
+          {canEdit && <Segment icon={<Pencil />} onClick={() => go(`#/${row.id}/edit`)}>Edit</Segment>}
+          <Segment icon={<Play />} onClick={() => go(`#/${row.id}`)}>Play</Segment>
           {canEdit && (
-            <a className="btn btn--small" href={`#/${row.id}/edit`}>
-              <Pencil size={14} /> Edit
-            </a>
-          )}
-          <a className="btn btn--small" href={`#/${row.id}`}>
-            <Play size={14} /> Play
-          </a>
-          {canEdit && (
-            <button
-              className="btn btn--small"
+            <Segment
+              icon={row.draft ? <Globe /> : <EyeOff />}
               onClick={() => onPublish(row.draft)}
               title={row.draft ? "Include it in the published site on the next push" : "Leave it out of the published site"}
             >
-              {row.draft ? <Globe size={14} /> : <EyeOff size={14} />} {row.draft ? "Publish" : "Unpublish"}
-            </button>
+              {row.draft ? "Publish" : "Unpublish"}
+            </Segment>
           )}
-          {canEdit && (
-            <button className="btn btn--small" onClick={onDuplicate} title="Make an independent copy">
-              <Copy size={14} /> Duplicate
-            </button>
-          )}
-          {canEdit && <DeleteButton onDelete={onDelete} />}
-        </div>
+          {canEdit && <Segment icon={<Copy />} onClick={onDuplicate} title="Make an independent copy">Duplicate</Segment>}
+          {canEdit && <DeleteSegment onDelete={onDelete} />}
+        </SegmentedControl>
       </div>
     </Card>
   );
@@ -269,7 +259,7 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (title: str
 }
 
 // Asks before deleting: the first click arms it ("Delete?"), a second click within 3 seconds deletes.
-function DeleteButton({ onDelete }: { onDelete: () => void }) {
+function DeleteSegment({ onDelete }: { onDelete: () => void }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
     if (!armed) return;
@@ -277,14 +267,15 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
     return () => window.clearTimeout(t);
   }, [armed]);
   return (
-    <button
-      className={`btn btn--small btn--danger${armed ? " is-armed" : ""}`}
+    <Segment
+      className={`tile__delete${armed ? " is-armed" : ""}`}
+      icon={<Trash2 />}
+      hideLabel
       onClick={() => (armed ? onDelete() : setArmed(true))}
-      title="Delete the project and its images"
-      aria-label={armed ? "Confirm delete" : "Delete"}
+      title={armed ? "Click again to delete" : "Delete the project and its images"}
     >
-      <Trash2 size={14} /> {armed && "Delete?"}
-    </button>
+      {armed ? "Delete?" : "Delete"}
+    </Segment>
   );
 }
 

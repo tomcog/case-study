@@ -70,26 +70,6 @@ code {
   filter: brightness(0.94);
 }
 
-.btn--small {
-  padding: 5px 10px;
-  font-size: 13px;
-}
-
-.btn--danger {
-  color: var(--accent);
-}
-
-.btn--danger:hover,
-.btn--danger.is-armed {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.btn--danger.is-armed {
-  background: var(--accent);
-  color: #fff;
-}
-
 .input {
   width: 100%;
   padding: 8px 10px;
@@ -286,9 +266,19 @@ code {
 }
 
 .tile__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  max-width: 100%;
+}
+
+/* Delete is an icon; armed (click again to confirm) it fills red, so the row
+   keeps its width. */
+.tile__delete,
+.tile__delete:hover {
+  color: var(--accent);
+}
+
+.tile__delete.is-armed {
+  background: var(--accent);
+  color: #fff;
 }
 
 /* ─── Messages ─── */
