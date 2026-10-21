@@ -25,4 +25,32 @@ export const DEFAULT_WALKTHROUGH = {
         },
     ],
 };
+/** The demo a step runs in: the nearest `enter.app` at or before it. A run of
+ * steps through one app only has to name it once, and jumping straight to step
+ * seven still resolves to the same app as walking there.
+ *
+ * Crossing into another app is always a fresh document, so the reader's work in
+ * the app they are leaving doesn't carry over — each app boots from its seed. */
+export function targetAt(content, index) {
+    const app = appAt(content, index);
+    return (app && content.targets?.[app]) || content.target;
+}
+/** The name a step resolves to, or null for the default demo. An unknown name
+ * — "default" among them — means the default demo, which is how a step says
+ * it comes back from a named one. */
+export function appAt(content, index) {
+    for (let i = Math.min(index, content.steps.length - 1); i >= 0; i--) {
+        const app = content.steps[i]?.enter?.app;
+        if (app)
+            return content.targets?.[app] ? app : null;
+    }
+    return null;
+}
+/** Every demo the walkthrough can show, the default first. */
+export function allTargets(content) {
+    return [
+        { name: null, target: content.target },
+        ...Object.entries(content.targets ?? {}).map(([name, target]) => ({ name, target })),
+    ];
+}
 //# sourceMappingURL=types.js.map

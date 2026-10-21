@@ -26,6 +26,9 @@ export interface WalkthroughTarget {
 
 /** How the product gets into the state a step talks about. */
 export interface StepEnter {
+  /** Which demo this step runs in: a key of the walkthrough's `targets`, or
+   * absent to stay in whichever app the steps before it named. */
+  app?: string;
   /** A hash route inside the demo, e.g. "#/settings". */
   path?: string;
   /** A seed the demo understands, passed as ?wt=<state>. Only applied when the
@@ -74,7 +77,11 @@ export interface WalkthroughContent {
   title?: string;
   draft?: boolean;
   preview?: ProjectPreview;
+  /** The demo the walkthrough opens in, and the one a step falls back to. */
   target: WalkthroughTarget;
+  /** Further demos, by name, for a walkthrough that crosses more than one app.
+   * A step picks one with `enter.app`. Each has to be same-origin too. */
+  targets?: Record<string, WalkthroughTarget>;
   /** Which side the copy sits on (default "left"). */
   panelSide?: "left" | "right";
   steps: WalkthroughStep[];
@@ -94,3 +101,33 @@ export const DEFAULT_WALKTHROUGH: WalkthroughContent = {
     },
   ],
 };
+
+/** The demo a step runs in: the nearest `enter.app` at or before it. A run of
+ * steps through one app only has to name it once, and jumping straight to step
+ * seven still resolves to the same app as walking there.
+ *
+ * Crossing into another app is always a fresh document, so the reader's work in
+ * the app they are leaving doesn't carry over — each app boots from its seed. */
+export function targetAt(content: WalkthroughContent, index: number): WalkthroughTarget {
+  const app = appAt(content, index);
+  return (app && content.targets?.[app]) || content.target;
+}
+
+/** The name a step resolves to, or null for the default demo. An unknown name
+ * — "default" among them — means the default demo, which is how a step says
+ * it comes back from a named one. */
+export function appAt(content: WalkthroughContent, index: number): string | null {
+  for (let i = Math.min(index, content.steps.length - 1); i >= 0; i--) {
+    const app = content.steps[i]?.enter?.app;
+    if (app) return content.targets?.[app] ? app : null;
+  }
+  return null;
+}
+
+/** Every demo the walkthrough can show, the default first. */
+export function allTargets(content: WalkthroughContent): { name: string | null; target: WalkthroughTarget }[] {
+  return [
+    { name: null, target: content.target },
+    ...Object.entries(content.targets ?? {}).map(([name, target]) => ({ name, target })),
+  ];
+}

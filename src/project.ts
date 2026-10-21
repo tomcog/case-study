@@ -1,6 +1,6 @@
 import { DEFAULT_CONTENT } from "./core.js";
 import type { CaseStudyContent, ProjectPreview, Screen } from "./core.js";
-import type { WalkthroughContent, WalkthroughStep } from "./walkthrough/types.js";
+import type { WalkthroughContent, WalkthroughStep, WalkthroughTarget } from "./walkthrough/types.js";
 
 // ─── Project files ─────────────────────────────────────────────────
 // A project is one JSON object. These helpers make that object safe to move
@@ -87,10 +87,12 @@ export function withAssetBase<T extends ProjectContent>(project: T, base: string
   const preview = previewWithAssetBase(base)(project.preview);
   if (isWalkthrough(project)) {
     const abs = absolutizer(base);
+    const target = (t: WalkthroughTarget) => ({ ...t, src: abs(t.src) ?? "" });
     const next: WalkthroughContent = {
       ...project,
       preview,
-      target: { ...project.target, src: abs(project.target.src) ?? "" },
+      target: target(project.target),
+      targets: project.targets && Object.fromEntries(Object.entries(project.targets).map(([name, t]) => [name, target(t)])),
       steps: project.steps.map(stepWithAssetBase(base)),
     };
     return next as T;

@@ -20,6 +20,6 @@ export { renderStyledText } from "./ui/renderStyledText.js";
 export { WalkthroughPlayer } from "./walkthrough/WalkthroughPlayer.js";
 export { WalkthroughBuilder } from "./walkthrough/WalkthroughBuilder.js";
 export { sameOriginDriver } from "./walkthrough/driver.js";
-export { DEFAULT_WALKTHROUGH } from "./walkthrough/types.js";
+export { DEFAULT_WALKTHROUGH, allTargets, appAt, targetAt } from "./walkthrough/types.js";
 export type { Driver, MarkRect, MarkRects, PickHit } from "./walkthrough/driver.js";
 export type { WalkthroughContent, WalkthroughStep, WalkthroughTarget, StepAdvance, StepEnter, Spotlight, } from "./walkthrough/types.js";

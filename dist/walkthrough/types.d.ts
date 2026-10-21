@@ -10,6 +10,9 @@ export interface WalkthroughTarget {
 }
 /** How the product gets into the state a step talks about. */
 export interface StepEnter {
+    /** Which demo this step runs in: a key of the walkthrough's `targets`, or
+     * absent to stay in whichever app the steps before it named. */
+    app?: string;
     /** A hash route inside the demo, e.g. "#/settings". */
     path?: string;
     /** A seed the demo understands, passed as ?wt=<state>. Only applied when the
@@ -64,10 +67,30 @@ export interface WalkthroughContent {
     title?: string;
     draft?: boolean;
     preview?: ProjectPreview;
+    /** The demo the walkthrough opens in, and the one a step falls back to. */
     target: WalkthroughTarget;
+    /** Further demos, by name, for a walkthrough that crosses more than one app.
+     * A step picks one with `enter.app`. Each has to be same-origin too. */
+    targets?: Record<string, WalkthroughTarget>;
     /** Which side the copy sits on (default "left"). */
     panelSide?: "left" | "right";
     steps: WalkthroughStep[];
 }
 /** What a new walkthrough starts as: one step, and no demo pointed at yet. */
 export declare const DEFAULT_WALKTHROUGH: WalkthroughContent;
+/** The demo a step runs in: the nearest `enter.app` at or before it. A run of
+ * steps through one app only has to name it once, and jumping straight to step
+ * seven still resolves to the same app as walking there.
+ *
+ * Crossing into another app is always a fresh document, so the reader's work in
+ * the app they are leaving doesn't carry over — each app boots from its seed. */
+export declare function targetAt(content: WalkthroughContent, index: number): WalkthroughTarget;
+/** The name a step resolves to, or null for the default demo. An unknown name
+ * — "default" among them — means the default demo, which is how a step says
+ * it comes back from a named one. */
+export declare function appAt(content: WalkthroughContent, index: number): string | null;
+/** Every demo the walkthrough can show, the default first. */
+export declare function allTargets(content: WalkthroughContent): {
+    name: string | null;
+    target: WalkthroughTarget;
+}[];

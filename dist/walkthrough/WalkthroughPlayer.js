@@ -10,6 +10,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
 import { DemoNotice, Spotlight, toBox, useDemo } from "./stage.js";
+import { targetAt } from "./types.js";
 const PANEL_W = 400;
 const LINE = "#e6e4e1";
 const MUTED = "#6f6a66";
@@ -34,7 +35,7 @@ function watch(driver, advance, done) {
     }
 }
 export function WalkthroughPlayer({ content, startIndex = 0, onExit }) {
-    const { target, steps } = content;
+    const { steps } = content;
     const reduced = useReducedMotion();
     const [i, setI] = useState(startIndex);
     const [nudge, setNudge] = useState(false);
@@ -43,6 +44,9 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }) {
     const finished = i >= steps.length;
     const markIds = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
     const markKey = markIds.join("|");
+    // Which app this step runs in. Changing it swaps the framed document, which
+    // the stage handles by standing up a driver for the new demo.
+    const target = useMemo(() => targetAt(content, i), [content, i]);
     const demo = useDemo(target, markIds);
     const { driver, measure } = demo;
     const next = useCallback(() => setI((n) => n + 1), []);

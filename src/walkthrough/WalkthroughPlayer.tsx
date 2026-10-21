@@ -11,6 +11,7 @@ import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
 import { DemoNotice, Spotlight, toBox, useDemo } from "./stage.js";
 import type { Driver } from "./driver.js";
+import { targetAt } from "./types.js";
 import type { StepAdvance, WalkthroughContent } from "./types.js";
 
 const PANEL_W = 400;
@@ -45,7 +46,7 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
   startIndex?: number;
   onExit?: () => void;
 }) {
-  const { target, steps } = content;
+  const { steps } = content;
   const reduced = useReducedMotion();
 
   const [i, setI] = useState(startIndex);
@@ -58,6 +59,9 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
   const markIds = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
   const markKey = markIds.join("|");
 
+  // Which app this step runs in. Changing it swaps the framed document, which
+  // the stage handles by standing up a driver for the new demo.
+  const target = useMemo(() => targetAt(content, i), [content, i]);
   const demo = useDemo(target, markIds);
   const { driver, measure } = demo;
 

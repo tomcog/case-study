@@ -70,10 +70,12 @@ export function withAssetBase(project, base) {
     const preview = previewWithAssetBase(base)(project.preview);
     if (isWalkthrough(project)) {
         const abs = absolutizer(base);
+        const target = (t) => ({ ...t, src: abs(t.src) ?? "" });
         const next = {
             ...project,
             preview,
-            target: { ...project.target, src: abs(project.target.src) ?? "" },
+            target: target(project.target),
+            targets: project.targets && Object.fromEntries(Object.entries(project.targets).map(([name, t]) => [name, target(t)])),
             steps: project.steps.map(stepWithAssetBase(base)),
         };
         return next;

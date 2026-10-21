@@ -15,7 +15,8 @@ import { Field, ImageField, PreviewCardSettings, ghostBtn, iconBtn, inputStyle, 
 import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
 import { DemoNotice, HoverOutline, Spotlight, toBox, useDemo } from "./stage.js";
 import type { PickHit } from "./driver.js";
-import type { StepAdvance, WalkthroughContent, WalkthroughStep } from "./types.js";
+import { allTargets, appAt, targetAt } from "./types.js";
+import type { StepAdvance, WalkthroughContent, WalkthroughStep, WalkthroughTarget } from "./types.js";
 
 const ADVANCE_KINDS: { value: StepAdvance["on"]; label: string; hint: string }[] = [
   { value: "manual", label: "A button", hint: "The reader presses Next in the panel." },
@@ -57,14 +58,61 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
   const step = steps[index];
 
   const markIds = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
-  const demo = useDemo(content.target, markIds);
+  // The app the selected step runs in, which is what the canvas shows.
+  const target = useMemo(() => targetAt(content, index), [content, index]);
+  const demo = useDemo(target, markIds);
   const { driver } = demo;
+  const named = allTargets(content);
 
   const update = (patch: Partial<WalkthroughStep>) =>
     setContent((prev) => ({ ...prev, steps: prev.steps.map((s, i) => (i === index ? { ...s, ...patch } : s)) }));
 
-  const setTarget = (patch: Partial<WalkthroughContent["target"]>) =>
-    setContent((prev) => ({ ...prev, target: { ...prev.target, ...patch } }));
+  /** Edit whichever demo the selected step runs in. */
+  const setTarget = (patch: Partial<WalkthroughTarget>) =>
+    setContent((prev) => {
+      const app = appAt(prev, index);
+      if (!app) return { ...prev, target: { ...prev.target, ...patch } };
+      return { ...prev, targets: { ...prev.targets, [app]: { ...(prev.targets?.[app] ?? { src: "" }), ...patch } } };
+    });
+
+  const patchNamed = (name: string, patch: Partial<WalkthroughTarget>) =>
+    setContent((prev) => ({
+      ...prev,
+      targets: { ...prev.targets, [name]: { ...(prev.targets?.[name] ?? { src: "" }), ...patch } },
+    }));
+
+  const addTarget = () => {
+    setContent((prev) => {
+      let name = "app-2";
+      for (let n = 2; prev.targets?.[name]; n++) name = `app-${n + 1}`;
+      return { ...prev, targets: { ...prev.targets, [name]: { src: "", width: prev.target.width, minWidth: prev.target.minWidth } } };
+    });
+  };
+
+  /** Renaming a demo carries the steps that point at it along with it. */
+  const renameTarget = (from: string, to: string) => {
+    if (!to.trim() || to === from) return;
+    setContent((prev) => {
+      const entries = Object.entries(prev.targets ?? {}).map(([k, v]) => [k === from ? to : k, v] as const);
+      return {
+        ...prev,
+        targets: Object.fromEntries(entries),
+        steps: prev.steps.map((st) => (st.enter?.app === from ? { ...st, enter: { ...st.enter, app: to } } : st)),
+      };
+    });
+  };
+
+  const removeTarget = (name: string) => {
+    setContent((prev) => {
+      const next = { ...prev.targets };
+      delete next[name];
+      return {
+        ...prev,
+        targets: next,
+        steps: prev.steps.map((st) => (st.enter?.app === name ? { ...st, enter: { ...st.enter, app: undefined } } : st)),
+      };
+    });
+  };
 
   const addStep = () => {
     setContent((prev) => {
@@ -282,26 +330,24 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
               )}
             </div>
           ) : (
-            <DemoNotice blocked={demo.blocked!} src={content.target.src} />
+            <DemoNotice blocked={demo.blocked!} src={target.src} />
           )}
         </div>
 
         {/* Inspector */}
         <div style={inspector}>
           <Field label="Demo" collapsible>
-            <input
-              value={content.target.src}
-              onChange={(e) => setTarget({ src: e.target.value })}
-              placeholder="/projects/<id>/demo/index.html"
-              style={inputStyle}
-            />
+            <p style={{ ...hint, marginTop: 0 }}>
+              This step runs in <strong>{appAt(content, index) ?? "the default demo"}</strong>.
+            </p>
+            <input value={target.src} onChange={(e) => setTarget({ src: e.target.value })} placeholder="/projects/<id>/demo/index.html" style={inputStyle} />
             <p style={hint}>Served from this site, so the walkthrough can drive it. A build in the project's own demo/ folder.</p>
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
               <label style={{ ...hint, flex: 1 }}>
                 Width
                 <input
                   type="number"
-                  value={content.target.width ?? ""}
+                  value={target.width ?? ""}
                   onChange={(e) => setTarget({ width: e.target.value ? Number(e.target.value) : undefined })}
                   style={inputStyle}
                 />
@@ -310,12 +356,32 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                 Min width
                 <input
                   type="number"
-                  value={content.target.minWidth ?? ""}
+                  value={target.minWidth ?? ""}
                   onChange={(e) => setTarget({ minWidth: e.target.value ? Number(e.target.value) : undefined })}
                   style={inputStyle}
                 />
               </label>
             </div>
+
+            {Object.entries(content.targets ?? {}).map(([name, t]) => (
+              <div key={name} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10, marginTop: 10 }}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input key={name} defaultValue={name} onBlur={(e) => renameTarget(name, e.target.value)} style={inputStyle} />
+                  <button onClick={() => removeTarget(name)} style={{ ...iconBtn(false), width: 30, height: 30 }} title="Remove this demo">
+                    <X size={13} />
+                  </button>
+                </div>
+                <input
+                  value={t.src}
+                  onChange={(e) => patchNamed(name, { src: e.target.value })}
+                  placeholder="/projects/<id>/demo/<app>/index.html"
+                  style={{ ...inputStyle, marginTop: 6 }}
+                />
+              </div>
+            ))}
+            <button onClick={addTarget} style={{ ...ghostBtn, marginTop: 10 }}>
+              <Plus size={15} /> Add another app
+            </button>
           </Field>
 
           <div style={{ display: "flex", gap: 6, margin: "18px 0" }}>
@@ -342,6 +408,26 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
           </Field>
 
           <Field label="Starts at" collapsible>
+            {named.length > 1 && (
+              <>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  <button onClick={() => update({ enter: { ...step.enter, app: undefined } })} style={choice(!step.enter?.app)}>
+                    Carry on
+                  </button>
+                  <button onClick={() => update({ enter: { ...step.enter, app: "default" } })} style={choice(step.enter?.app === "default")}>
+                    {"Default"}
+                  </button>
+                  {Object.keys(content.targets ?? {}).map((name) => (
+                    <button key={name} onClick={() => update({ enter: { ...step.enter, app: name } })} style={choice(step.enter?.app === name)}>
+                      {name}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ ...hint, marginTop: 0, marginBottom: 10 }}>
+                  “Carry on” stays in whichever app the steps before this one named.
+                </p>
+              </>
+            )}
             <div style={{ display: "flex", gap: 6 }}>
               <input
                 value={step.enter?.path ?? ""}
