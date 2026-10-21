@@ -1,5 +1,7 @@
-/* ProjectBuilder's own pages. The builder and player style themselves (inline);
-   this covers the project list around them, in the same warm greys. */
+/* ProjectBuilder's own pages. Controls come from @tomcoggia/ui; what's left
+   here is the layout around them — the list, the tiles and the messages — in
+   the same warm greys. The builder and player style themselves (inline),
+   because they ship in the package, which can't depend on the library. */
 
 :root {
   --accent: var(--cs-accent, #e51a38);
@@ -20,70 +22,13 @@ body {
   margin: 0;
   background: var(--backdrop);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: var(--ui-font-family, var(--ui-font-primary), var(--ui-font-fallback));
   -webkit-font-smoothing: antialiased;
 }
 
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.92em;
-}
-
-/* ─── Controls ─── */
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  text-decoration: none;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.btn:hover {
-  border-color: #cfcac3;
-  background: #faf9f7;
-}
-
-.btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.btn--primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
-}
-
-.btn--primary:hover {
-  border-color: var(--accent);
-  background: var(--accent);
-  filter: brightness(0.94);
-}
-
-.input {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  font-size: 14px;
-}
-
-.input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
 }
 
 /* ─── The list ─── */
@@ -129,16 +74,17 @@ code {
   background: var(--surface);
 }
 
-.new__label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
 .new__row {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
+}
+
+/* InputText carries its label under the field, so the row lines up on the
+   controls' tops rather than their bottoms. */
+
+.new__input {
+  flex: 1;
 }
 
 .new__hint {
@@ -247,20 +193,10 @@ code {
   border-color: var(--line);
 }
 
-.tile__rename {
+.tile__rename,
+.tile__rename input {
   font-size: 16px;
   font-weight: 650;
-}
-
-.badge {
-  flex-shrink: 0;
-  margin-left: auto;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #efece7;
-  color: #6f6a63;
-  font-size: 11px;
-  font-weight: 600;
 }
 
 .tile__meta {
@@ -281,62 +217,6 @@ code {
 /* A project action: the component library's Segment (Figma 672:13902) at MD,
    drawn as a button of its own. Every value is the library's segment token,
    and the ground is the segmented track's, since a lone segment has none. */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ui-segmented-md-icon-gap);
-  height: var(--ui-segmented-md-height);
-  min-width: var(--ui-segmented-md-height);
-  padding: 0 var(--ui-segmented-md-padding-x);
-  border: none;
-  border-radius: var(--ui-segmented-radius);
-  background: var(--ui-segmented-track-bg, var(--ui-surface-pale));
-  color: var(--ui-text-default);
-  font-family: inherit;
-  font-size: var(--ui-segmented-md-font-size);
-  font-weight: var(--ui-segmented-font-weight);
-  line-height: var(--ui-segmented-md-line-height);
-  text-decoration: none;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color var(--ui-motion-fast) ease, color var(--ui-motion-fast) ease;
-}
-
-.pill svg {
-  flex-shrink: 0;
-  width: var(--ui-segmented-md-icon-size);
-  height: var(--ui-segmented-md-icon-size);
-  opacity: var(--ui-segmented-icon-opacity);
-}
-
-.pill:hover {
-  color: var(--ui-action);
-}
-
-.pill:active {
-  background: color-mix(in srgb, var(--ui-text-default) 12%, var(--ui-segmented-track-bg, var(--ui-surface-pale)));
-}
-
-.pill--icon {
-  justify-content: center;
-  padding: 0;
-}
-
-.pill--icon svg {
-  opacity: var(--ui-segmented-icon-only-opacity);
-}
-
-/* Delete is red; armed (click again to confirm) it fills red. */
-.pill--danger,
-.pill--danger:hover {
-  color: var(--accent);
-}
-
-.pill--danger.is-armed {
-  background: var(--accent);
-  color: #fff;
-}
-
 /* ─── Messages ─── */
 
 .toast {

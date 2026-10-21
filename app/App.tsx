@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
-import { Card } from "@tomcoggia/ui";
+import { Button, ButtonRound, Card, InputText, Tag } from "@tomcoggia/ui";
 import {
   CaseStudyBuilder, CaseStudyPlayer, CaseStudyProvider, Stage, ScreenView,
   WalkthroughBuilder, WalkthroughPlayer, bleedBg, backdropFor, isWalkthrough,
@@ -104,9 +104,9 @@ function ProjectList() {
           <LayoutGrid size={20} /> ProjectBuilder
         </h1>
         {canEdit && !creating && (
-          <button className="btn btn--primary" onClick={() => setCreating(true)}>
-            <Plus size={16} /> New project
-          </button>
+          <Button variant="primary" icon={<Plus size={16} />} onClick={() => setCreating(true)}>
+            New project
+          </Button>
         )}
       </header>
 
@@ -150,20 +150,20 @@ function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string, kind
         if (name) onCreate(name, "case-study");
       }}
     >
-      <label className="new__label" htmlFor="new-title">Project name</label>
       <div className="new__row">
-        <input
+        <InputText
           id="new-title"
-          className="input"
+          className="new__input"
+          label="Project name"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => e.key === "Escape" && onCancel()}
           placeholder="e.g. SimpleScreen CRC"
           autoFocus
         />
-        <button className="btn btn--primary" type="submit" disabled={!name}>Case study</button>
-        <button className="btn" type="button" disabled={!name} onClick={() => onCreate(name, "walkthrough")}>Walkthrough</button>
-        <button className="btn" type="button" onClick={onCancel}>Cancel</button>
+        <Button variant="primary" type="submit" disabled={!name}>Case study</Button>
+        <Button variant="secondary" type="button" disabled={!name} onClick={() => onCreate(name, "walkthrough")}>Walkthrough</Button>
+        <Button variant="ghost" type="button" onClick={onCancel}>Cancel</Button>
       </div>
       <p className="new__hint">
         Its id will be <code>{slugPreview(name)}</code>. Other sites load the project by its id, so the id stays the same if you rename the project later. A case study is a deck of screens; a walkthrough is stepped copy beside a live demo.
@@ -211,33 +211,41 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
           ) : (
             <h2 className="tile__title">{row.title}</h2>
           )}
-          {row.draft && <span className="badge" title="Not published: other sites can't load it">Draft</span>}
+          {row.draft && <Tag title="Not published: other sites can't load it">Draft</Tag>}
         </div>
         <p className="tile__meta">
           <code>{row.id}</code> · {row.count} {unit(row)} · {ago(row.updatedAt)}
         </p>
         <div className="tile__actions">
+          {/* asChild keeps these real links: cmd-click and "open in new tab" still work. */}
           {canEdit && (
-            <a className="pill" href={`#/${row.id}/edit`}>
-              <Pencil /> Edit
-            </a>
+            <Button asChild size="sm" variant="tertiary" icon={<Pencil size={14} />}>
+              <a href={`#/${row.id}/edit`}>Edit</a>
+            </Button>
           )}
-          <a className="pill" href={`#/${row.id}`}>
-            <Play /> Play
-          </a>
+          <Button asChild size="sm" variant="tertiary" icon={<Play size={14} />}>
+            <a href={`#/${row.id}`}>Play</a>
+          </Button>
           {canEdit && (
-            <button
-              className="pill"
+            <Button
+              size="sm"
+              variant="tertiary"
+              icon={row.draft ? <Globe size={14} /> : <EyeOff size={14} />}
               onClick={() => onPublish(row.draft)}
               title={row.draft ? "Include it in the published site on the next push" : "Leave it out of the published site"}
             >
-              {row.draft ? <Globe /> : <EyeOff />} {row.draft ? "Publish" : "Unpublish"}
-            </button>
+              {row.draft ? "Publish" : "Unpublish"}
+            </Button>
           )}
           {canEdit && (
-            <button className="pill pill--icon" onClick={onDuplicate} title="Duplicate: make an independent copy" aria-label="Duplicate">
-              <Copy />
-            </button>
+            <ButtonRound
+              size="sm"
+              variant="tertiary"
+              icon={<Copy size={14} />}
+              onClick={onDuplicate}
+              title="Duplicate: make an independent copy"
+              aria-label="Duplicate"
+            />
           )}
           {canEdit && <DeleteButton onDelete={onDelete} />}
         </div>
@@ -268,8 +276,10 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (title: str
     onDone(value.trim());
   };
   return (
-    <input
-      className="input tile__rename"
+    <InputText
+      className="tile__rename"
+      label="Project name"
+      hideLabel
       value={title}
       onChange={(e) => setTitle(e.target.value)}
       onBlur={() => finish(title)}
@@ -277,7 +287,6 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (title: str
         if (e.key === "Enter") finish(title);
         if (e.key === "Escape") finish(initial);
       }}
-      aria-label="Project name"
       autoFocus
     />
   );
@@ -292,14 +301,15 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
     return () => window.clearTimeout(t);
   }, [armed]);
   return (
-    <button
-      className={`pill pill--icon pill--danger${armed ? " is-armed" : ""}`}
+    <ButtonRound
+      size="sm"
+      tone="danger"
+      variant={armed ? "primary" : "tertiary"}
+      icon={<Trash2 size={14} />}
       onClick={() => (armed ? onDelete() : setArmed(true))}
       title={armed ? "Click again to delete" : "Delete the project and its images"}
       aria-label={armed ? "Confirm delete" : "Delete"}
-    >
-      <Trash2 />
-    </button>
+    />
   );
 }
 

@@ -41,7 +41,8 @@ Installs from GitHub use the committed `dist/`, because npm 11 doesn't run a git
 
 ## Conventions
 
-- In the package (`src/`), all styling is inline `style` objects. There are no CSS files or classNames, apart from one scrollbar rule in `PhoneMockup`. The app (`app/`) has its own stylesheet, `app/app.css`.
+- In the package (`src/`), all styling is inline `style` objects. There are no CSS files or classNames, apart from one scrollbar rule in `PhoneMockup`. That holds because the package is published and installed by other sites: its only runtime dependency is `lucide-react`, so it can't reach for a component library.
+- The app (`app/`) is the other way round: its controls come from **`@tomcoggia/ui`** (`github:tomcog/component-library`, a devDependency — the app is built here, so it can depend on it). Use its components rather than writing new ones; `app/app.css` is only the layout around them (list, tiles, messages). `app/main.tsx` imports `@tomcoggia/ui/fonts.css` for the self-hosted brand typeface (DM Sans) and `@tomcoggia/ui/styles.css` for the tokens, and `app.css` names the font with the library's own chain (`var(--ui-font-family, var(--ui-font-primary), var(--ui-font-fallback))`) so the page and the components can't drift. The builder and player inherit that typeface from the host page, which is how a host re-skins them.
 - Brand colors come from `src/theme.ts`. Rendering uses `RED`/`INK`, which are `var(--cs-accent, …)`/`var(--cs-ink, …)` so hosts can re-skin them. Values stored in project data (a screen's `accent`) must be real hex values (`DEFAULT_ACCENT`), never CSS variables.
 - ESM with `moduleResolution: "Bundler"`: relative imports in `src/` use the `.js` extension (`./core.js`), even for `.tsx` sources.
 - Files open with a short header comment (`// ─── Section ───`) describing their role. Match that style.
