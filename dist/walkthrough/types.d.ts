@@ -1,21 +1,22 @@
 import type { ProjectPreview } from "../core.js";
 /** What is on the stage, which is really a statement about what the player can
  * do with it: read into it, or only show it. */
-export type StageKind = "demo" | "embed" | "mock";
+export type StageKind = "code" | "embed" | "mock";
 export interface Stage {
     /** Stable id, which is what a step names. Renaming the label leaves it be. */
     id: string;
     /** What the builder calls it. Falls back to the id. */
     label?: string;
     kind: StageKind;
-    /** A demo's entry file, site-relative ("/projects/<id>/demo/orders/index.html")
-     * and same-origin or it can't be driven; an embed's URL; a mock's image. */
+    /** A code stage's entry file, site-relative
+     * ("/projects/<id>/demo/orders/index.html") and same-origin or it can't be
+     * driven; an embed's URL; an image's file. */
     src: string;
-    /** Viewport width to give a demo or an embed, in px. The stage scales to fit it. */
+    /** Viewport width to give a code stage or an embed, in px. The stage scales to fit it. */
     width?: number;
     /** Below this stage width the player drops the frame for the copy alone. */
     minWidth?: number;
-    /** A mock's framing: "center" shows it whole, "fill" crops it to the stage.
+    /** An image stage's framing: "center" shows it whole, "fill" crops it to the stage.
      * Default "center". */
     fit?: "center" | "fill";
 }
@@ -27,7 +28,7 @@ export interface StepEnter {
     /** Which stage this step runs in, by id. Absent stays in whichever stage the
      * steps before it named. */
     stage?: string;
-    /** A hash route inside a demo, e.g. "#/settings". Opaque stages have none. */
+    /** A hash route inside a code stage, e.g. "#/settings". Opaque stages have none. */
     path?: string;
     /** A seed the demo understands, passed as ?wt=<state>.
      *

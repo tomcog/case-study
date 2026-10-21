@@ -28,14 +28,14 @@ import type { Area, Callout, Stage, StageKind, StepAdvance, WalkthroughContent, 
 
 const ADVANCE_KINDS: { value: StepAdvance["on"]; label: string; hint: string }[] = [
   { value: "manual", label: "A button", hint: "The reader presses Next in the panel." },
-  { value: "click", label: "A click", hint: "The reader clicks a marked element in the demo." },
-  { value: "path", label: "A route", hint: "The demo navigates to a hash route." },
-  { value: "signal", label: "A signal", hint: "The demo fires wt:signal with this name." },
+  { value: "click", label: "A click", hint: "The reader clicks a marked element in the app." },
+  { value: "path", label: "A route", hint: "The app navigates to a hash route." },
+  { value: "signal", label: "A signal", hint: "The app fires wt:signal with this name." },
   { value: "any", label: "Any of…", hint: "Whichever of these happens first." },
 ];
 
 const STAGE_KINDS: { value: StageKind; label: string; hint: string }[] = [
-  { value: "demo", label: "Demo", hint: "A build served from this site. The reader uses it, and steps can watch what they do." },
+  { value: "code", label: "Code", hint: "An app you built, served from this site. The reader uses it, and steps can watch what they do." },
   { value: "embed", label: "Embed", hint: "Any other URL in a frame — a Figma prototype, a live site. The reader can click inside it; we can't see them do it." },
   { value: "mock", label: "Mock-up", hint: "A still image, for an app that doesn't exist yet." },
 ];
@@ -111,7 +111,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
   const addStage = () =>
     setContent((prev) => {
       const name = `Stage ${prev.stages.length + 1}`;
-      const stage: Stage = { id: newStageId(prev.stages, name), label: name, kind: "demo", src: "", width: 1280, minWidth: 900 };
+      const stage: Stage = { id: newStageId(prev.stages, name), label: name, kind: "code", src: "", width: 1280, minWidth: 900 };
       return { ...prev, stages: [...prev.stages, stage] };
     });
 
@@ -185,6 +185,13 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
   // watches the stage and the seed only.
   const enterPath = step?.enter?.path ?? "";
   const enterState = step?.enter?.state ?? "";
+  // A route is a hash route inside the stage: "#/orders". An address pasted
+  // here still applies — as a hash on the stage the step is already on — so
+  // nothing throws and the stage never changes. Catch the shapes an address
+  // takes: a file, a full URL, or a hash that isn't rooted at "/".
+  const route = enterPath.replace(/^#/, "");
+  const misroute = !!enterPath && (!route.startsWith("/") || route.includes(".html") || enterPath.includes("://"));
+
   useEffect(() => {
     if (!driver || !step) return;
     let live = true;
@@ -237,7 +244,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
     if (!picking) return;
     const offPick = driver.onPick((hit) => {
       if (!hit.mark) {
-        setWarning(`That ${hit.label} has no data-walkthrough id. Add one in the demo, then pick it again.`);
+        setWarning(`That ${hit.label} has no data-walkthrough id. Add one in the app, then pick it again.`);
         return;
       }
       applyMark(picking, hit.mark);
@@ -482,7 +489,8 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
 
             {driveable && (
               <>
-                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                <label style={{ ...hint, display: "block", marginTop: 12 }}>Route, inside this stage</label>
+                <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                   <input
                     value={step.enter?.path ?? ""}
                     onChange={(e) => update({ enter: clean({ ...step.enter, path: e.target.value || undefined }) })}
@@ -495,16 +503,29 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                     onClick={() => driver && update({ enter: clean({ ...step.enter, path: driver.currentPath() || undefined }) })}
                     disabled={!driver}
                     style={nowrap}
-                    title="Use the route the demo is showing"
+                    title="Use the route the app is showing"
                   >
                     Use current
                   </Button>
                 </div>
+                {/* A path that isn't a hash route is almost always an address
+                    typed into the wrong field: it gets applied as a hash on the
+                    stage the step is already on, so the stage never changes and
+                    nothing looks broken. Say so rather than letting it pass. */}
+                {misroute && (
+                  <div style={warn}>
+                    <span>
+                      That isn't a route — it's an address. A route moves around <strong>inside</strong> {stageName(stage, stageId)},
+                      like <code>#/orders</code>. To show a different app, add it under <strong>Stages</strong> and pick it above.
+                    </span>
+                  </div>
+                )}
+                <label style={{ ...hint, display: "block", marginTop: 10 }}>Seed, sent as ?wt=</label>
                 <input
                   value={step.enter?.state ?? ""}
                   onChange={(e) => update({ enter: clean({ ...step.enter, state: e.target.value || undefined }) })}
-                  placeholder="Seed, passed as ?wt="
-                  style={{ ...inputStyle, marginTop: 6 }}
+                  placeholder="fresh"
+                  style={{ ...inputStyle, marginTop: 4 }}
                 />
                 <p style={hint}>
                   Applied whenever the document is made — a jump, or arriving in a stage that isn't on screen. Walking forward inside
@@ -515,10 +536,10 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
             {opaque && <p style={hint}>An embed or a mock-up can't be routed or seeded from here.</p>}
           </Field>
 
-          <Field label="Cover" collapsible>
-            <SegmentedControl size="md" aria-label="What covers the stage" style={track}>
+          <Field label="Display" collapsible>
+            <SegmentedControl size="md" aria-label="What this frame displays" style={track}>
               <Segment selected={!still} onClick={() => update({ still: undefined })}>
-                The stage
+                What's running
               </Segment>
               <Segment
                 selected={!!still}
@@ -534,7 +555,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
             {still && (
               <>
                 <div style={{ marginTop: 10 }}>
-                  <ImageField value={still.src} onChange={(v) => update({ still: { ...still, src: v } })} label="Cover image" />
+                  <ImageField value={still.src} onChange={(v) => update({ still: { ...still, src: v } })} label="Image" />
                 </div>
                 <SegmentedControl size="md" aria-label="How the cover fits" style={{ ...track, marginTop: 8 }}>
                   {(["center", "fill"] as const).map((fit) => (
@@ -543,7 +564,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                     </Segment>
                   ))}
                 </SegmentedControl>
-                <p style={hint}>Laid over this step's stage, which stays loaded underneath, so the next step picks up where the reader left off.</p>
+                <p style={hint}>Drawn over whatever this step is running, which keeps running underneath — so the next step picks up where the reader left off rather than starting again.</p>
               </>
             )}
           </Field>
@@ -685,7 +706,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
             <p style={hint}>
               {opaque
                 ? "Anchored to an area of the stage, which an embed or a mock-up can't move out from under them."
-                : "Anchored to a mark, so they follow the element as the demo reflows."}
+                : "Anchored to a mark, so they follow the element as the app reflows."}
             </p>
           </Field>
 
@@ -872,12 +893,12 @@ function StagesPanel({ content, onPatch, onAdd, onRemove, onMove, onClose }: {
                 <input
                   value={stage.src}
                   onChange={(e) => onPatch(stage.id, { src: e.target.value })}
-                  placeholder={stage.kind === "demo" ? "/projects/<id>/demo/<app>/index.html" : "https://embed.figma.com/…"}
+                  placeholder={stage.kind === "code" ? "/projects/<id>/demo/<app>/index.html" : "https://embed.figma.com/…"}
                   style={{ ...inputStyle, marginTop: 8 }}
                 />
                 <p style={hint}>
-                  {stage.kind === "demo"
-                    ? "Served from this site, so the walkthrough can drive it. A build in the project's own demo/ folder."
+                  {stage.kind === "code"
+                    ? "An app you built, served from this site so the walkthrough can drive it. Its build goes in the project's own demo/ folder."
                     : "Whatever URL the source gives you to embed. It runs on its own origin, so it's shown rather than driven."}
                 </p>
                 <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
@@ -959,7 +980,7 @@ function Anchor({ mark, area, opaque, onMark, onPick, onDraw, busy, disabled }: 
         icon={<Crosshair size={14} />}
         onClick={onPick}
         disabled={disabled}
-        title={disabled ? "Needs the live demo" : "Pick it by clicking the demo"}
+        title={disabled ? "Needs a code stage" : "Pick it by clicking the app"}
         style={nowrap}
       >
         Pick

@@ -52,11 +52,11 @@ export function useStage(stage, marks) {
         window.addEventListener("resize", on);
         return () => window.removeEventListener("resize", on);
     }, []);
-    // A demo on another origin can't be read from here, so say so rather than
-    // showing a frame that silently never responds. An embed is on another
-    // origin by design and makes no such promise, so this is a demo's problem.
+    // A code stage on another origin can't be read from here, so say so rather
+    // than showing a frame that silently never responds. An embed is on another
+    // origin by design and makes no such promise, so this is only code's problem.
     const foreign = useMemo(() => {
-        if (!src || kind !== "demo")
+        if (!src || kind !== "code")
             return false;
         try {
             return new URL(src, window.location.href).origin !== window.location.origin;
@@ -75,7 +75,7 @@ export function useStage(stage, marks) {
                     ? "small"
                     : null;
     const mode = blocked ? "blocked" : kind;
-    const driveable = mode === "demo";
+    const driveable = mode === "code";
     useEffect(() => {
         const el = frameRef.current;
         if (!driveable || !el)
@@ -251,7 +251,7 @@ export function StageStill({ image }) {
  * apart: a walkthrough with no stages at all, and a step pointed at one that
  * has since been deleted or renamed. */
 export function StageNotice({ blocked, src, stageId }) {
-    const text = blocked === "no-stage" ? (stageId ? (_jsxs(_Fragment, { children: ["This step runs in ", _jsx("strong", { children: stageId }), ", which this walkthrough no longer has. Point it at one of its stages, or add that one back."] })) : (_jsx(_Fragment, { children: "This walkthrough has no stages yet. Add one \u2014 an app served from this site, a Figma embed, or a mock-up image." }))) : blocked === "no-src" ? (_jsx(_Fragment, { children: "This stage has no address yet." })) : blocked === "foreign" ? (_jsxs(_Fragment, { children: [_jsx("strong", { children: src }), " is on another origin, so it can't be driven from here. Play this walkthrough on the site that hosts the demo, or make this stage an ", _jsx("strong", { children: "embed" }), ", which is shown rather than driven."] })) : (_jsx(_Fragment, { children: "This stage needs a wider window than this one." }));
+    const text = blocked === "no-stage" ? (stageId ? (_jsxs(_Fragment, { children: ["This step runs in ", _jsx("strong", { children: stageId }), ", which this walkthrough no longer has. Point it at one of its stages, or add that one back."] })) : (_jsx(_Fragment, { children: "This walkthrough has no stages yet. Add one \u2014 code you built and serve from this site, a framed URL, or an image." }))) : blocked === "no-src" ? (_jsx(_Fragment, { children: "This stage has no address yet." })) : blocked === "foreign" ? (_jsxs(_Fragment, { children: [_jsx("strong", { children: src }), " is on another origin, so it can't be driven from here. Play this walkthrough on the site that hosts the app, or make this stage an ", _jsx("strong", { children: "embed" }), ", which is shown rather than driven."] })) : (_jsx(_Fragment, { children: "This stage needs a wider window than this one." }));
     return (_jsx("div", { style: { flex: 1, display: "grid", placeItems: "center", padding: 32, color: "#6f6a66", fontSize: 14, textAlign: "center" }, children: _jsx("p", { style: { maxWidth: 440, lineHeight: 1.6 }, children: text }) }));
 }
 // ─── Callouts ──────────────────────────────────────────────────────

@@ -8,16 +8,17 @@
 // to say so once.
 //
 // Stages differ in what the player can do with them, not in what they are:
-//   • demo  — served from this site, so it can be read into and driven. Marks,
-//             spotlights that follow a reflowing element, advancing on what the
-//             reader actually did.
+//   • code  — an app you built, served from this site, so it can be read into
+//             and driven. Marks, spotlights that follow a reflowing element,
+//             advancing on what the reader actually did. "demo" is all three
+//             of these, so it can't also be the name of one.
 //   • embed — any other URL in a frame: a Figma prototype, a live site. The
 //             reader can click inside it; we just can't see them do it.
 //   • mock  — a still image. Nothing to click at all.
 // The last two are opaque: no marks, no observed advance, and anchoring by
 // rectangle rather than by element.
 //
-// A demo has to hold up five rules, and adding one means making them true:
+// A code stage has to hold up five rules, and adding one means making them true:
 //   1. data-walkthrough="<id>" on anything a step references (never selectors)
 //   2. hash routes, so `enter.path` is an assignment and a path advance is a hashchange
 //   3. boot from ?wt=<state> (sometimes empty), so any step is reachable by
@@ -26,7 +27,7 @@
 //   5. built with base "./" into projects/<id>/demo/
 /** Whether the player can read into this stage — marks, live geometry, and
  * advancing on what the reader does. Everything else is shown, not driven. */
-export const isDriveable = (stage) => stage?.kind === "demo";
+export const isDriveable = (stage) => stage?.kind === "code";
 /** What a new walkthrough starts as: one step, and no stage to put it on. */
 export const DEFAULT_WALKTHROUGH = {
     kind: "walkthrough",

@@ -90,7 +90,7 @@ function idFromSrc(src: string, taken: Set<string>): string {
 const cleanStage = (s: Partial<Stage>, fallbackId: string): Stage => ({
   ...s,
   id: typeof s.id === "string" && s.id ? s.id : fallbackId,
-  kind: s.kind === "embed" || s.kind === "mock" ? s.kind : "demo",
+  kind: s.kind === "embed" || s.kind === "mock" ? s.kind : "code",
   src: typeof s.src === "string" ? s.src : "",
 });
 
@@ -109,7 +109,7 @@ function foldStages(raw: Partial<WalkthroughContent> & LegacyWalkthrough): Stage
   const fold = (t: LegacyTarget, label?: string) => {
     const src = typeof t.src === "string" ? t.src : "";
     const id = label ? uniq(slug(label) || "app", taken) : idFromSrc(src, taken);
-    out.push({ id, label: label ?? undefined, kind: "demo", src, width: t.width, minWidth: t.minWidth });
+    out.push({ id, label: label ?? undefined, kind: "code", src, width: t.width, minWidth: t.minWidth });
   };
   if (raw.target && typeof raw.target === "object") fold(raw.target);
   for (const [name, t] of Object.entries(raw.targets ?? {})) {

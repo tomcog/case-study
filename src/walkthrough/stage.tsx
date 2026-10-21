@@ -31,7 +31,7 @@ export interface Box {
 export type Blocked = "no-stage" | "no-src" | "foreign" | "small";
 
 /** What the stage is doing: showing one of the three kinds, or nothing. */
-export type StageMode = "demo" | "embed" | "mock" | "blocked";
+export type StageMode = "code" | "embed" | "mock" | "blocked";
 
 /** The box around one or more demo rects, in stage pixels. */
 export function toBox(rects: MarkRect[], scale: number, pad = 6): Box | null {
@@ -72,11 +72,11 @@ export function useStage(stage: Stage | null, marks: string[]) {
     return () => window.removeEventListener("resize", on);
   }, []);
 
-  // A demo on another origin can't be read from here, so say so rather than
-  // showing a frame that silently never responds. An embed is on another
-  // origin by design and makes no such promise, so this is a demo's problem.
+  // A code stage on another origin can't be read from here, so say so rather
+  // than showing a frame that silently never responds. An embed is on another
+  // origin by design and makes no such promise, so this is only code's problem.
   const foreign = useMemo(() => {
-    if (!src || kind !== "demo") return false;
+    if (!src || kind !== "code") return false;
     try {
       return new URL(src, window.location.href).origin !== window.location.origin;
     } catch {
@@ -95,7 +95,7 @@ export function useStage(stage: Stage | null, marks: string[]) {
           : null;
 
   const mode: StageMode = blocked ? "blocked" : (kind as StageMode);
-  const driveable = mode === "demo";
+  const driveable = mode === "code";
 
   useEffect(() => {
     const el = frameRef.current;
@@ -355,14 +355,14 @@ export function StageNotice({ blocked, src, stageId }: { blocked: Blocked; src: 
           one back.
         </>
       ) : (
-        <>This walkthrough has no stages yet. Add one — an app served from this site, a Figma embed, or a mock-up image.</>
+        <>This walkthrough has no stages yet. Add one — code you built and serve from this site, a framed URL, or an image.</>
       )
     ) : blocked === "no-src" ? (
       <>This stage has no address yet.</>
     ) : blocked === "foreign" ? (
       <>
         <strong>{src}</strong> is on another origin, so it can't be driven from here. Play this walkthrough on the site that hosts the
-        demo, or make this stage an <strong>embed</strong>, which is shown rather than driven.
+        app, or make this stage an <strong>embed</strong>, which is shown rather than driven.
       </>
     ) : (
       <>This stage needs a wider window than this one.</>

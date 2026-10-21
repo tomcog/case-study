@@ -9,7 +9,7 @@ export interface Box {
 /** Why there is nothing on the stage, when there isn't. */
 export type Blocked = "no-stage" | "no-src" | "foreign" | "small";
 /** What the stage is doing: showing one of the three kinds, or nothing. */
-export type StageMode = "demo" | "embed" | "mock" | "blocked";
+export type StageMode = "code" | "embed" | "mock" | "blocked";
 /** The box around one or more demo rects, in stage pixels. */
 export declare function toBox(rects: MarkRect[], scale: number, pad?: number): Box | null;
 /** An Area resolved against the stage it sits on. Fractions in, pixels out. */

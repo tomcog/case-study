@@ -58,7 +58,7 @@ function idFromSrc(src, taken) {
 const cleanStage = (s, fallbackId) => ({
     ...s,
     id: typeof s.id === "string" && s.id ? s.id : fallbackId,
-    kind: s.kind === "embed" || s.kind === "mock" ? s.kind : "demo",
+    kind: s.kind === "embed" || s.kind === "mock" ? s.kind : "code",
     src: typeof s.src === "string" ? s.src : "",
 });
 /** The stages a saved walkthrough has, or the old `target` + `targets` folded
@@ -76,7 +76,7 @@ function foldStages(raw) {
     const fold = (t, label) => {
         const src = typeof t.src === "string" ? t.src : "";
         const id = label ? uniq(slug(label) || "app", taken) : idFromSrc(src, taken);
-        out.push({ id, label: label ?? undefined, kind: "demo", src, width: t.width, minWidth: t.minWidth });
+        out.push({ id, label: label ?? undefined, kind: "code", src, width: t.width, minWidth: t.minWidth });
     };
     if (raw.target && typeof raw.target === "object")
         fold(raw.target);

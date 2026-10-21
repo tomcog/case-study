@@ -8,16 +8,17 @@
 // to say so once.
 //
 // Stages differ in what the player can do with them, not in what they are:
-//   • demo  — served from this site, so it can be read into and driven. Marks,
-//             spotlights that follow a reflowing element, advancing on what the
-//             reader actually did.
+//   • code  — an app you built, served from this site, so it can be read into
+//             and driven. Marks, spotlights that follow a reflowing element,
+//             advancing on what the reader actually did. "demo" is all three
+//             of these, so it can't also be the name of one.
 //   • embed — any other URL in a frame: a Figma prototype, a live site. The
 //             reader can click inside it; we just can't see them do it.
 //   • mock  — a still image. Nothing to click at all.
 // The last two are opaque: no marks, no observed advance, and anchoring by
 // rectangle rather than by element.
 //
-// A demo has to hold up five rules, and adding one means making them true:
+// A code stage has to hold up five rules, and adding one means making them true:
 //   1. data-walkthrough="<id>" on anything a step references (never selectors)
 //   2. hash routes, so `enter.path` is an assignment and a path advance is a hashchange
 //   3. boot from ?wt=<state> (sometimes empty), so any step is reachable by
@@ -29,7 +30,7 @@ import type { ProjectPreview } from "../core.js";
 
 /** What is on the stage, which is really a statement about what the player can
  * do with it: read into it, or only show it. */
-export type StageKind = "demo" | "embed" | "mock";
+export type StageKind = "code" | "embed" | "mock";
 
 export interface Stage {
   /** Stable id, which is what a step names. Renaming the label leaves it be. */
@@ -37,28 +38,29 @@ export interface Stage {
   /** What the builder calls it. Falls back to the id. */
   label?: string;
   kind: StageKind;
-  /** A demo's entry file, site-relative ("/projects/<id>/demo/orders/index.html")
-   * and same-origin or it can't be driven; an embed's URL; a mock's image. */
+  /** A code stage's entry file, site-relative
+   * ("/projects/<id>/demo/orders/index.html") and same-origin or it can't be
+   * driven; an embed's URL; an image's file. */
   src: string;
-  /** Viewport width to give a demo or an embed, in px. The stage scales to fit it. */
+  /** Viewport width to give a code stage or an embed, in px. The stage scales to fit it. */
   width?: number;
   /** Below this stage width the player drops the frame for the copy alone. */
   minWidth?: number;
-  /** A mock's framing: "center" shows it whole, "fill" crops it to the stage.
+  /** An image stage's framing: "center" shows it whole, "fill" crops it to the stage.
    * Default "center". */
   fit?: "center" | "fill";
 }
 
 /** Whether the player can read into this stage — marks, live geometry, and
  * advancing on what the reader does. Everything else is shown, not driven. */
-export const isDriveable = (stage?: Stage | null): boolean => stage?.kind === "demo";
+export const isDriveable = (stage?: Stage | null): boolean => stage?.kind === "code";
 
 /** How the product gets into the state a step talks about. */
 export interface StepEnter {
   /** Which stage this step runs in, by id. Absent stays in whichever stage the
    * steps before it named. */
   stage?: string;
-  /** A hash route inside a demo, e.g. "#/settings". Opaque stages have none. */
+  /** A hash route inside a code stage, e.g. "#/settings". Opaque stages have none. */
   path?: string;
   /** A seed the demo understands, passed as ?wt=<state>.
    *
