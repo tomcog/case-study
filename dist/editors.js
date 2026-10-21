@@ -13,6 +13,7 @@ export function ImageField({ value, onChange, overlay, onOverlayChange, label = 
     const [showLibrary, setShowLibrary] = useState(false);
     const fileInputRef = useRef(null);
     const [uploading, setUploading] = useState(false);
+    const [dropping, setDropping] = useState(false);
     const handleFile = async (file) => {
         if (!file.type.startsWith("image/") || !assets?.upload)
             return;
@@ -22,8 +23,32 @@ export function ImageField({ value, onChange, overlay, onOverlayChange, label = 
         if (path)
             onChange(path);
     };
-    return (_jsxs(Field, { label: label, children: [showLibrary && (_jsx(ImageLibraryModal, { onSelect: (path) => { onChange(path); setShowLibrary(false); }, onClose: () => setShowLibrary(false) })), value && (_jsxs("div", { style: { position: "relative", marginBottom: 8, borderRadius: 6, overflow: "hidden", border: "1px solid #dcd8d2", background: "#4a4a4a" }, children: [_jsx("img", { src: value, alt: "", style: { display: "block", width: "100%", height: 120, objectFit: "contain" }, onError: (e) => { e.currentTarget.style.display = "none"; } }), onOverlayChange && (_jsx("button", { onClick: () => onOverlayChange(!overlay), title: overlay ? "Disable gradient overlay" : "Enable gradient overlay", style: { position: "absolute", top: 6, left: 6, width: 26, height: 26, borderRadius: 999, border: "none", background: overlay ? ACCENT : "rgba(20,18,16,0.7)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }, children: _jsx(Layers, { size: 13 }) })), _jsx("button", { onClick: () => onChange(""), title: "Remove image", style: { position: "absolute", top: 6, right: 6, width: 26, height: 26, borderRadius: 999, border: "none", background: "rgba(20,18,16,0.7)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }, children: _jsx(Trash2, { size: 13 }) })] })), _jsx("input", { value: value, onChange: (e) => onChange(e.target.value), placeholder: "https://\u2026 or /images/\u2026", style: inputStyle }), (assets?.upload || assets?.list) && (_jsxs("div", { style: { display: "flex", gap: 6, marginTop: 6 }, children: [assets.upload && (_jsxs("button", { onClick: () => fileInputRef.current?.click(), style: { ...ghostBtn, flex: 1, justifyContent: "center" }, children: [_jsx(ImageIcon, { size: 14 }), " ", uploading ? "Uploading…" : "Upload"] })), assets.list && (_jsxs("button", { onClick: () => setShowLibrary(true), style: { ...ghostBtn, flex: 1, justifyContent: "center" }, children: [_jsx(FolderOpen, { size: 14 }), " Browse"] }))] })), _jsx("input", { ref: fileInputRef, type: "file", accept: "image/*", style: { display: "none" }, onChange: (e) => { const f = e.target.files?.[0]; if (f)
-                    handleFile(f); e.target.value = ""; } })] }));
+    // Dropping an image straight onto the field, as well as picking or browsing
+    // for one. Ignored when the host supplies no uploader: there'd be nowhere to
+    // put the file.
+    const drop = assets?.upload
+        ? {
+            onDragOver: (e) => {
+                e.preventDefault();
+                setDropping(true);
+            },
+            onDragLeave: () => setDropping(false),
+            onDrop: (e) => {
+                e.preventDefault();
+                setDropping(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file)
+                    handleFile(file);
+            },
+        }
+        : {};
+    return (_jsx(Field, { label: label, children: _jsxs("div", { ...drop, style: {
+                borderRadius: 8,
+                outline: dropping ? `2px dashed ${ACCENT}` : "none",
+                outlineOffset: 3,
+                background: dropping ? "#fff5f6" : undefined,
+            }, children: [showLibrary && (_jsx(ImageLibraryModal, { onSelect: (path) => { onChange(path); setShowLibrary(false); }, onClose: () => setShowLibrary(false) })), value && (_jsxs("div", { style: { position: "relative", marginBottom: 8, borderRadius: 6, overflow: "hidden", border: "1px solid #dcd8d2", background: "#4a4a4a" }, children: [_jsx("img", { src: value, alt: "", style: { display: "block", width: "100%", height: 120, objectFit: "contain" }, onError: (e) => { e.currentTarget.style.display = "none"; } }), onOverlayChange && (_jsx("button", { onClick: () => onOverlayChange(!overlay), title: overlay ? "Disable gradient overlay" : "Enable gradient overlay", style: { position: "absolute", top: 6, left: 6, width: 26, height: 26, borderRadius: 999, border: "none", background: overlay ? ACCENT : "rgba(20,18,16,0.7)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }, children: _jsx(Layers, { size: 13 }) })), _jsx("button", { onClick: () => onChange(""), title: "Remove image", style: { position: "absolute", top: 6, right: 6, width: 26, height: 26, borderRadius: 999, border: "none", background: "rgba(20,18,16,0.7)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }, children: _jsx(Trash2, { size: 13 }) })] })), _jsx("input", { value: value, onChange: (e) => onChange(e.target.value), placeholder: "https://\u2026 or /images/\u2026", style: inputStyle }), (assets?.upload || assets?.list) && (_jsxs("div", { style: { display: "flex", gap: 6, marginTop: 6 }, children: [assets.upload && (_jsxs("button", { onClick: () => fileInputRef.current?.click(), style: { ...ghostBtn, flex: 1, justifyContent: "center" }, children: [_jsx(ImageIcon, { size: 14 }), " ", uploading ? "Uploading…" : "Upload"] })), assets.list && (_jsxs("button", { onClick: () => setShowLibrary(true), style: { ...ghostBtn, flex: 1, justifyContent: "center" }, children: [_jsx(FolderOpen, { size: 14 }), " Browse"] }))] })), _jsx("input", { ref: fileInputRef, type: "file", accept: "image/*", style: { display: "none" }, onChange: (e) => { const f = e.target.files?.[0]; if (f)
+                        handleFile(f); e.target.value = ""; } })] }) }));
 }
 export function OverviewEditor({ items, onChange, label = "Index items" }) {
     return (_jsx(Field, { label: label, children: _jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [items.map((it, i) => (_jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6, border: "1px solid #e3e0db", borderRadius: 8, padding: 8 }, children: [_jsxs("div", { style: { display: "flex", gap: 6, alignItems: "center" }, children: [_jsx("span", { style: { fontSize: 11, color: "#8a857d", fontVariantNumeric: "tabular-nums" }, children: String(i + 1).padStart(2, "0") }), _jsx("textarea", { value: it.label, onChange: (e) => onChange(items.map((x, j) => j === i ? { ...x, label: e.target.value } : x)), placeholder: "Label", rows: 1, style: { ...inputStyle, resize: "vertical" } }), _jsx("button", { onClick: () => onChange(items.filter((_, j) => j !== i)), style: iconBtn(false), children: _jsx(Trash2, { size: 14 }) })] }), _jsx("textarea", { value: it.body, onChange: (e) => onChange(items.map((x, j) => j === i ? { ...x, body: e.target.value } : x)), rows: 2, placeholder: "Description", style: { ...inputStyle, resize: "vertical" } })] }, it.id))), _jsxs("button", { onClick: () => onChange([...items, { id: `o-${Date.now()}`, label: "Section", body: "Describe this section." }]), style: { ...ghostBtn, justifyContent: "center" }, children: [_jsx(Plus, { size: 14 }), " Add item"] })] }) }));

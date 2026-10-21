@@ -36,6 +36,7 @@ export function ImageField({ value, onChange, overlay, onOverlayChange, label = 
   const [showLibrary, setShowLibrary] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [dropping, setDropping] = useState(false);
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith("image/") || !assets?.upload) return;
@@ -45,8 +46,36 @@ export function ImageField({ value, onChange, overlay, onOverlayChange, label = 
     if (path) onChange(path);
   };
 
+  // Dropping an image straight onto the field, as well as picking or browsing
+  // for one. Ignored when the host supplies no uploader: there'd be nowhere to
+  // put the file.
+  const drop = assets?.upload
+    ? {
+        onDragOver: (e: React.DragEvent) => {
+          e.preventDefault();
+          setDropping(true);
+        },
+        onDragLeave: () => setDropping(false),
+        onDrop: (e: React.DragEvent) => {
+          e.preventDefault();
+          setDropping(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) handleFile(file);
+        },
+      }
+    : {};
+
   return (
     <Field label={label}>
+      <div
+        {...drop}
+        style={{
+          borderRadius: 8,
+          outline: dropping ? `2px dashed ${ACCENT}` : "none",
+          outlineOffset: 3,
+          background: dropping ? "#fff5f6" : undefined,
+        }}
+      >
       {showLibrary && (
         <ImageLibraryModal
           onSelect={(path) => { onChange(path); setShowLibrary(false); }}
@@ -89,6 +118,7 @@ export function ImageField({ value, onChange, overlay, onOverlayChange, label = 
 
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
+      </div>
     </Field>
   );
 }

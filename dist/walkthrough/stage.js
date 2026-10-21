@@ -9,7 +9,8 @@ import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-run
 // reports is in demo pixels and is multiplied by that scale on its way out.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { RED } from "../theme.js";
+import { INK, RED } from "../theme.js";
+import { renderStyledText } from "../ui/renderStyledText.js";
 import { sameOriginDriver } from "./driver.js";
 /** The box around one or more demo rects, in stage pixels. */
 export function toBox(rects, scale, pad = 6) {
@@ -83,7 +84,15 @@ export function useDemo(target, marks) {
         if (!driver)
             return;
         const ids = marksRef.current;
-        setRects(ids.length ? driver.marks(ids) : {});
+        const next = ids.length ? driver.marks(ids) : {};
+        // The demo reports layout every frame while it animates; only a box that
+        // actually moved is worth a render.
+        setRects((prev) => (sameRects(prev, next) ? prev : next));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [driver, markKey]);
+    // Follow these marks as the demo reflows, not just when it scrolls.
+    useEffect(() => {
+        driver?.observe(marksRef.current);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [driver, markKey]);
     useEffect(() => {
@@ -104,8 +113,18 @@ export function useDemo(target, marks) {
         transform: `scale(${scale})`,
         transformOrigin: "top left",
     };
-    return { frameRef, stageRef, driver, rects, scale, measure, framed, blocked, frameStyle };
+    return { frameRef, stageRef, driver, rects, scale, measure, framed, blocked, frameStyle, bounds: size };
 }
+const sameRects = (a, b) => {
+    const keys = Object.keys(a);
+    if (keys.length !== Object.keys(b).length)
+        return false;
+    return keys.every((k) => {
+        const x = a[k];
+        const y = b[k];
+        return y && x.x === y.x && x.y === y.y && x.w === y.w && x.h === y.h;
+    });
+};
 /** Everything but the marked element, dimmed — and optionally click-proof. */
 export function Spotlight({ box, shape, lock }) {
     if (!box)
@@ -138,5 +157,84 @@ export function HoverOutline({ box, ok }) {
 export function DemoNotice({ blocked, src }) {
     const text = blocked === "no-demo" ? (_jsxs(_Fragment, { children: ["This walkthrough doesn't point at a demo yet. Set its ", _jsx("strong", { children: "demo path" }), " to something served from this site, such as", " ", _jsx("code", { children: "/projects/<id>/demo/index.html" }), "."] })) : blocked === "foreign" ? (_jsxs(_Fragment, { children: [_jsx("strong", { children: src }), " is on another origin, so it can't be driven from here \u2014 play this walkthrough on the site that hosts the demo."] })) : (_jsx(_Fragment, { children: "The demo needs a wider window than this one." }));
     return (_jsx("div", { style: { flex: 1, display: "grid", placeItems: "center", padding: 32, color: "#6f6a66", fontSize: 14, textAlign: "center" }, children: _jsx("p", { style: { maxWidth: 420, lineHeight: 1.6 }, children: text }) }));
+}
+// ─── Callouts ──────────────────────────────────────────────────────
+// Labels anchored to elements in the demo. The anchor moves with the demo's
+// scale, but the bubble itself is drawn at the stage's own scale: a demo shown
+// at 0.4 would otherwise have callouts no one could read.
+const BUBBLE_W = 236;
+const GAP = 16;
+/** The side with room for the bubble, preferring the one that was asked for. */
+function sideFor(box, bounds, wanted) {
+    const room = {
+        right: bounds.w - (box.x + box.w),
+        left: box.x,
+        bottom: bounds.h - (box.y + box.h),
+        top: box.y,
+    };
+    const fits = (s) => room[s] >= (s === "left" || s === "right" ? BUBBLE_W + GAP : 90 + GAP);
+    if (wanted && fits(wanted))
+        return wanted;
+    return ["right", "left", "bottom", "top"].find(fits) ?? wanted ?? "right";
+}
+export function Callouts({ items, rects, scale, bounds }) {
+    const placed = items
+        .map((callout, i) => {
+        const rect = rects[callout.mark];
+        const box = rect && toBox([rect], scale, 0);
+        if (!box)
+            return null;
+        // An anchor scrolled out of the demo has nothing to point at.
+        const cx = box.x + box.w / 2;
+        const cy = box.y + box.h / 2;
+        if (cx < 0 || cy < 0 || cx > bounds.w || cy > bounds.h)
+            return null;
+        const side = sideFor(box, bounds, callout.placement);
+        const dx = (callout.offset?.x ?? 0) * scale;
+        const dy = (callout.offset?.y ?? 0) * scale;
+        const edge = side === "right" ? { x: box.x + box.w, y: cy }
+            : side === "left" ? { x: box.x, y: cy }
+                : side === "bottom" ? { x: cx, y: box.y + box.h }
+                    : { x: cx, y: box.y };
+        const anchor = side === "right" ? { x: edge.x + GAP, y: edge.y }
+            : side === "left" ? { x: edge.x - GAP, y: edge.y }
+                : side === "bottom" ? { x: edge.x, y: edge.y + GAP }
+                    : { x: edge.x, y: edge.y - GAP };
+        const shift = side === "right" ? "translate(0, -50%)"
+            : side === "left" ? "translate(-100%, -50%)"
+                : side === "bottom" ? "translate(-50%, 0)"
+                    : "translate(-50%, -100%)";
+        // Flipping sides isn't enough on its own: a bubble centred on an element
+        // near an edge still hangs off it. Clamp it inside the stage and let the
+        // leader line angle across to the element.
+        const PAD = 10;
+        const half = BUBBLE_W / 2;
+        const clamp = (v, min, max) => Math.min(Math.max(v, min), Math.max(min, max));
+        const x = anchor.x + dx;
+        const y = anchor.y + dy;
+        const placedAt = side === "top" || side === "bottom"
+            ? { x: clamp(x, half + PAD, bounds.w - half - PAD), y }
+            : { x, y: clamp(y, 44 + PAD, bounds.h - 44 - PAD) };
+        return { key: `${callout.mark}-${i}`, callout, edge, anchor: placedAt, shift };
+    })
+        .filter((p) => !!p);
+    if (!placed.length)
+        return null;
+    return (_jsxs(_Fragment, { children: [_jsx("svg", { width: bounds.w, height: bounds.h, style: { position: "absolute", inset: 0, pointerEvents: "none", overflow: "visible" }, children: placed.map((p) => (_jsxs("g", { children: [_jsx("line", { x1: p.edge.x, y1: p.edge.y, x2: p.anchor.x, y2: p.anchor.y, stroke: RED, strokeWidth: 1.5 }), _jsx("circle", { cx: p.edge.x, cy: p.edge.y, r: 3.5, fill: RED })] }, p.key))) }), placed.map((p) => (_jsx("div", { style: {
+                    position: "absolute",
+                    left: p.anchor.x,
+                    top: p.anchor.y,
+                    transform: p.shift,
+                    width: BUBBLE_W,
+                    background: "#fff",
+                    border: "1px solid #e6e4e1",
+                    borderRadius: 9,
+                    boxShadow: "0 10px 28px -10px rgba(0,0,0,0.45)",
+                    padding: "9px 12px",
+                    fontSize: 13,
+                    lineHeight: 1.45,
+                    color: INK,
+                    pointerEvents: "none",
+                }, children: renderStyledText(p.callout.text) }, p.key)))] }));
 }
 //# sourceMappingURL=stage.js.map

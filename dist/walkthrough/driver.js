@@ -27,6 +27,7 @@ export function sameOriginDriver(frame, src) {
     const hovers = new Set();
     let picking = false;
     let hovered = null;
+    // The frame's own realm, where its observers and constructors live.
     const win = () => frame.contentWindow;
     const doc = () => frame.contentDocument;
     const hitFrom = (node) => {
@@ -91,7 +92,43 @@ export function sameOriginDriver(frame, src) {
         if (detail?.name)
             signals.forEach((cb) => cb(detail.name, detail));
     };
-    const handleLayout = () => layouts.forEach((cb) => cb());
+    // Layout reports are coalesced to one a frame: a demo that animates or
+    // re-renders can otherwise fire these faster than anything can measure.
+    let queued = false;
+    const handleLayout = () => {
+        if (queued)
+            return;
+        queued = true;
+        window.requestAnimationFrame(() => {
+            queued = false;
+            syncSizes();
+            layouts.forEach((cb) => cb());
+        });
+    };
+    let watched = [];
+    let observedEls = [];
+    let sizes = null;
+    let mutations = null;
+    /** Follow the watched elements themselves, so a box that moves because the
+     * demo re-rendered is noticed as readily as one that moved by scrolling.
+     * Re-observing only when the elements actually change keeps the observer's
+     * own first callback from looping back round. */
+    function syncSizes() {
+        const w = win();
+        const d = doc();
+        if (!w || !d)
+            return;
+        const els = watched.map((id) => query(id)).filter((el) => !!el);
+        const same = sizes && els.length === observedEls.length && els.every((el, i) => el === observedEls[i]);
+        if (same)
+            return;
+        observedEls = els;
+        sizes?.disconnect();
+        const ro = new w.ResizeObserver(handleLayout);
+        sizes = ro;
+        ro.observe(d.documentElement);
+        els.forEach((el) => ro.observe(el));
+    }
     // Every navigation inside the frame replaces the document, so the listeners
     // are bound again on each load rather than once at setup.
     let detach = null;
@@ -110,6 +147,12 @@ export function sameOriginDriver(frame, src) {
         w.addEventListener("hashchange", handleHash);
         w.addEventListener("wt:signal", handleSignal);
         w.addEventListener("resize", handleLayout);
+        mutations?.disconnect();
+        const mo = new w.MutationObserver(handleLayout);
+        mutations = mo;
+        mo.observe(d, { childList: true, subtree: true, attributes: true });
+        observedEls = [];
+        syncSizes();
         if (picking)
             d.documentElement.style.cursor = "crosshair";
         detach = () => {
@@ -209,6 +252,12 @@ export function sameOriginDriver(frame, src) {
             layouts.add(cb);
             return () => layouts.delete(cb);
         },
+        observe(ids) {
+            if (ids.length === watched.length && ids.every((id, i) => id === watched[i]))
+                return;
+            watched = ids;
+            syncSizes();
+        },
         onPick(cb) {
             picks.add(cb);
             return () => picks.delete(cb);
@@ -233,6 +282,8 @@ export function sameOriginDriver(frame, src) {
         dispose() {
             this.setPicking(false);
             frame.removeEventListener("load", attach);
+            sizes?.disconnect();
+            mutations?.disconnect();
             detach?.();
             clicks.clear();
             paths.clear();

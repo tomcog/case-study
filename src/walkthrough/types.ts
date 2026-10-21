@@ -48,6 +48,20 @@ export interface Spotlight {
   lock?: boolean;
 }
 
+/** A label pointing at something in the demo. Anchored to a mark rather than
+ * to coordinates: a live product reflows, scrolls and changes with its data,
+ * so a position that was right when it was authored wouldn't stay right. */
+export interface Callout {
+  mark: string;
+  /** The copy, in the same inline markup as the panel's. */
+  text: string;
+  /** Which side of the element it sits on. Flipped when it won't fit, and
+   * chosen by whichever side has room when it isn't given. */
+  placement?: "top" | "right" | "bottom" | "left";
+  /** Nudge from that position, in demo pixels. */
+  offset?: { x?: number; y?: number };
+}
+
 export type StepAdvance =
   | { on: "manual"; label?: string }
   | { on: "click"; mark: string }
@@ -66,6 +80,8 @@ export interface WalkthroughStep {
   imageUrl?: string;
   enter?: StepEnter;
   spotlight?: Spotlight;
+  /** Labels pointing at parts of the demo, shown for as long as the step is. */
+  callouts?: Callout[];
   advance: StepAdvance;
   /** ms to wait before the panel offers a way past this step (default 12000). */
   nudgeAfter?: number;
@@ -101,6 +117,17 @@ export const DEFAULT_WALKTHROUGH: WalkthroughContent = {
     },
   ],
 };
+
+/** Every mark a step points at, spotlight and callouts together, in the order
+ * they were authored and without repeats. */
+export function stepMarks(step?: WalkthroughStep): string[] {
+  const mark = step?.spotlight?.mark;
+  const ids = !mark ? [] : Array.isArray(mark) ? [...mark] : [mark];
+  for (const callout of step?.callouts ?? []) {
+    if (callout.mark && !ids.includes(callout.mark)) ids.push(callout.mark);
+  }
+  return ids;
+}
 
 /** The demo a step runs in: the nearest `enter.app` at or before it. A run of
  * steps through one app only has to name it once, and jumping straight to step

@@ -42,8 +42,12 @@ export interface Driver {
   onClick(cb: (mark: string) => void): () => void;
   onPath(cb: (path: string) => void): () => void;
   onSignal(cb: (name: string, detail: unknown) => void): () => void;
-  /** The demo scrolled or resized: whatever `marks` returned is now stale. */
+  /** The demo scrolled, resized, or moved something: whatever `marks` returned
+   * is now stale. Reports at most once a frame. */
   onLayout(cb: () => void): () => void;
+  /** Which marks to watch closely. Their boxes are then followed as the demo
+   * animates, re-renders and reflows, not just when it scrolls. */
+  observe(ids: string[]): void;
   /** Authoring: swallow the demo's own interactions and report what's pointed
    * at instead, so a mark can be chosen by clicking it. */
   setPicking(on: boolean): void;
@@ -81,7 +85,8 @@ export function sameOriginDriver(frame: HTMLIFrameElement, src: string): Driver 
   let picking = false;
   let hovered: Element | null = null;
 
-  const win = () => frame.contentWindow;
+  // The frame's own realm, where its observers and constructors live.
+  const win = () => frame.contentWindow as (Window & typeof globalThis) | null;
   const doc = () => frame.contentDocument;
 
   const hitFrom = (node: EventTarget | null): { el: Element; hit: PickHit } | null => {
@@ -144,7 +149,42 @@ export function sameOriginDriver(frame: HTMLIFrameElement, src: string): Driver 
     if (detail?.name) signals.forEach((cb) => cb(detail.name as string, detail));
   };
 
-  const handleLayout = () => layouts.forEach((cb) => cb());
+  // Layout reports are coalesced to one a frame: a demo that animates or
+  // re-renders can otherwise fire these faster than anything can measure.
+  let queued = false;
+  const handleLayout = () => {
+    if (queued) return;
+    queued = true;
+    window.requestAnimationFrame(() => {
+      queued = false;
+      syncSizes();
+      layouts.forEach((cb) => cb());
+    });
+  };
+
+  let watched: string[] = [];
+  let observedEls: Element[] = [];
+  let sizes: ResizeObserver | null = null;
+  let mutations: MutationObserver | null = null;
+
+  /** Follow the watched elements themselves, so a box that moves because the
+   * demo re-rendered is noticed as readily as one that moved by scrolling.
+   * Re-observing only when the elements actually change keeps the observer's
+   * own first callback from looping back round. */
+  function syncSizes() {
+    const w = win();
+    const d = doc();
+    if (!w || !d) return;
+    const els = watched.map((id) => query(id)).filter((el): el is Element => !!el);
+    const same = sizes && els.length === observedEls.length && els.every((el, i) => el === observedEls[i]);
+    if (same) return;
+    observedEls = els;
+    sizes?.disconnect();
+    const ro = new w.ResizeObserver(handleLayout);
+    sizes = ro;
+    ro.observe(d.documentElement);
+    els.forEach((el) => ro.observe(el));
+  }
 
   // Every navigation inside the frame replaces the document, so the listeners
   // are bound again on each load rather than once at setup.
@@ -164,6 +204,12 @@ export function sameOriginDriver(frame: HTMLIFrameElement, src: string): Driver 
     w.addEventListener("hashchange", handleHash);
     w.addEventListener("wt:signal", handleSignal as EventListener);
     w.addEventListener("resize", handleLayout);
+    mutations?.disconnect();
+    const mo = new w.MutationObserver(handleLayout);
+    mutations = mo;
+    mo.observe(d, { childList: true, subtree: true, attributes: true });
+    observedEls = [];
+    syncSizes();
     if (picking) d.documentElement.style.cursor = "crosshair";
     detach = () => {
       d.removeEventListener("click", handleClick, true);
@@ -270,6 +316,12 @@ export function sameOriginDriver(frame: HTMLIFrameElement, src: string): Driver 
       layouts.add(cb);
       return () => layouts.delete(cb);
     },
+
+    observe(ids) {
+      if (ids.length === watched.length && ids.every((id, i) => id === watched[i])) return;
+      watched = ids;
+      syncSizes();
+    },
     onPick(cb) {
       picks.add(cb);
       return () => picks.delete(cb);
@@ -296,6 +348,8 @@ export function sameOriginDriver(frame: HTMLIFrameElement, src: string): Driver 
     dispose() {
       this.setPicking(false);
       frame.removeEventListener("load", attach);
+      sizes?.disconnect();
+      mutations?.disconnect();
       detach?.();
       clicks.clear();
       paths.clear();

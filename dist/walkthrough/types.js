@@ -25,6 +25,17 @@ export const DEFAULT_WALKTHROUGH = {
         },
     ],
 };
+/** Every mark a step points at, spotlight and callouts together, in the order
+ * they were authored and without repeats. */
+export function stepMarks(step) {
+    const mark = step?.spotlight?.mark;
+    const ids = !mark ? [] : Array.isArray(mark) ? [...mark] : [mark];
+    for (const callout of step?.callouts ?? []) {
+        if (callout.mark && !ids.includes(callout.mark))
+            ids.push(callout.mark);
+    }
+    return ids;
+}
 /** The demo a step runs in: the nearest `enter.app` at or before it. A run of
  * steps through one app only has to name it once, and jumping straight to step
  * seven still resolves to the same app as walking there.

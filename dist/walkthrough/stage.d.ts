@@ -1,5 +1,5 @@
 import type { Driver, MarkRect, MarkRects } from "./driver.js";
-import type { WalkthroughTarget } from "./types.js";
+import type { Callout, WalkthroughTarget } from "./types.js";
 export interface Box {
     x: number;
     y: number;
@@ -21,6 +21,10 @@ export declare function useDemo(target: WalkthroughTarget, marks: string[]): {
     framed: boolean;
     blocked: Blocked | null;
     frameStyle: import("react").CSSProperties;
+    bounds: {
+        w: number;
+        h: number;
+    };
 };
 /** Everything but the marked element, dimmed — and optionally click-proof. */
 export declare function Spotlight({ box, shape, lock }: {
@@ -38,3 +42,12 @@ export declare function DemoNotice({ blocked, src }: {
     blocked: Blocked;
     src: string;
 }): import("react").JSX.Element;
+export declare function Callouts({ items, rects, scale, bounds }: {
+    items: Callout[];
+    rects: MarkRects;
+    scale: number;
+    bounds: {
+        w: number;
+        h: number;
+    };
+}): import("react").JSX.Element | null;

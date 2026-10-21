@@ -13,10 +13,10 @@ import { ChevronDown, ChevronUp, Copy, Crosshair, Image as ImageIcon, LayoutGrid
 import { ACCENT } from "../core.js";
 import { Field, ImageField, PreviewCardSettings, ghostBtn, iconBtn, inputStyle, primaryBtn } from "../editors.js";
 import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
-import { DemoNotice, HoverOutline, Spotlight, toBox, useDemo } from "./stage.js";
+import { Callouts, DemoNotice, HoverOutline, Spotlight, toBox, useDemo } from "./stage.js";
 import type { PickHit } from "./driver.js";
-import { allTargets, appAt, targetAt } from "./types.js";
-import type { StepAdvance, WalkthroughContent, WalkthroughStep, WalkthroughTarget } from "./types.js";
+import { allTargets, appAt, stepMarks, targetAt } from "./types.js";
+import type { Callout, StepAdvance, WalkthroughContent, WalkthroughStep, WalkthroughTarget } from "./types.js";
 
 const ADVANCE_KINDS: { value: StepAdvance["on"]; label: string; hint: string }[] = [
   { value: "manual", label: "A button", hint: "The reader presses Next in the panel." },
@@ -37,7 +37,7 @@ const newStep = (): WalkthroughStep => ({
 });
 
 /** Which field a picked mark should land in. */
-type Slot = { field: "spotlight" } | { field: "advance" } | { field: "any"; at: number };
+type Slot = { field: "spotlight" } | { field: "advance" } | { field: "any"; at: number } | { field: "callout"; at: number };
 
 export function WalkthroughBuilder({ content, setContent, projectName, onClose }: {
   content: WalkthroughContent;
@@ -57,7 +57,8 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
   const index = Math.min(selected, Math.max(0, steps.length - 1));
   const step = steps[index];
 
-  const markIds = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
+  const markIds = useMemo(() => stepMarks(step), [step]);
+  const spotMarks = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
   // The app the selected step runs in, which is what the canvas shows.
   const target = useMemo(() => targetAt(content, index), [content, index]);
   const demo = useDemo(target, markIds);
@@ -113,6 +114,14 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
       };
     });
   };
+
+  const patchCallout = (at: number, patch: Partial<Callout>) =>
+    update({ callouts: (step.callouts ?? []).map((c, i) => (i === at ? { ...c, ...patch } : c)) });
+
+  const addCallout = () =>
+    update({ callouts: [...(step.callouts ?? []), { mark: "", text: "Describe this element." }] });
+
+  const removeCallout = (at: number) => update({ callouts: (step.callouts ?? []).filter((_, i) => i !== at) });
 
   const addStep = () => {
     setContent((prev) => {
@@ -179,6 +188,10 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
       update({ spotlight: { ...(step.spotlight ?? {}), mark } });
       return;
     }
+    if (slot.field === "callout") {
+      update({ callouts: (step.callouts ?? []).map((c, i) => (i === slot.at ? { ...c, mark } : c)) });
+      return;
+    }
     if (slot.field === "advance") {
       update({ advance: { on: "click", mark } });
       return;
@@ -221,9 +234,9 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
   }, [picking]);
 
   const box = useMemo(
-    () => toBox(markIds.map((id) => demo.rects[id]).filter(Boolean), demo.scale, step?.spotlight?.pad ?? 6),
+    () => toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), demo.scale, step?.spotlight?.pad ?? 6),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [demo.rects, markIds.join("|"), demo.scale, step],
+    [demo.rects, spotMarks.join("|"), demo.scale, step],
   );
 
   const hoverBox = hover && toBox([hover.rect], demo.scale, 2);
@@ -320,6 +333,9 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
             <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden" }}>
               <iframe ref={demo.frameRef} title="Demo" style={demo.frameStyle} />
               {!picking && <Spotlight box={box} shape={step.spotlight?.shape} lock={false} />}
+              {!picking && step.callouts?.length ? (
+                <Callouts items={step.callouts} rects={demo.rects} scale={demo.scale} bounds={demo.bounds} />
+              ) : null}
               {picking && <HoverOutline box={hoverBox} ok={!!hover?.mark} />}
               {picking && (
                 <div style={pickBanner}>
@@ -499,6 +515,45 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                 <Plus size={15} /> Add a spotlight
               </button>
             )}
+          </Field>
+
+          <Field label="Callouts" collapsible>
+            {(step.callouts ?? []).map((callout, at) => (
+              <div key={at} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                <MarkField
+                  value={callout.mark}
+                  onChange={(v) => patchCallout(at, { mark: v })}
+                  onPick={() => setPicking({ field: "callout", at })}
+                  picking={picking?.field === "callout" && picking.at === at}
+                  disabled={!demo.framed}
+                />
+                <textarea
+                  value={callout.text}
+                  onChange={(e) => patchCallout(at, { text: e.target.value })}
+                  rows={2}
+                  placeholder="What this element is for"
+                  style={{ ...inputStyle, resize: "vertical", marginTop: 6 }}
+                />
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+                  {(["auto", "top", "right", "bottom", "left"] as const).map((side) => (
+                    <button
+                      key={side}
+                      onClick={() => patchCallout(at, { placement: side === "auto" ? undefined : side })}
+                      style={choice((callout.placement ?? "auto") === side)}
+                    >
+                      {side}
+                    </button>
+                  ))}
+                  <button onClick={() => removeCallout(at)} style={{ ...iconBtn(false), width: 28, height: 28, marginLeft: "auto" }} title="Remove">
+                    <X size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button onClick={addCallout} style={ghostBtn}>
+              <Plus size={15} /> Add a callout
+            </button>
+            <p style={hint}>Anchored to a mark, so they follow the element as the demo reflows.</p>
           </Field>
 
           <Field label="Advances on" collapsible>

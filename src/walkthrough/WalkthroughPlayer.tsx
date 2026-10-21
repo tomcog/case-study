@@ -9,9 +9,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
-import { DemoNotice, Spotlight, toBox, useDemo } from "./stage.js";
+import { Callouts, DemoNotice, Spotlight, toBox, useDemo } from "./stage.js";
 import type { Driver } from "./driver.js";
-import { targetAt } from "./types.js";
+import { stepMarks, targetAt } from "./types.js";
 import type { StepAdvance, WalkthroughContent } from "./types.js";
 
 const PANEL_W = 400;
@@ -56,8 +56,10 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
   const step = steps[i];
   const finished = i >= steps.length;
 
-  const markIds = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
+  // Spotlight and callouts are measured together.
+  const markIds = useMemo(() => stepMarks(step), [step]);
   const markKey = markIds.join("|");
+  const spotMarks = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
 
   // Which app this step runs in. Changing it swaps the framed document, which
   // the stage handles by standing up a driver for the new demo.
@@ -108,9 +110,9 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
   }, [onExit]);
 
   const box = useMemo(
-    () => toBox(markIds.map((id) => demo.rects[id]).filter(Boolean), demo.scale, step?.spotlight?.pad ?? 6),
+    () => toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), demo.scale, step?.spotlight?.pad ?? 6),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [demo.rects, markKey, demo.scale, step],
+    [demo.rects, spotMarks.join("|"), demo.scale, step],
   );
 
   const restart = () => {
@@ -250,6 +252,9 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
         <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden", background: "#0f1115" }}>
           <iframe ref={demo.frameRef} title={content.title ?? "Product"} style={demo.frameStyle} />
           <Spotlight box={box} shape={step?.spotlight?.shape} lock={step?.spotlight?.lock} />
+          {step?.callouts?.length ? (
+            <Callouts items={step.callouts} rects={demo.rects} scale={demo.scale} bounds={demo.bounds} />
+          ) : null}
         </div>
       )}
 

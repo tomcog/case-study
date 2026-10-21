@@ -33,8 +33,12 @@ export interface Driver {
     onClick(cb: (mark: string) => void): () => void;
     onPath(cb: (path: string) => void): () => void;
     onSignal(cb: (name: string, detail: unknown) => void): () => void;
-    /** The demo scrolled or resized: whatever `marks` returned is now stale. */
+    /** The demo scrolled, resized, or moved something: whatever `marks` returned
+     * is now stale. Reports at most once a frame. */
     onLayout(cb: () => void): () => void;
+    /** Which marks to watch closely. Their boxes are then followed as the demo
+     * animates, re-renders and reflows, not just when it scrolls. */
+    observe(ids: string[]): void;
     /** Authoring: swallow the demo's own interactions and report what's pointed
      * at instead, so a mark can be chosen by clicking it. */
     setPicking(on: boolean): void;
