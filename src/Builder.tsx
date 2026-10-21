@@ -3,6 +3,7 @@ import { Reorder } from "motion/react";
 import {
   Plus, Trash2, ChevronUp, ChevronDown, Play, LayoutGrid, Image as ImageIcon, Copy,
 } from "lucide-react";
+import { Button, ButtonRound } from "@tomcoggia/ui";
 import { RED, DEFAULT_ACCENT } from "./theme.js";
 import {
   ACCENT, THEMES, DEFAULT_OVERVIEW_ITEMS, DEFAULT_GALLERY, DEFAULT_ANNOTATIONS, DEFAULT_STAT,
@@ -13,7 +14,7 @@ import type {
 } from "./core.js";
 import {
   MetricsEditor, ImageField, OverviewEditor, GalleryEditor, StatEditor, Field, ColorInput,
-  PreviewCardSettings, inputStyle, primaryBtn, ghostBtn, iconBtn,
+  PreviewCardSettings, inputStyle,
 } from "./editors.js";
 import { Player } from "./Player.js";
 
@@ -136,15 +137,13 @@ export function Builder({ content, setContent, projectName, isCaseStudy, onToggl
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
-          <button onClick={() => setShowThumb((v) => !v)} style={ghostBtn} title="Projects page preview card & visibility">
-            <ImageIcon size={16} /> Project settings
-          </button>
-          <button onClick={() => setPlaying(true)} style={primaryBtn}>
-            <Play size={16} /> Preview
-          </button>
-          {onClose && (
-            <button onClick={onClose} style={{ ...ghostBtn, borderStyle: "solid" }}>Done</button>
-          )}
+          <Button variant="tertiary" icon={<ImageIcon size={16} />} onClick={() => setShowThumb((v) => !v)} title="Projects page preview card & visibility">
+            Project settings
+          </Button>
+          <Button variant="primary" icon={<Play size={16} />} onClick={() => setPlaying(true)}>
+            Preview
+          </Button>
+          {onClose && <Button variant="secondary" onClick={onClose}>Done</Button>}
           {showThumb && (
             <PreviewCardSettings
               preview={content.preview ?? {}}
@@ -188,9 +187,9 @@ export function Builder({ content, setContent, projectName, isCaseStudy, onToggl
               </Reorder.Item>
             ))}
           </Reorder.Group>
-          <button onClick={addScreen} style={{ ...ghostBtn, justifyContent: "center", marginTop: 4 }}>
-            <Plus size={16} /> Add screen
-          </button>
+          <Button variant="ghost" size="sm" icon={<Plus size={16} />} onClick={addScreen} style={{ width: "100%", justifyContent: "center", marginTop: 4 }}>
+            Add screen
+          </Button>
         </div>
 
         {/* Live canvas — the whole work area is the viewport (as in view mode),
@@ -213,10 +212,10 @@ export function Builder({ content, setContent, projectName, isCaseStudy, onToggl
         <div style={{ width: 320, flexShrink: 0, background: "#fff", borderLeft: "1px solid #e3e0db", overflowY: "auto", padding: 18, paddingBottom: 104 }}>
           {/* Screen actions */}
           <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
-            <button onClick={() => move(-1)} disabled={selected === 0} title="Move up" style={iconBtn(selected === 0)}><ChevronUp size={16} /></button>
-            <button onClick={() => move(1)} disabled={selected === screens.length - 1} title="Move down" style={iconBtn(selected === screens.length - 1)}><ChevronDown size={16} /></button>
-            <button onClick={duplicateScreen} title="Duplicate" style={iconBtn(false)}><Copy size={16} /></button>
-            <button onClick={deleteScreen} disabled={screens.length <= 1} title="Delete" style={iconBtn(screens.length <= 1)}><Trash2 size={16} /></button>
+            <ButtonRound variant="tertiary" icon={<ChevronUp size={16} />} onClick={() => move(-1)} disabled={selected === 0} title="Move up" aria-label="Move up" />
+            <ButtonRound variant="tertiary" icon={<ChevronDown size={16} />} onClick={() => move(1)} disabled={selected === screens.length - 1} title="Move down" aria-label="Move down" />
+            <ButtonRound variant="tertiary" icon={<Copy size={16} />} onClick={duplicateScreen} title="Duplicate" aria-label="Duplicate" />
+            <ButtonRound variant="tertiary" tone="danger" icon={<Trash2 size={16} />} onClick={deleteScreen} disabled={screens.length <= 1} title="Delete" aria-label="Delete" />
           </div>
 
           <Field label="Layout" collapsible>

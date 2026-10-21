@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Plus, Trash2, ChevronDown, FolderOpen, Image as ImageIcon, Layers } from "lucide-react";
+import { Button, ButtonRound } from "@tomcoggia/ui";
 import { RED as ACCENT, DEFAULT_ACCENT } from "./theme.js";
 import { useCaseStudyConfig } from "./config.js";
 import { ImageLibraryModal } from "./ui/ImageLibraryModal.js";
@@ -14,12 +15,12 @@ export function MetricsEditor({ metrics, onChange }: { metrics: Metric[]; onChan
           <div key={m.id} style={{ display: "flex", gap: 6 }}>
             <input value={m.value} onChange={(e) => onChange(metrics.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} placeholder="−63%" style={{ ...inputStyle, width: 70 }} />
             <input value={m.label} onChange={(e) => onChange(metrics.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Label" style={inputStyle} />
-            <button onClick={() => onChange(metrics.filter((_, j) => j !== i))} style={iconBtn(false)}><Trash2 size={14} /></button>
+            <ButtonRound size="sm" variant="tertiary" tone="danger" icon={<Trash2 size={14} />} onClick={() => onChange(metrics.filter((_, j) => j !== i))} aria-label="Remove metric" />
           </div>
         ))}
-        <button onClick={() => onChange([...metrics, { id: `m-${Date.now()}`, value: "00", label: "Metric" }])} style={{ ...ghostBtn, justifyContent: "center" }}>
-          <Plus size={14} /> Add metric
-        </button>
+        <Button variant="ghost" size="sm" icon={<Plus size={14} />} onClick={() => onChange([...metrics, { id: `m-${Date.now()}`, value: "00", label: "Metric" }])} style={addStyle}>
+          Add metric
+        </Button>
       </div>
     </Field>
   );
@@ -104,14 +105,14 @@ export function ImageField({ value, onChange, overlay, onOverlayChange, label = 
       {(assets?.upload || assets?.list) && (
         <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
           {assets.upload && (
-            <button onClick={() => fileInputRef.current?.click()} style={{ ...ghostBtn, flex: 1, justifyContent: "center" }}>
-              <ImageIcon size={14} /> {uploading ? "Uploading…" : "Upload"}
-            </button>
+            <Button variant="ghost" size="sm" icon={<ImageIcon size={14} />} onClick={() => fileInputRef.current?.click()} style={{ ...addStyle, flex: 1 }}>
+              {uploading ? "Uploading…" : "Upload"}
+            </Button>
           )}
           {assets.list && (
-            <button onClick={() => setShowLibrary(true)} style={{ ...ghostBtn, flex: 1, justifyContent: "center" }}>
-              <FolderOpen size={14} /> Browse
-            </button>
+            <Button variant="ghost" size="sm" icon={<FolderOpen size={14} />} onClick={() => setShowLibrary(true)} style={{ ...addStyle, flex: 1 }}>
+              Browse
+            </Button>
           )}
         </div>
       )}
@@ -132,14 +133,14 @@ export function OverviewEditor({ items, onChange, label = "Index items" }: { ite
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <span style={{ fontSize: 11, color: "#8a857d", fontVariantNumeric: "tabular-nums" }}>{String(i + 1).padStart(2, "0")}</span>
               <textarea value={it.label} onChange={(e) => onChange(items.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Label" rows={1} style={{ ...inputStyle, resize: "vertical" }} />
-              <button onClick={() => onChange(items.filter((_, j) => j !== i))} style={iconBtn(false)}><Trash2 size={14} /></button>
+              <ButtonRound size="sm" variant="tertiary" tone="danger" icon={<Trash2 size={14} />} onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label="Remove item" />
             </div>
             <textarea value={it.body} onChange={(e) => onChange(items.map((x, j) => j === i ? { ...x, body: e.target.value } : x))} rows={2} placeholder="Description" style={{ ...inputStyle, resize: "vertical" }} />
           </div>
         ))}
-        <button onClick={() => onChange([...items, { id: `o-${Date.now()}`, label: "Section", body: "Describe this section." }])} style={{ ...ghostBtn, justifyContent: "center" }}>
-          <Plus size={14} /> Add item
-        </button>
+        <Button variant="ghost" size="sm" icon={<Plus size={14} />} onClick={() => onChange([...items, { id: `o-${Date.now()}`, label: "Section", body: "Describe this section." }])} style={addStyle}>
+          Add item
+        </Button>
       </div>
     </Field>
   );
@@ -159,15 +160,15 @@ export function GalleryEditor({ images, onChange }: { images: GalleryImage[]; on
                 title="Index label — clear it to hide the number for this image"
                 style={{ ...inputStyle, width: 56, padding: "5px 8px", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}
               />
-              <button onClick={() => onChange(images.filter((_, j) => j !== i))} style={iconBtn(false)}><Trash2 size={14} /></button>
+              <ButtonRound size="sm" variant="tertiary" tone="danger" icon={<Trash2 size={14} />} onClick={() => onChange(images.filter((_, j) => j !== i))} aria-label="Remove image" />
             </div>
             <ImageField value={img.url} onChange={(url) => set(i, { url })} />
             <textarea value={img.caption} onChange={(e) => set(i, { caption: e.target.value })} rows={1} placeholder="Caption" style={{ ...inputStyle, resize: "vertical" }} />
           </div>
         ))}
-        <button onClick={() => onChange([...images, { id: `g-${Date.now()}`, url: "", caption: "Caption" }])} style={{ ...ghostBtn, justifyContent: "center" }}>
-          <Plus size={14} /> Add image
-        </button>
+        <Button variant="ghost" size="sm" icon={<Plus size={14} />} onClick={() => onChange([...images, { id: `g-${Date.now()}`, url: "", caption: "Caption" }])} style={addStyle}>
+          Add image
+        </Button>
       </div>
     </Field>
   );
@@ -237,28 +238,13 @@ export function ColorInput({ label, value, onChange }: { label: string; value: s
   );
 }
 
+/** An "add another one" button spans its list. */
+const addStyle: React.CSSProperties = { width: "100%", justifyContent: "center" };
+
 export const inputStyle: React.CSSProperties = {
   width: "100%", fontSize: 13, padding: "8px 10px", border: "1px solid #dcd8d2",
   borderRadius: 6, outline: "none", color: "#1a1a1a", background: "#fff", fontFamily: "inherit",
 };
-
-export const primaryBtn: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 8, background: ACCENT, color: "#fff",
-  border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer",
-};
-
-export const ghostBtn: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 6, background: "#fff", color: "#5a554e",
-  border: "1px dashed #cfcbc4", borderRadius: 8, padding: "9px 12px", fontSize: 13, cursor: "pointer",
-};
-
-export function iconBtn(disabled: boolean): React.CSSProperties {
-  return {
-    width: 34, height: 34, borderRadius: 6, border: "1px solid #dcd8d2", background: "#fff",
-    color: disabled ? "#cfcbc4" : "#5a554e", cursor: disabled ? "default" : "pointer",
-    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-  };
-}
 
 // ─── Thumbnail settings (deck-level) ──────────────────────────────
 // Authors the preview card shown on the Projects page (/projects) for this

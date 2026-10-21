@@ -17,7 +17,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Reorder } from "motion/react";
 import { ChevronDown, ChevronUp, Copy, Crosshair, Image as ImageIcon, LayoutGrid, Layers, Play, Plus, Square, Trash2, X } from "lucide-react";
 import { ACCENT } from "../core.js";
-import { Field, ImageField, PreviewCardSettings, ghostBtn, iconBtn, inputStyle, primaryBtn } from "../editors.js";
+import { Field, ImageField, PreviewCardSettings, inputStyle } from "../editors.js";
+import { Button, ButtonRound, Segment, SegmentedControl } from "@tomcoggia/ui";
 import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
 import { AreaDraw, Callouts, HoverOutline, Spotlight, StageNotice, StageStill, areaBox, toBox, useStage } from "./stage.js";
 import type { Box } from "./stage.js";
@@ -287,9 +288,9 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
       <div style={shell}>
         <div style={{ margin: "auto", textAlign: "center", color: "#5a554e" }}>
           <p style={{ marginBottom: 14 }}>This walkthrough has no steps yet.</p>
-          <button onClick={addStep} style={{ ...primaryBtn, margin: "0 auto" }}>
-            <Plus size={16} /> Add the first step
-          </button>
+          <Button variant="primary" icon={<Plus size={16} />} onClick={addStep} style={{ margin: "0 auto" }}>
+            Add the first step
+          </Button>
         </div>
       </div>
     );
@@ -311,17 +312,16 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
-          <button onClick={() => setShowStages((v) => !v)} style={ghostBtn} title="The apps, embeds and mock-ups this walkthrough shows">
-            <Layers size={16} /> Stages
-            <span style={{ color: "#8a857d", fontWeight: 400 }}>{content.stages.length}</span>
-          </button>
-          <button onClick={() => setShowThumb((v) => !v)} style={ghostBtn} title="Projects page preview card">
-            <ImageIcon size={16} /> Project settings
-          </button>
-          <button onClick={() => setPlaying(true)} style={primaryBtn}>
-            <Play size={16} /> Preview
-          </button>
-          {onClose && <button onClick={onClose} style={{ ...ghostBtn, borderStyle: "solid" }}>Done</button>}
+          <Button variant="tertiary" icon={<Layers size={16} />} onClick={() => setShowStages((v) => !v)} title="The apps, embeds and mock-ups this walkthrough shows">
+            Stages <span style={{ opacity: 0.6, fontWeight: 400 }}>{content.stages.length}</span>
+          </Button>
+          <Button variant="tertiary" icon={<ImageIcon size={16} />} onClick={() => setShowThumb((v) => !v)} title="Projects page preview card">
+            Project settings
+          </Button>
+          <Button variant="primary" icon={<Play size={16} />} onClick={() => setPlaying(true)}>
+            Preview
+          </Button>
+          {onClose && <Button variant="secondary" onClick={onClose}>Done</Button>}
           {showStages && (
             <StagesPanel
               content={content}
@@ -391,9 +391,9 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
               );
             })}
           </Reorder.Group>
-          <button onClick={addStep} style={{ ...ghostBtn, justifyContent: "center", marginTop: 4 }}>
-            <Plus size={16} /> Add step
-          </button>
+          <Button variant="ghost" size="sm" icon={<Plus size={16} />} onClick={addStep} style={{ ...fill, marginTop: 4 }}>
+            Add step
+          </Button>
         </div>
 
         {/* The stage */}
@@ -452,18 +452,18 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
         {/* Inspector */}
         <div style={inspector}>
           <Field label="Runs in" collapsible>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <SegmentedControl size="md" aria-label="The stage this step runs in" style={track}>
               {index > 0 && (
-                <button onClick={() => update({ enter: clean({ ...step.enter, stage: undefined }) })} style={choice(!step.enter?.stage)}>
+                <Segment selected={!step.enter?.stage} onClick={() => update({ enter: clean({ ...step.enter, stage: undefined }) })}>
                   Carry on
-                </button>
+                </Segment>
               )}
               {content.stages.map((s) => (
-                <button key={s.id} onClick={() => update({ enter: { ...step.enter, stage: s.id } })} style={choice(activeStage === s.id)}>
+                <Segment key={s.id} selected={activeStage === s.id} onClick={() => update({ enter: { ...step.enter, stage: s.id } })}>
                   {stageName(s)}
-                </button>
+                </Segment>
               ))}
-            </div>
+            </SegmentedControl>
             {!content.stages.length && (
               <p style={hint}>
                 No stages yet — <button onClick={() => setShowStages(true)} style={linkBtn}>add one</button> and this step will have
@@ -489,14 +489,16 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                     placeholder="#/settings"
                     style={inputStyle}
                   />
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => driver && update({ enter: clean({ ...step.enter, path: driver.currentPath() || undefined }) })}
                     disabled={!driver}
-                    style={{ ...ghostBtn, whiteSpace: "nowrap" }}
+                    style={nowrap}
                     title="Use the route the demo is showing"
                   >
                     Use current
-                  </button>
+                  </Button>
                 </div>
                 <input
                   value={step.enter?.state ?? ""}
@@ -514,43 +516,43 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
           </Field>
 
           <Field label="Cover" collapsible>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => update({ still: undefined })} style={choice(!still)}>
+            <SegmentedControl size="md" aria-label="What covers the stage" style={track}>
+              <Segment selected={!still} onClick={() => update({ still: undefined })}>
                 The stage
-              </button>
-              <button
+              </Segment>
+              <Segment
+                selected={!!still}
                 onClick={() =>
                   // The image takes the stage's clicks, so only the panel's
                   // button can move the reader on from it.
                   update({ still: { src: "", ...step.still }, advance: step.advance.on === "manual" ? step.advance : { on: "manual" } })
                 }
-                style={choice(!!still)}
               >
                 An image
-              </button>
-            </div>
+              </Segment>
+            </SegmentedControl>
             {still && (
               <>
                 <div style={{ marginTop: 10 }}>
                   <ImageField value={still.src} onChange={(v) => update({ still: { ...still, src: v } })} label="Cover image" />
                 </div>
-                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                <SegmentedControl size="md" aria-label="How the cover fits" style={{ ...track, marginTop: 8 }}>
                   {(["center", "fill"] as const).map((fit) => (
-                    <button key={fit} onClick={() => update({ still: { ...still, fit } })} style={choice((still.fit ?? "center") === fit)}>
+                    <Segment key={fit} selected={(still.fit ?? "center") === fit} onClick={() => update({ still: { ...still, fit } })}>
                       {fit === "center" ? "Centered" : "Fill"}
-                    </button>
+                    </Segment>
                   ))}
-                </div>
+                </SegmentedControl>
                 <p style={hint}>Laid over this step's stage, which stays loaded underneath, so the next step picks up where the reader left off.</p>
               </>
             )}
           </Field>
 
           <div style={{ display: "flex", gap: 6, margin: "18px 0" }}>
-            <button onClick={() => move(-1)} disabled={index === 0} title="Move up" style={iconBtn(index === 0)}><ChevronUp size={16} /></button>
-            <button onClick={() => move(1)} disabled={index === steps.length - 1} title="Move down" style={iconBtn(index === steps.length - 1)}><ChevronDown size={16} /></button>
-            <button onClick={duplicateStep} title="Duplicate" style={iconBtn(false)}><Copy size={16} /></button>
-            <button onClick={deleteStep} disabled={steps.length <= 1} title="Delete" style={iconBtn(steps.length <= 1)}><Trash2 size={16} /></button>
+            <ButtonRound variant="tertiary" icon={<ChevronUp size={16} />} onClick={() => move(-1)} disabled={index === 0} title="Move up" aria-label="Move up" />
+            <ButtonRound variant="tertiary" icon={<ChevronDown size={16} />} onClick={() => move(1)} disabled={index === steps.length - 1} title="Move down" aria-label="Move down" />
+            <ButtonRound variant="tertiary" icon={<Copy size={16} />} onClick={duplicateStep} title="Duplicate" aria-label="Duplicate" />
+            <ButtonRound variant="tertiary" tone="danger" icon={<Trash2 size={16} />} onClick={deleteStep} disabled={steps.length <= 1} title="Delete" aria-label="Delete" />
           </div>
 
           <Field label="Eyebrow">
@@ -585,16 +587,18 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                   busy={picking?.field === "spotlight" || drawing?.field === "spotlight"}
                   disabled={demo.mode === "blocked" || !!still || (!opaque && !driveable)}
                 />
-                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                  {(["rect", "pill"] as const).map((shape) => (
-                    <button
-                      key={shape}
-                      onClick={() => update({ spotlight: { ...step.spotlight!, shape } })}
-                      style={choice((step.spotlight!.shape ?? "rect") === shape)}
-                    >
-                      {shape === "rect" ? "Rounded" : "Pill"}
-                    </button>
-                  ))}
+                <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
+                  <SegmentedControl size="md" aria-label="Spotlight shape" style={track}>
+                    {(["rect", "pill"] as const).map((shape) => (
+                      <Segment
+                        key={shape}
+                        selected={(step.spotlight!.shape ?? "rect") === shape}
+                        onClick={() => update({ spotlight: { ...step.spotlight!, shape } })}
+                      >
+                        {shape === "rect" ? "Rounded" : "Pill"}
+                      </Segment>
+                    ))}
+                  </SegmentedControl>
                   {!opaque && (
                     <input
                       type="number"
@@ -621,12 +625,12 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                   />
                   Block clicks everywhere else
                 </label>
-                <button onClick={() => update({ spotlight: undefined })} style={{ ...ghostBtn, marginTop: 10 }}>Remove spotlight</button>
+                <Button variant="ghost" size="sm" tone="danger" onClick={() => update({ spotlight: undefined })} style={{ marginTop: 10 }}>Remove spotlight</Button>
               </>
             ) : (
-              <button onClick={() => update({ spotlight: {} })} style={ghostBtn}>
-                <Plus size={15} /> Add a spotlight
-              </button>
+              <Button variant="ghost" size="sm" icon={<Plus size={15} />} onClick={() => update({ spotlight: {} })}>
+                Add a spotlight
+              </Button>
             )}
           </Field>
 
@@ -650,25 +654,34 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                   placeholder="What this element is for"
                   style={{ ...inputStyle, resize: "vertical", marginTop: 6 }}
                 />
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
-                  {(["auto", "top", "right", "bottom", "left"] as const).map((side) => (
-                    <button
-                      key={side}
-                      onClick={() => patchCallout(at, { placement: side === "auto" ? undefined : side })}
-                      style={choice((callout.placement ?? "auto") === side)}
-                    >
-                      {side}
-                    </button>
-                  ))}
-                  <button onClick={() => removeCallout(at)} style={{ ...iconBtn(false), width: 28, height: 28, marginLeft: "auto" }} title="Remove">
-                    <X size={13} />
-                  </button>
+                <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+                  <SegmentedControl size="md" aria-label="Which side the callout sits on" style={track}>
+                    {(["auto", "top", "right", "bottom", "left"] as const).map((side) => (
+                      <Segment
+                        key={side}
+                        selected={(callout.placement ?? "auto") === side}
+                        onClick={() => patchCallout(at, { placement: side === "auto" ? undefined : side })}
+                      >
+                        {side}
+                      </Segment>
+                    ))}
+                  </SegmentedControl>
+                  <ButtonRound
+                    size="sm"
+                    variant="tertiary"
+                    tone="danger"
+                    icon={<X size={13} />}
+                    onClick={() => removeCallout(at)}
+                    title="Remove"
+                    aria-label="Remove callout"
+                    style={{ marginLeft: "auto" }}
+                  />
                 </div>
               </div>
             ))}
-            <button onClick={addCallout} style={ghostBtn}>
-              <Plus size={15} /> Add a callout
-            </button>
+            <Button variant="ghost" size="sm" icon={<Plus size={15} />} onClick={addCallout}>
+              Add a callout
+            </Button>
             <p style={hint}>
               {opaque
                 ? "Anchored to an area of the stage, which an embed or a mock-up can't move out from under them."
@@ -677,13 +690,13 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
           </Field>
 
           <Field label="Advances on" collapsible>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            <SegmentedControl size="md" aria-label="What advances this step" style={track}>
               {ADVANCE_KINDS.filter((k) => !opaque || k.value === "manual").map((k) => (
-                <button key={k.value} onClick={() => update({ advance: blankAdvance(k.value, step.advance) })} style={choice(step.advance.on === k.value)}>
+                <Segment key={k.value} selected={step.advance.on === k.value} onClick={() => update({ advance: blankAdvance(k.value, step.advance) })}>
                   {k.label}
-                </button>
+                </Segment>
               ))}
-            </div>
+            </SegmentedControl>
             <p style={hint}>
               {opaque
                 ? "Nothing can be observed inside an embed or a mock-up, so a step on one is left with the panel's button."
@@ -720,26 +733,31 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {step.advance.of.map((a, at) => (
                   <div key={at} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10 }}>
-                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                      {(["click", "path", "signal"] as const).map((on) => (
-                        <button
-                          key={on}
-                          onClick={() => updateAny(step.advance as Extract<StepAdvance, { on: "any" }>, at, blankAdvance(on, a), update)}
-                          style={choice(a.on === on)}
-                        >
-                          {on}
-                        </button>
-                      ))}
-                      <button
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
+                      <SegmentedControl size="md" aria-label="What this way waits for" style={track}>
+                        {(["click", "path", "signal"] as const).map((on) => (
+                          <Segment
+                            key={on}
+                            selected={a.on === on}
+                            onClick={() => updateAny(step.advance as Extract<StepAdvance, { on: "any" }>, at, blankAdvance(on, a), update)}
+                          >
+                            {on}
+                          </Segment>
+                        ))}
+                      </SegmentedControl>
+                      <ButtonRound
+                        size="sm"
+                        variant="tertiary"
+                        tone="danger"
+                        icon={<X size={13} />}
                         onClick={() => {
                           const any = step.advance as Extract<StepAdvance, { on: "any" }>;
                           update({ advance: { ...any, of: any.of.filter((_, i) => i !== at) } });
                         }}
-                        style={{ ...iconBtn(false), width: 28, height: 28, marginLeft: "auto" }}
                         title="Remove"
-                      >
-                        <X size={13} />
-                      </button>
+                        aria-label="Remove this way"
+                        style={{ marginLeft: "auto" }}
+                      />
                     </div>
                     <SimpleAdvance
                       advance={a}
@@ -751,15 +769,18 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                     />
                   </div>
                 ))}
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Plus size={15} />}
                   onClick={() => {
                     const any = step.advance as Extract<StepAdvance, { on: "any" }>;
                     update({ advance: { ...any, of: [...any.of, { on: "click", mark: "" }] } });
                   }}
-                  style={ghostBtn}
+                  style={undefined}
                 >
-                  <Plus size={15} /> Add a way
-                </button>
+                  Add a way
+                </Button>
               </div>
             )}
           </Field>
@@ -767,9 +788,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
           {warning && (
             <div style={warn}>
               {warning}
-              <button onClick={() => setWarning(null)} style={{ ...iconBtn(false), width: 26, height: 26, flex: "none" }} aria-label="Dismiss">
-                <X size={13} />
-              </button>
+              <ButtonRound size="sm" variant="tertiary" icon={<X size={13} />} onClick={() => setWarning(null)} aria-label="Dismiss" style={{ flex: "none" }} />
             </div>
           )}
         </div>
@@ -813,29 +832,26 @@ function StagesPanel({ content, onPatch, onAdd, onRemove, onMove, onClose }: {
                 placeholder={stage.id}
                 style={inputStyle}
               />
-              <button onClick={() => onMove(stage.id, -1)} disabled={i === 0} style={{ ...iconBtn(i === 0), width: 28, height: 28 }} title="Move up">
-                <ChevronUp size={13} />
-              </button>
-              <button
+              <ButtonRound size="sm" variant="tertiary" icon={<ChevronUp size={13} />} onClick={() => onMove(stage.id, -1)} disabled={i === 0} title="Move up" aria-label="Move up" />
+              <ButtonRound
+                size="sm"
+                variant="tertiary"
+                icon={<ChevronDown size={13} />}
                 onClick={() => onMove(stage.id, 1)}
                 disabled={i === content.stages.length - 1}
-                style={{ ...iconBtn(i === content.stages.length - 1), width: 28, height: 28 }}
                 title="Move down"
-              >
-                <ChevronDown size={13} />
-              </button>
-              <button onClick={() => onRemove(stage.id)} style={{ ...iconBtn(false), width: 28, height: 28 }} title="Remove this stage">
-                <X size={13} />
-              </button>
+                aria-label="Move down"
+              />
+              <ButtonRound size="sm" variant="tertiary" tone="danger" icon={<X size={13} />} onClick={() => onRemove(stage.id)} title="Remove this stage" aria-label="Remove this stage" />
             </div>
 
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <SegmentedControl size="md" aria-label="What this stage is" style={{ ...track, marginTop: 8 }}>
               {STAGE_KINDS.map((k) => (
-                <button key={k.value} onClick={() => onPatch(stage.id, { kind: k.value })} style={choice(stage.kind === k.value)}>
+                <Segment key={k.value} selected={stage.kind === k.value} onClick={() => onPatch(stage.id, { kind: k.value })}>
                   {k.label}
-                </button>
+                </Segment>
               ))}
-            </div>
+            </SegmentedControl>
             <p style={hint}>{STAGE_KINDS.find((k) => k.value === stage.kind)?.hint}</p>
 
             {stage.kind === "mock" ? (
@@ -843,13 +859,13 @@ function StagesPanel({ content, onPatch, onAdd, onRemove, onMove, onClose }: {
                 <div style={{ marginTop: 8 }}>
                   <ImageField value={stage.src} onChange={(v) => onPatch(stage.id, { src: v })} label="Mock-up image" />
                 </div>
-                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                <SegmentedControl size="md" aria-label="How the mock-up fits" style={{ ...track, marginTop: 8 }}>
                   {(["center", "fill"] as const).map((fit) => (
-                    <button key={fit} onClick={() => onPatch(stage.id, { fit })} style={choice((stage.fit ?? "center") === fit)}>
+                    <Segment key={fit} selected={(stage.fit ?? "center") === fit} onClick={() => onPatch(stage.id, { fit })}>
                       {fit === "center" ? "Centered" : "Fill"}
-                    </button>
+                    </Segment>
                   ))}
-                </div>
+                </SegmentedControl>
               </>
             ) : (
               <>
@@ -894,9 +910,9 @@ function StagesPanel({ content, onPatch, onAdd, onRemove, onMove, onClose }: {
           </div>
         ))}
 
-        <button onClick={onAdd} style={{ ...ghostBtn, justifyContent: "center", width: "100%" }}>
-          <Plus size={15} /> Add a stage
-        </button>
+        <Button variant="ghost" size="sm" icon={<Plus size={15} />} onClick={onAdd} style={fill}>
+          Add a stage
+        </Button>
       </div>
     </>
   );
@@ -920,36 +936,34 @@ function Anchor({ mark, area, opaque, onMark, onPick, onDraw, busy, disabled }: 
     return (
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
         <span style={{ ...inputStyle, display: "flex", alignItems: "center", color: area ? "#1a1a1a" : "#8a857d", fontSize: 12 }}>{at}</span>
-        <button
+        <Button
+          size="sm"
+          variant={busy ? "primary" : "ghost"}
+          icon={<Square size={14} />}
           onClick={onDraw}
           disabled={disabled}
           title={disabled ? "Needs the stage" : "Drag the area on the stage"}
-          style={{
-            ...ghostBtn, whiteSpace: "nowrap", borderStyle: "solid",
-            ...(busy ? { background: ACCENT, color: "#fff", borderColor: ACCENT } : null),
-            ...(disabled ? { opacity: 0.5, cursor: "default" } : null),
-          }}
+          style={nowrap}
         >
-          <Square size={14} /> Draw
-        </button>
+          Draw
+        </Button>
       </div>
     );
   }
   return (
     <div style={{ display: "flex", gap: 6 }}>
       <input value={mark} onChange={(e) => onMark(e.target.value)} placeholder="data-walkthrough id" style={inputStyle} />
-      <button
+      <Button
+        size="sm"
+        variant={busy ? "primary" : "ghost"}
+        icon={<Crosshair size={14} />}
         onClick={onPick}
         disabled={disabled}
         title={disabled ? "Needs the live demo" : "Pick it by clicking the demo"}
-        style={{
-          ...ghostBtn, whiteSpace: "nowrap", borderStyle: "solid",
-          ...(busy ? { background: ACCENT, color: "#fff", borderColor: ACCENT } : null),
-          ...(disabled ? { opacity: 0.5, cursor: "default" } : null),
-        }}
+        style={nowrap}
       >
-        <Crosshair size={14} /> Pick
-      </button>
+        Pick
+      </Button>
     </div>
   );
 }
@@ -1006,9 +1020,9 @@ function SimpleAdvance({ advance, onChange, onPick, picking, canPick, currentPat
     return (
       <div style={{ display: "flex", gap: 6 }}>
         <input value={advance.path} onChange={(e) => onChange({ on: "path", path: e.target.value })} placeholder="#/settings" style={inputStyle} />
-        <button onClick={() => currentPath && onChange({ on: "path", path: currentPath })} disabled={!currentPath} style={{ ...ghostBtn, whiteSpace: "nowrap" }}>
+        <Button variant="ghost" size="sm" onClick={() => currentPath && onChange({ on: "path", path: currentPath })} disabled={!currentPath} style={nowrap}>
           Use current
-        </button>
+        </Button>
       </div>
     );
   }
@@ -1033,8 +1047,15 @@ const rail: React.CSSProperties = {
 };
 
 const inspector: React.CSSProperties = {
-  width: 320, flexShrink: 0, background: "#fff", borderLeft: "1px solid #e3e0db", overflowY: "auto", padding: 18, paddingBottom: 104,
+  width: 360, flexShrink: 0, background: "#fff", borderLeft: "1px solid #e3e0db", overflowY: "auto", padding: 18, paddingBottom: 104,
 };
+
+/** A segmented control holds as many options as the walkthrough has, and a
+ * walkthrough that crosses four apps has a row the panel can't fit. Scrolling
+ * the track keeps that row inside the inspector instead of pushing the whole
+ * panel sideways; the thumb is positioned within the track, so it travels with
+ * it. */
+const track: React.CSSProperties = { maxWidth: "100%", overflowX: "auto" };
 
 const stagesPanel: React.CSSProperties = {
   position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 91, width: 360, maxHeight: "80vh", overflowY: "auto",
@@ -1072,10 +1093,7 @@ const pickCancel: React.CSSProperties = {
   color: "#5a554e", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
 };
 
-function choice(active: boolean): React.CSSProperties {
-  return {
-    fontSize: 12, padding: "7px 10px", borderRadius: 6, cursor: "pointer",
-    border: active ? `1.5px solid ${ACCENT}` : "1px solid #dcd8d2",
-    background: active ? "#fff5f6" : "#fff", color: "#1a1a1a",
-  };
-}
+/** A button that spans the list it ends, and one that must not wrap beside a
+ * field. Everything else about these comes from the variant. */
+const fill: React.CSSProperties = { width: "100%", justifyContent: "center" };
+const nowrap: React.CSSProperties = { whiteSpace: "nowrap", flex: "none" };

@@ -7,10 +7,19 @@ A project is one JSON object (`CaseStudyContent`): an ordered list of `screens` 
 ## Install
 
 ```bash
-npm install https://github.com/tomcog/case-study/archive/refs/tags/v0.1.0.tar.gz motion
+npm install https://github.com/tomcog/case-study/archive/refs/tags/v0.1.0.tar.gz motion github:tomcog/component-library
 ```
 
-Peer dependencies: `react`, `react-dom` (18 or 19), `motion` (11+).
+Peer dependencies: `react`, `react-dom` (18 or 19), `motion` (11+), and `@tomcoggia/ui` (0.86+), which the builders are built from.
+
+The package ships no stylesheet of its own, so the app loads the design system's — once, wherever it sets up:
+
+```tsx
+import "@tomcoggia/ui/fonts.css";  // self-hosted DM Sans; omit it to use your own type
+import "@tomcoggia/ui/styles.css";
+```
+
+Playing a project needs neither import to work, but the builders will look unstyled without them.
 
 ## Use
 

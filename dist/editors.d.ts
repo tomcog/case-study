@@ -34,9 +34,6 @@ export declare function ColorInput({ label, value, onChange }: {
     onChange: (v: string) => void;
 }): import("react").JSX.Element;
 export declare const inputStyle: React.CSSProperties;
-export declare const primaryBtn: React.CSSProperties;
-export declare const ghostBtn: React.CSSProperties;
-export declare function iconBtn(disabled: boolean): React.CSSProperties;
 export declare function PreviewCardSettings({ preview, onChange, onClose, isCaseStudy, onToggleCaseStudy }: {
     preview: ProjectPreview;
     onChange: (patch: Partial<ProjectPreview>) => void;

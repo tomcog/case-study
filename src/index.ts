@@ -16,7 +16,7 @@ export type { ProjectSummary, ProjectSource, ProjectContent, ProjectKind } from 
 export { DEFAULT_ACCENT, DEFAULT_INK } from "./theme.js";
 
 // Building blocks the host app may reuse in its own screens (e.g. a project index editor).
-export { ImageField, Field, inputStyle, primaryBtn, ghostBtn } from "./editors.js";
+export { ImageField, Field, inputStyle } from "./editors.js";
 export { CaseStudyThumb } from "./ui/CaseStudyThumb.js";
 export type { ThumbFrame } from "./ui/CaseStudyThumb.js";
 export { CaseStudyLink } from "./ui/CaseStudyLink.js";

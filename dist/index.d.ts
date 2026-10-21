@@ -8,7 +8,7 @@ export type { CaseStudyContent, Screen, ScreenLayout, Theme, Metric, OverviewIte
 export { migrate, withAssetBase, loadProject, previewCard, projectSource, isWalkthrough, SCHEMA_VERSION } from "./project.js";
 export type { ProjectSummary, ProjectSource, ProjectContent, ProjectKind } from "./project.js";
 export { DEFAULT_ACCENT, DEFAULT_INK } from "./theme.js";
-export { ImageField, Field, inputStyle, primaryBtn, ghostBtn } from "./editors.js";
+export { ImageField, Field, inputStyle } from "./editors.js";
 export { CaseStudyThumb } from "./ui/CaseStudyThumb.js";
 export type { ThumbFrame } from "./ui/CaseStudyThumb.js";
 export { CaseStudyLink } from "./ui/CaseStudyLink.js";
