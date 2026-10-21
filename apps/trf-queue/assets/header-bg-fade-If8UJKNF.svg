@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="1280" height="90" viewBox="0 0 1280 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Header BG Fade">
+<path id="Header BG Fade_2" d="M0 0H1280V90H0V0Z" fill="url(#paint0_linear_0_7)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_7" x1="646" y1="90" x2="646" y2="1.41841e-05" gradientUnits="userSpaceOnUse">
+<stop stop-color="white" stop-opacity="0"/>
+<stop offset="0.504808" stop-color="white"/>
+</linearGradient>
+</defs>
+</svg>

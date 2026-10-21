@@ -1,0 +1,23 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Result Report - History - Badge - Corrected">
+<circle id="Badge" cx="13" cy="13" r="12" stroke="#D9DBDE" stroke-width="2"/>
+<g id="Icon/Report/Corrected">
+<path id="Combined Shape" d="M8 6.99988H18V18.9999H8V6.99988Z" fill-rule="evenodd" clip-rule="evenodd" fill="#3D4349"/>
+<g id="Combined Shape_2" filter="url(#filter0_d_0_4145)">
+<path d="M14 10V11H10V10H14ZM16 13V12H10V13H16ZM15 15V14H10V15H15Z" fill-rule="evenodd" clip-rule="evenodd" fill="white"/>
+</g>
+</g>
+</g>
+<defs>
+<filter id="filter0_d_0_4145" x="6" y="10" width="14" height="13" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="4"/>
+<feGaussianBlur stdDeviation="2"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_4145"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_4145" result="shape"/>
+</filter>
+</defs>
+</svg>
