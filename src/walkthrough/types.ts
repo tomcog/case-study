@@ -7,8 +7,8 @@
 //            same app as the step before it keeps that app's document alive,
 //            so whatever the reader did carries forward. Naming a different
 //            one throws the old document away and boots the new app.
-//   content  what is VISIBLE: that app, a framed URL, or an image. An image
-//            over a running app hides it without stopping it, so the step
+//   content  what is VISIBLE: that app, a framed URL, an image, or a slide.
+//            Anything but the app hides it without stopping it, so the step
 //            after can pick the reader up where they left off.
 //   actions  what the step DOES to the running app as it opens: click a mark,
 //            type into one. The app is same-origin, so this needs nothing of
@@ -30,7 +30,7 @@
 //   2. hash routes, so a starting screen is an assignment rather than a load
 //   3. built with base "./", since it is served from its own folder
 
-import type { ProjectPreview } from "../core.js";
+import type { ProjectPreview, Screen } from "../core.js";
 
 /** What a step shows. The app named by `WalkthroughStep.app` keeps running
  * whichever of these is on screen. */
@@ -42,7 +42,12 @@ export type StepContent =
    * anchored by area and left by the panel's button. */
   | { kind: "embed"; url: string; width?: number; minWidth?: number }
   /** A still. Same anchoring and the same way out as an embed. */
-  | { kind: "image"; src: string; fit?: "center" | "fill" };
+  | { kind: "image"; src: string; fit?: "center" | "fill" }
+  /** A composed slide, on the fixed 1280×720 canvas the case-study layouts are
+   * drawn on. It carries its own copy, so the panel steps aside and the slide
+   * takes the whole viewport. The app keeps running behind it either way, so a
+   * slide between two demo steps doesn't cost the reader their work. */
+  | { kind: "slide"; screen: Screen };
 
 /** Something the step does to the running app as it opens, in order.
  *
@@ -139,7 +144,6 @@ export interface WalkthroughStep {
 }
 
 export interface WalkthroughContent {
-  kind: "walkthrough";
   schemaVersion?: number;
   title?: string;
   draft?: boolean;
@@ -149,9 +153,8 @@ export interface WalkthroughContent {
   steps: WalkthroughStep[];
 }
 
-/** What a new walkthrough starts as: one step, running nothing. */
+/** What a new project starts as: one step, running nothing. */
 export const DEFAULT_WALKTHROUGH: WalkthroughContent = {
-  kind: "walkthrough",
   steps: [
     {
       id: "step-1",

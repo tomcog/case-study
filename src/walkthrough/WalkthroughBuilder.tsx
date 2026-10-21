@@ -16,7 +16,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Reorder } from "motion/react";
 import { ChevronDown, ChevronUp, Copy, Crosshair, Image as ImageIcon, LayoutGrid, Layers, Play, Plus, Square, Trash2, X } from "lucide-react";
-import { ACCENT } from "../core.js";
+import { ACCENT, Stage, ScreenView, bleedBg, backdropFor } from "../core.js";
+import type { Screen } from "../core.js";
+import { SlideFields, newScreen } from "../slide.js";
 import { Field, ImageField, PreviewCardSettings, inputStyle } from "../editors.js";
 import { Button, ButtonRound, Segment, SegmentedControl } from "@tomcoggia/ui";
 import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
@@ -39,6 +41,7 @@ const CONTENT_KINDS: { value: StepContent["kind"]; label: string; hint: string }
   { value: "app", label: "The app", hint: "The app this step is running. The reader uses it, and the step can watch what they do." },
   { value: "embed", label: "A URL", hint: "Any page in a frame — a Figma prototype, a live site. The reader can click inside it; nothing out here can see them do it." },
   { value: "image", label: "An image", hint: "A still. Whatever the step is running keeps running behind it." },
+  { value: "slide", label: "A slide", hint: "A composed slide, full screen. It carries its own copy, so the panel steps aside for it." },
 ];
 
 const uid = () => `step-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`;
@@ -118,6 +121,10 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
   // ── Steps ──
   const patchCallout = (at: number, patch: Partial<Callout>) =>
     update({ callouts: (step.callouts ?? []).map((c, i) => (i === at ? { ...c, ...patch } : c)) });
+
+  /** Edit the slide this step displays, if it displays one. */
+  const patchSlide = (patch: Partial<Screen>) =>
+    update({ content: shown.kind === "slide" ? { kind: "slide", screen: { ...shown.screen, ...patch } } : shown });
 
   const patchAction = (at: number, action: StepAction) =>
     update({ actions: (step.actions ?? []).map((a, i) => (i === at ? action : a)) });
@@ -368,7 +375,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
                   whileDrag={{ scale: 1.04, boxShadow: "0 10px 24px rgba(0,0,0,0.22)", cursor: "grabbing" }}
                   style={{ cursor: "grab" }}
                 >
-                  {run && (
+                  {run && (runs.length > 1 || !!run.app) && (
                     <div style={runBand}>
                       <Layers size={11} style={{ flex: "none", opacity: 0.7 }} />
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -384,9 +391,11 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
                     }}
                   >
                     <div style={{ fontSize: 10, opacity: 0.5, position: "absolute", top: 6, right: 8 }}>{i + 1}</div>
-                    <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: ACCENT, marginBottom: 4 }}>{s.eyebrow}</div>
+                    <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: ACCENT, marginBottom: 4 }}>
+                      {s.eyebrow || (s.content?.kind === "slide" ? s.content.screen.eyebrow : "")}
+                    </div>
                     <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {s.title || s.id}
+                      {s.title || (s.content?.kind === "slide" ? s.content.screen.title : "") || s.id}
                     </div>
                   </div>
                 </Reorder.Item>
@@ -406,6 +415,21 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
                   image or a URL hides it without stopping it. */}
               {demo.live && app && <iframe key={app.src} ref={demo.frameRef} title={app.label} style={demo.frameStyle} />}
 
+              {shown.kind === "slide" && (
+                <div style={{ position: "absolute", inset: 0, background: "#f4f3f1" }}>
+                  <Stage key={shown.screen.id} background={bleedBg(shown.screen)} backdrop={backdropFor(shown.screen)}>
+                    <ScreenView
+                      screen={shown.screen}
+                      play={false}
+                      reduced
+                      logoSrc={content.preview?.logo}
+                      onAnnotationMove={shown.screen.layout === "showcase"
+                        ? (id, x, y) => patchSlide({ items: (shown.screen.items ?? []).map((it) => (it.id === id ? { ...it, x, y } : it)) })
+                        : undefined}
+                    />
+                  </Stage>
+                </div>
+              )}
               {shown.kind === "image" && <StageStill image={shown} />}
               {shown.kind === "embed" && (
                 <iframe
@@ -560,6 +584,12 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
                   </label>
                 </div>
               </>
+            )}
+
+            {shown.kind === "slide" && (
+              <div style={{ marginTop: 12 }}>
+                <SlideFields screen={shown.screen} update={patchSlide} logoSrc={content.preview?.logo} />
+              </div>
             )}
 
             {shown.kind === "image" && (
@@ -900,6 +930,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
 function blankContent(kind: StepContent["kind"], from: StepContent): StepContent {
   if (kind === "app") return { kind: "app" };
   if (kind === "embed") return { kind: "embed", url: from.kind === "embed" ? from.url : "" };
+  if (kind === "slide") return { kind: "slide", screen: from.kind === "slide" ? from.screen : newScreen() };
   return { kind: "image", src: from.kind === "image" ? from.src : "", fit: from.kind === "image" ? from.fit : undefined };
 }
 

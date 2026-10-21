@@ -7,8 +7,8 @@
 //            same app as the step before it keeps that app's document alive,
 //            so whatever the reader did carries forward. Naming a different
 //            one throws the old document away and boots the new app.
-//   content  what is VISIBLE: that app, a framed URL, or an image. An image
-//            over a running app hides it without stopping it, so the step
+//   content  what is VISIBLE: that app, a framed URL, an image, or a slide.
+//            Anything but the app hides it without stopping it, so the step
 //            after can pick the reader up where they left off.
 //   actions  what the step DOES to the running app as it opens: click a mark,
 //            type into one. The app is same-origin, so this needs nothing of
@@ -29,9 +29,8 @@
 //      CSS selectors, which rot)
 //   2. hash routes, so a starting screen is an assignment rather than a load
 //   3. built with base "./", since it is served from its own folder
-/** What a new walkthrough starts as: one step, running nothing. */
+/** What a new project starts as: one step, running nothing. */
 export const DEFAULT_WALKTHROUGH = {
-    kind: "walkthrough",
     steps: [
         {
             id: "step-1",

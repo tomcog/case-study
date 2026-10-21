@@ -1,5 +1,5 @@
-import { DEFAULT_CONTENT } from "./core.js";
-import type { CaseStudyContent, ProjectPreview, Screen } from "./core.js";
+import { DEFAULT_WALKTHROUGH } from "./walkthrough/types.js";
+import type { ProjectPreview, Screen } from "./core.js";
 import type { StepContent, WalkthroughContent, WalkthroughStep } from "./walkthrough/types.js";
 
 // ─── Project files ─────────────────────────────────────────────────
@@ -11,13 +11,9 @@ import type { StepContent, WalkthroughContent, WalkthroughStep } from "./walkthr
 // stepped copy beside a stage. `kind` tells them apart, and is absent on
 // everything saved before walkthroughs existed — so absent means case study.
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
-export type ProjectKind = "case-study" | "walkthrough";
-
-export type ProjectContent = CaseStudyContent | WalkthroughContent;
-
-export const isWalkthrough = (project: ProjectContent): project is WalkthroughContent => project.kind === "walkthrough";
+export type ProjectContent = WalkthroughContent;
 
 /** An app ingested into the shared pool: a snapshot of someone's built output,
  * copied in and served from this site. Steps reference the `id`, so renaming
@@ -62,6 +58,13 @@ interface LegacyWalkthrough {
   stages?: LegacyStage[];
 }
 
+/** The deck a project was before version 5, when a case study and a
+ * walkthrough were different kinds of thing. */
+interface LegacyDeck {
+  kind?: string;
+  screens?: Screen[];
+}
+
 interface LegacyStep {
   enter?: { app?: string; stage?: string; path?: string; state?: string };
   stage?: { src?: string; fit?: "center" | "fill" };
@@ -69,35 +72,35 @@ interface LegacyStep {
 }
 
 /** Bring any saved project up to the current shape. Never throws: unknown or
- * empty input falls back to the starter deck. Versions 1 and 2 need no field
- * changes for a case study — version 2 only added `kind`, and a case study is
- * what a project without one is. Legacy screens without a `theme` keep their
- * look at render time (see screenTheme).
+ * empty input falls back to one empty step.
  *
- * Walkthroughs changed twice. Version 3 folded the privileged demo and the
- * named ones beside it into one `stages` list. Version 4 removes the list
- * entirely: what a step runs, what it shows and where it starts are three
- * fields on the step, so nothing is inherited and nothing is shared. */
+ * A project used to be one of two kinds. A case study was a deck of screens; a
+ * walkthrough was steps beside a live app. Version 5 makes it one thing — a
+ * list of steps, each displaying a slide, an app, a URL or an image — because
+ * a deck was only ever the case where every step displays a slide. A case
+ * study's screens become exactly that, in order. */
 export function migrate(raw: unknown): ProjectContent {
-  if (!raw || typeof raw !== "object") return { ...DEFAULT_CONTENT, kind: "case-study", schemaVersion: SCHEMA_VERSION };
-  const p = raw as Partial<ProjectContent>;
-  return p.kind === "walkthrough" ? walkthrough(p as Partial<WalkthroughContent> & LegacyWalkthrough) : caseStudy(p as Partial<CaseStudyContent>);
-}
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_WALKTHROUGH, schemaVersion: SCHEMA_VERSION };
+  const p = raw as Partial<WalkthroughContent> & LegacyWalkthrough & LegacyDeck;
+  const { target, targets, stages, kind, screens, ...rest } = p;
 
-function caseStudy(p: Partial<CaseStudyContent>): CaseStudyContent {
-  const screens = Array.isArray(p.screens) && p.screens.length ? p.screens : DEFAULT_CONTENT.screens;
-  return { ...p, kind: "case-study", screens, schemaVersion: SCHEMA_VERSION };
-}
+  // A deck: every screen becomes a step that displays it, and nothing runs.
+  if (Array.isArray(screens) && !Array.isArray(p.steps)) {
+    return {
+      ...rest,
+      steps: screens.map((screen, i) => ({
+        id: screen.id || `step-${i + 1}`,
+        advance: { on: "manual" } as const,
+        content: { kind: "slide" as const, screen },
+      })),
+      schemaVersion: SCHEMA_VERSION,
+    };
+  }
 
-/** A walkthrough with nothing authored yet is left empty rather than filled
- * with a starter: its steps only mean anything next to the app they run. */
-function walkthrough(raw: Partial<WalkthroughContent> & LegacyWalkthrough): WalkthroughContent {
-  const { target, targets, stages, ...rest } = raw;
-  const legacy = legacyStages(raw);
-  const steps = Array.isArray(raw.steps) ? raw.steps : [];
+  const legacy = legacyStages(p);
+  const steps = Array.isArray(p.steps) ? p.steps : [];
   return {
     ...rest,
-    kind: "walkthrough",
     steps: legacy.length ? steps.map((s, i) => foldStep(s, steps, i, legacy)) : steps.map(plainStep),
     schemaVersion: SCHEMA_VERSION,
   };
@@ -145,12 +148,7 @@ function foldStep(raw: WalkthroughStep & LegacyStep, steps: WalkthroughStep[], i
     content = { kind: "image", src: cover?.src || record?.src || "", fit: cover?.fit ?? record?.fit };
   }
 
-  return {
-    ...step,
-    app,
-    start: kind === "code" ? enter?.path : undefined,
-    content,
-  };
+  return { ...step, app, start: kind === "code" ? enter?.path : undefined, content };
 }
 
 /** A step already in the current shape, with the fields it may not have. */
@@ -192,7 +190,9 @@ const stepWithAssetBase = (base: string) => {
         ? { ...step.content, src: abs(step.content.src) ?? "" }
         : step.content?.kind === "embed"
           ? { ...step.content, url: abs(step.content.url) ?? "" }
-          : step.content,
+          : step.content?.kind === "slide"
+            ? { ...step.content, screen: screenWithAssetBase(base)(step.content.screen) }
+            : step.content,
   });
 };
 
@@ -205,16 +205,12 @@ const previewWithAssetBase = (base: string) => {
  * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
  * Absolute URLs and empty fields are left alone. Returns a new object.
  *
- * A walkthrough's own images and embeds are pinned the same way. The apps it
+ * A step's own images, embeds and slides are pinned the same way. The apps it
  * runs are not: a step stores an app's id, and where that app is served from
  * is the host's to say, since the pool is shared across projects. */
 export function withAssetBase<T extends ProjectContent>(project: T, base: string): T {
   const preview = previewWithAssetBase(base)(project.preview);
-  if (isWalkthrough(project)) {
-    const next: WalkthroughContent = { ...project, preview, steps: project.steps.map(stepWithAssetBase(base)) };
-    return next as T;
-  }
-  const next: CaseStudyContent = { ...project, preview, screens: project.screens.map(screenWithAssetBase(base)) };
+  const next: WalkthroughContent = { ...project, preview, steps: project.steps.map(stepWithAssetBase(base)) };
   return next as T;
 }
 
@@ -240,11 +236,11 @@ export function previewCard(project: ProjectContent) {
 /** One row of a project source's index.json (written by ProjectBuilder). */
 export interface ProjectSummary {
   id: string;
-  kind: ProjectKind;
   title: string;
-  /** Screens in a case study, steps in a walkthrough. */
+  /** How many steps it has. */
   count: number;
-  /** A case study's first screen, to render a thumbnail from. Null otherwise. */
+  /** The first slide it displays, to render a thumbnail from — null for a
+   * project that opens straight into an app. */
   cover: Screen | null;
   /** The card the project authors for itself: the thumbnail every kind has. */
   preview: ProjectPreview | null;

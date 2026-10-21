@@ -1,9 +1,7 @@
-import type { CaseStudyContent, ProjectPreview, Screen } from "./core.js";
+import type { ProjectPreview, Screen } from "./core.js";
 import type { WalkthroughContent } from "./walkthrough/types.js";
-export declare const SCHEMA_VERSION = 4;
-export type ProjectKind = "case-study" | "walkthrough";
-export type ProjectContent = CaseStudyContent | WalkthroughContent;
-export declare const isWalkthrough: (project: ProjectContent) => project is WalkthroughContent;
+export declare const SCHEMA_VERSION = 5;
+export type ProjectContent = WalkthroughContent;
 /** An app ingested into the shared pool: a snapshot of someone's built output,
  * copied in and served from this site. Steps reference the `id`, so renaming
  * the label leaves them alone; `src` is where its entry file is served from,
@@ -20,21 +18,19 @@ export interface IngestedApp {
     ingestedAt?: number;
 }
 /** Bring any saved project up to the current shape. Never throws: unknown or
- * empty input falls back to the starter deck. Versions 1 and 2 need no field
- * changes for a case study — version 2 only added `kind`, and a case study is
- * what a project without one is. Legacy screens without a `theme` keep their
- * look at render time (see screenTheme).
+ * empty input falls back to one empty step.
  *
- * Walkthroughs changed twice. Version 3 folded the privileged demo and the
- * named ones beside it into one `stages` list. Version 4 removes the list
- * entirely: what a step runs, what it shows and where it starts are three
- * fields on the step, so nothing is inherited and nothing is shared. */
+ * A project used to be one of two kinds. A case study was a deck of screens; a
+ * walkthrough was steps beside a live app. Version 5 makes it one thing — a
+ * list of steps, each displaying a slide, an app, a URL or an image — because
+ * a deck was only ever the case where every step displays a slide. A case
+ * study's screens become exactly that, in order. */
 export declare function migrate(raw: unknown): ProjectContent;
 /** Rewrite every site-relative asset path in a project to an absolute URL on
  * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
  * Absolute URLs and empty fields are left alone. Returns a new object.
  *
- * A walkthrough's own images and embeds are pinned the same way. The apps it
+ * A step's own images, embeds and slides are pinned the same way. The apps it
  * runs are not: a step stores an app's id, and where that app is served from
  * is the host's to say, since the pool is shared across projects. */
 export declare function withAssetBase<T extends ProjectContent>(project: T, base: string): T;
@@ -57,11 +53,11 @@ export declare function previewCard(project: ProjectContent): {
 /** One row of a project source's index.json (written by ProjectBuilder). */
 export interface ProjectSummary {
     id: string;
-    kind: ProjectKind;
     title: string;
-    /** Screens in a case study, steps in a walkthrough. */
+    /** How many steps it has. */
     count: number;
-    /** A case study's first screen, to render a thumbnail from. Null otherwise. */
+    /** The first slide it displays, to render a thumbnail from — null for a
+     * project that opens straight into an app. */
     cover: Screen | null;
     /** The card the project authors for itself: the thumbnail every kind has. */
     preview: ProjectPreview | null;
@@ -82,6 +78,6 @@ export declare function projectSource(base: string): {
     }): Promise<ProjectSummary[]>;
     get: (id: string, opts?: {
         signal?: AbortSignal;
-    }) => Promise<ProjectContent>;
+    }) => Promise<WalkthroughContent>;
 };
 export type ProjectSource = ReturnType<typeof projectSource>;

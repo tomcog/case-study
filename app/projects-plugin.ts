@@ -141,19 +141,21 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
       .filter((id) => drafts || !isDraft(id))
       .map((id) => {
         const data = read(id);
-        // A project with no `kind` predates walkthroughs, so it is a case study.
-        const kind = data.kind === "walkthrough" ? "walkthrough" : "case-study";
-        const screens = Array.isArray(data.screens) ? data.screens.length : 0;
+        // Projects saved before version 5 were a deck of screens or a list of
+        // steps; both are steps now, and a deck's screens are the slides they
+        // display. Read either, so the list works before a project is opened
+        // and migrated on load.
+        const steps: any[] = Array.isArray(data.steps) ? data.steps : [];
+        const screens: any[] = Array.isArray(data.screens) ? data.screens : [];
+        const slide = steps.find((s) => s?.content?.kind === "slide")?.content.screen ?? screens[0] ?? null;
         return {
           id,
-          kind,
           title: data.title || data.preview?.title || id,
-          count: kind === "walkthrough" ? (Array.isArray(data.steps) ? data.steps.length : 0) : screens,
-          cover: data.screens?.[0] ?? null,
+          count: steps.length || screens.length,
+          cover: slide,
           preview: data.preview ?? null,
           draft: data.draft === true,
           updatedAt: statSync(projectFile(id)).mtimeMs,
-          screens,
         };
       })
       .sort((a, b) => b.updatedAt - a.updatedAt);

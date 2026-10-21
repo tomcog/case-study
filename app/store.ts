@@ -1,6 +1,6 @@
 import {
   DEFAULT_WALKTHROUGH, loadProject, migrate,
-  type CaseStudyAssets, type IngestedApp, type ProjectContent, type ProjectKind, type ProjectSummary,
+  type CaseStudyAssets, type IngestedApp, type ProjectContent, type ProjectSummary,
 } from "../src/index.js";
 
 // ─── Talking to projects/ ──────────────────────────────────────────
@@ -29,10 +29,10 @@ async function post<T = { ok: true }>(action: string, body: unknown): Promise<T>
   return json;
 }
 
-/** A new project starts from its kind's starter, so it opens composed rather
- * than as an empty shell. */
-export const createProject = (title: string, kind: ProjectKind = "case-study") =>
-  post<{ id: string }>("create", { title, data: migrate(kind === "walkthrough" ? DEFAULT_WALKTHROUGH : null) });
+/** A new project starts from the starter, so it opens composed rather than as
+ * an empty shell. */
+export const createProject = (title: string) =>
+  post<{ id: string }>("create", { title, data: migrate(DEFAULT_WALKTHROUGH) });
 export const saveProject = (id: string, data: ProjectContent) => post("save", { id, data });
 export const renameProject = (id: string, title: string) => post("rename", { id, title });
 export const publishProject = (id: string, published: boolean) => post("publish", { id, published });

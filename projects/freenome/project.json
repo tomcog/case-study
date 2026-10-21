@@ -1,6 +1,5 @@
 {
-  "kind": "walkthrough",
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "title": "Freenome — Provider Portal",
   "draft": true,
   "preview": {

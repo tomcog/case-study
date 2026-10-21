@@ -1,111 +1,167 @@
 {
-  "screens": [
+  "schemaVersion": 5,
+  "title": "Test Project",
+  "draft": true,
+  "steps": [
     {
       "id": "s1",
-      "layout": "overview",
-      "theme": "light",
-      "bg": "#ffffff",
-      "fg": "#1a1a1a",
-      "accent": "#E51A38",
-      "eyebrow": "Case Study",
-      "title": "Reinventing the cancer-screening workflow",
-      "body": "How a clinician-first redesign cut order errors and gave a brand-new diagnostic its first real product.",
-      "items": [
-        {
-          "id": "o1",
-          "label": "The Problem",
-          "body": "What problem did you set out to solve, and for whom?"
-        },
-        {
-          "id": "o2",
-          "label": "The Solution",
-          "body": "What did you design, and what changed as a result?"
-        },
-        {
-          "id": "o3",
-          "label": "My Role",
-          "body": "Research, Interaction Design, Prototyping"
-        },
-        {
-          "id": "o4",
-          "label": "Timeline",
-          "body": "6 months · 2024"
-        },
-        {
-          "id": "o5",
-          "label": "Tools",
-          "body": "Figma, Miro, FigJam, Jira"
+      "advance": {
+        "on": "manual"
+      },
+      "content": {
+        "kind": "slide",
+        "screen": {
+          "id": "s1",
+          "layout": "overview",
+          "theme": "light",
+          "bg": "#ffffff",
+          "fg": "#1a1a1a",
+          "accent": "#E51A38",
+          "eyebrow": "Case Study",
+          "title": "Reinventing the cancer-screening workflow",
+          "body": "How a clinician-first redesign cut order errors and gave a brand-new diagnostic its first real product.",
+          "items": [
+            {
+              "id": "o1",
+              "label": "The Problem",
+              "body": "What problem did you set out to solve, and for whom?"
+            },
+            {
+              "id": "o2",
+              "label": "The Solution",
+              "body": "What did you design, and what changed as a result?"
+            },
+            {
+              "id": "o3",
+              "label": "My Role",
+              "body": "Research, Interaction Design, Prototyping"
+            },
+            {
+              "id": "o4",
+              "label": "Timeline",
+              "body": "6 months \u00b7 2024"
+            },
+            {
+              "id": "o5",
+              "label": "Tools",
+              "body": "Figma, Miro, FigJam, Jira"
+            }
+          ]
         }
-      ]
+      }
     },
     {
       "id": "s2",
-      "layout": "cover",
-      "basicTheme": "light",
-      "theme": "light",
-      "bg": "#ffffff",
-      "fg": "#1a1a1a",
-      "accent": "#E51A38",
-      "eyebrow": "The problem",
-      "title": "Nobody had ever ordered a test like this before.",
-      "body": "There was no precedent, no workflow, and no requirements — just a novel blood test and a thousand open questions about how it would actually reach a patient."
+      "advance": {
+        "on": "manual"
+      },
+      "content": {
+        "kind": "slide",
+        "screen": {
+          "id": "s2",
+          "layout": "cover",
+          "basicTheme": "light",
+          "theme": "light",
+          "bg": "#ffffff",
+          "fg": "#1a1a1a",
+          "accent": "#E51A38",
+          "eyebrow": "The problem",
+          "title": "Nobody had ever ordered a test like this before.",
+          "body": "There was no precedent, no workflow, and no requirements \u2014 just a novel blood test and a thousand open questions about how it would actually reach a patient."
+        }
+      }
+    },
+    {
+      "id": "demo-step",
+      "eyebrow": "The product",
+      "title": "Every order the practice has placed",
+      "body": "One list, newest first. Try sorting it.",
+      "app": "provider-portal",
+      "start": "#/",
+      "advance": {
+        "on": "manual"
+      }
     },
     {
       "id": "s3",
-      "layout": "basic2",
-      "basicTheme": "light",
-      "basicTextSide": "left",
-      "basicImage": "fill",
-      "theme": "light",
-      "bg": "#ffffff",
-      "fg": "#1a1a1a",
-      "accent": "#E51A38",
-      "eyebrow": "Research",
-      "title": "100+ conversations with the people in the loop",
-      "body": "Clinicians, lab techs, IT admins, and support agents. We mapped every hand-off from order to result and found where the workflow quietly broke.",
-      "imageUrl": "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1200&q=80"
+      "advance": {
+        "on": "manual"
+      },
+      "content": {
+        "kind": "slide",
+        "screen": {
+          "id": "s3",
+          "layout": "basic2",
+          "basicTheme": "light",
+          "basicTextSide": "left",
+          "basicImage": "fill",
+          "theme": "light",
+          "bg": "#ffffff",
+          "fg": "#1a1a1a",
+          "accent": "#E51A38",
+          "eyebrow": "Research",
+          "title": "100+ conversations with the people in the loop",
+          "body": "Clinicians, lab techs, IT admins, and support agents. We mapped every hand-off from order to result and found where the workflow quietly broke.",
+          "imageUrl": "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1200&q=80"
+        }
+      },
+      "app": "provider-portal"
     },
     {
       "id": "s-quote",
-      "layout": "quote",
-      "theme": "light",
-      "bg": "#ffffff",
-      "fg": "#1a1a1a",
-      "accent": "#E51A38",
-      "eyebrow": "From the field",
-      "title": "For the first time, I could place an order without second-guessing a single step.",
-      "body": "Dr. Lena Ortiz, Oncologist"
+      "advance": {
+        "on": "manual"
+      },
+      "content": {
+        "kind": "slide",
+        "screen": {
+          "id": "s-quote",
+          "layout": "quote",
+          "theme": "light",
+          "bg": "#ffffff",
+          "fg": "#1a1a1a",
+          "accent": "#E51A38",
+          "eyebrow": "From the field",
+          "title": "For the first time, I could place an order without second-guessing a single step.",
+          "body": "Dr. Lena Ortiz, Oncologist"
+        }
+      }
     },
     {
       "id": "s4",
-      "layout": "metrics",
-      "theme": "light",
-      "bg": "#ffffff",
-      "fg": "#1a1a1a",
-      "accent": "#E51A38",
-      "eyebrow": "Outcome",
-      "title": "What changed",
-      "metrics": [
-        {
-          "id": "m1",
-          "value": "−63%",
-          "label": "Order entry errors"
-        },
-        {
-          "id": "m2",
-          "value": "8→2",
-          "label": "Steps to place an order"
-        },
-        {
-          "id": "m3",
-          "value": "1st",
-          "label": "Design system at the company"
+      "advance": {
+        "on": "manual"
+      },
+      "content": {
+        "kind": "slide",
+        "screen": {
+          "id": "s4",
+          "layout": "metrics",
+          "theme": "light",
+          "bg": "#ffffff",
+          "fg": "#1a1a1a",
+          "accent": "#E51A38",
+          "eyebrow": "Outcome",
+          "title": "What changed",
+          "metrics": [
+            {
+              "id": "m1",
+              "value": "\u221263%",
+              "label": "Order entry errors"
+            },
+            {
+              "id": "m2",
+              "value": "8\u21922",
+              "label": "Steps to place an order"
+            },
+            {
+              "id": "m3",
+              "value": "1st",
+              "label": "Design system at the company"
+            }
+          ]
         }
-      ]
+      }
     }
-  ],
-  "schemaVersion": 4,
-  "title": "Test Project",
-  "draft": true,
-  "kind": "case-study"
+  ]
 }

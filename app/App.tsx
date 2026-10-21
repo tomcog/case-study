@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { Button, ButtonRound, Card, InputText, Tag } from "@tomcoggia/ui";
 import {
-  CaseStudyBuilder, CaseStudyPlayer, CaseStudyProvider, Stage, ScreenView,
-  WalkthroughBuilder, WalkthroughPlayer, bleedBg, backdropFor, isWalkthrough,
-  type CaseStudyContent, type ProjectContent, type ProjectKind, type WalkthroughContent,
+  CaseStudyProvider, ProjectBuilder, ProjectPlayer, Stage, ScreenView, bleedBg, backdropFor,
+  type ProjectContent,
 } from "../src/index.js";
 import {
   beaconProject, canEdit, createProject, deleteApp, deleteProject, duplicateProject, getProject, ingestApp,
@@ -37,7 +36,7 @@ export function App() {
   const [id, mode] = useHash().replace(/^#\/?/, "").split("/").filter(Boolean);
   if (!id) return <ProjectList />;
   if (mode === "edit" && canEdit) return <ProjectEditor key={id} id={id} />;
-  return <ProjectPlayer key={id} id={id} />;
+  return <PlayProject key={id} id={id} />;
 }
 
 /** Loads one project; null while loading. */
@@ -87,12 +86,10 @@ function ProjectList() {
     await refresh();
   }
 
-  async function create(title: string, kind: ProjectKind) {
+  async function create(title: string) {
     try {
-      const { id } = await createProject(title, kind);
-      // Walkthroughs have no editor yet, so a new one opens in the player,
-      // which says what it still needs.
-      go(kind === "walkthrough" ? `#/${id}` : `#/${id}/edit`);
+      const { id } = await createProject(title);
+      go(`#/${id}/edit`);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -140,7 +137,7 @@ function ProjectList() {
   );
 }
 
-function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string, kind: ProjectKind) => void; onCancel: () => void }) {
+function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string) => void; onCancel: () => void }) {
   const [title, setTitle] = useState("");
   const name = title.trim();
   return (
@@ -148,7 +145,7 @@ function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string, kind
       className="new"
       onSubmit={(e) => {
         e.preventDefault();
-        if (name) onCreate(name, "case-study");
+        if (name) onCreate(name);
       }}
     >
       <div className="new__row">
@@ -162,21 +159,17 @@ function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string, kind
           placeholder="e.g. SimpleScreen CRC"
           autoFocus
         />
-        <Button variant="primary" type="submit" disabled={!name}>Case study</Button>
-        <Button variant="secondary" type="button" disabled={!name} onClick={() => onCreate(name, "walkthrough")}>Walkthrough</Button>
+        <Button variant="primary" type="submit" disabled={!name}>Create</Button>
         <Button variant="ghost" type="button" onClick={onCancel}>Cancel</Button>
       </div>
       <p className="new__hint">
-        Its id will be <code>{slugPreview(name)}</code>. Other sites load the project by its id, so the id stays the same if you rename the project later. A case study is a deck of screens; a walkthrough is stepped copy beside a live demo.
+        Its id will be <code>{slugPreview(name)}</code>. Other sites load the project by its id, so the id stays the same if you rename the project later. A project is a list of steps, each showing a slide, an app, a URL or an image.
       </p>
     </form>
   );
 }
 
-const unit = ({ kind, count }: ProjectRow) => {
-  const noun = kind === "walkthrough" ? "step" : "screen";
-  return count === 1 ? noun : `${noun}s`;
-};
+const unit = ({ count }: ProjectRow) => (count === 1 ? "step" : "steps");
 
 // Mirrors freeId() in projects-plugin.ts (the server adds a suffix if the id is taken).
 const slugPreview = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "project";
@@ -265,7 +258,7 @@ function Thumb({ row }: { row: ProjectRow }) {
     );
   }
   if (row.preview?.image) return <img className="tile__cover" src={row.preview.image} alt="" />;
-  return <div className="tile__empty">{row.kind === "walkthrough" ? "No preview image" : "No screens"}</div>;
+  return <div className="tile__empty">No preview image</div>;
 }
 
 function RenameInput({ initial, onDone }: { initial: string; onDone: (title: string) => void }) {
@@ -341,14 +334,13 @@ function useApps() {
   return { apps, refresh };
 }
 
-function ProjectPlayer({ id }: { id: string }) {
+function PlayProject({ id }: { id: string }) {
   const state = useProject(id);
   const { apps } = useApps();
   if (!state) return null;
   if ("error" in state) return <Status>{state.error}</Status>;
   const { project } = state;
-  if (isWalkthrough(project)) return <WalkthroughPlayer content={project} apps={apps} onExit={() => go("#/")} />;
-  return <CaseStudyPlayer screens={project.screens} logoSrc={project.preview?.logo} onExit={() => go("#/")} />;
+  return <ProjectPlayer content={project} apps={apps} onExit={() => go("#/")} />;
 }
 
 // ─── Edit ──────────────────────────────────────────────────────────
@@ -359,11 +351,6 @@ function ProjectEditor({ id }: { id: string }) {
   if ("error" in state) return <Status>{state.error}</Status>;
   return <Editor id={id} initial={state.project} />;
 }
-
-// A builder only ever edits the kind it was handed, so its updater can be
-// narrowed from the union the editor holds.
-const narrow = <T extends ProjectContent>(set: (u: (prev: ProjectContent) => ProjectContent) => void) =>
-  (u: (prev: T) => T) => set((prev) => u(prev as T));
 
 // Autosaves every change to projects/<id>/project.json, 300ms after typing stops.
 // A pending save is sent on the way out if the tab closes first.
@@ -405,25 +392,16 @@ function Editor({ id, initial }: { id: string; initial: ProjectContent }) {
 
   return (
     <CaseStudyProvider assets={assets}>
-      {isWalkthrough(content) ? (
-        <WalkthroughBuilder
-          content={content}
-          setContent={narrow<WalkthroughContent>(setContent)}
-          apps={apps}
-          onIngestApp={after(ingestApp)}
-          onPatchApp={after(patchApp)}
-          onDeleteApp={after(deleteApp)}
-          projectName={content.title || id}
-          onClose={() => go("#/")}
-        />
-      ) : (
-        <CaseStudyBuilder
-          content={content}
-          setContent={narrow<CaseStudyContent>(setContent)}
-          projectName={content.title || id}
-          onClose={() => go("#/")}
-        />
-      )}
+      <ProjectBuilder
+        content={content}
+        setContent={setContent}
+        apps={apps}
+        onIngestApp={after(ingestApp)}
+        onPatchApp={after(patchApp)}
+        onDeleteApp={after(deleteApp)}
+        projectName={content.title || id}
+        onClose={() => go("#/")}
+      />
       {error && (
         <div className="toast" role="alert">
           {error}

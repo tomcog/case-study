@@ -1,4 +1,4 @@
-import type { ProjectPreview } from "../core.js";
+import type { ProjectPreview, Screen } from "../core.js";
 /** What a step shows. The app named by `WalkthroughStep.app` keeps running
  * whichever of these is on screen. */
 export type StepContent = 
@@ -20,6 +20,14 @@ export type StepContent =
     kind: "image";
     src: string;
     fit?: "center" | "fill";
+}
+/** A composed slide, on the fixed 1280×720 canvas the case-study layouts are
+ * drawn on. It carries its own copy, so the panel steps aside and the slide
+ * takes the whole viewport. The app keeps running behind it either way, so a
+ * slide between two demo steps doesn't cost the reader their work. */
+ | {
+    kind: "slide";
+    screen: Screen;
 };
 /** Something the step does to the running app as it opens, in order.
  *
@@ -128,7 +136,6 @@ export interface WalkthroughStep {
     nudgeAfter?: number;
 }
 export interface WalkthroughContent {
-    kind: "walkthrough";
     schemaVersion?: number;
     title?: string;
     draft?: boolean;
@@ -137,7 +144,7 @@ export interface WalkthroughContent {
     panelSide?: "left" | "right";
     steps: WalkthroughStep[];
 }
-/** What a new walkthrough starts as: one step, running nothing. */
+/** What a new project starts as: one step, running nothing. */
 export declare const DEFAULT_WALKTHROUGH: WalkthroughContent;
 /** What a step shows, defaulted. */
 export declare const contentOf: (step?: WalkthroughStep) => StepContent;

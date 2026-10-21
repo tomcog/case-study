@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
+import { Stage, ScreenView, bleedBg, backdropFor } from "../core.js";
 import { Callouts, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
 import type { Box } from "./stage.js";
 import type { Driver } from "./driver.js";
@@ -126,10 +127,13 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onExit?.();
       if (e.key === "ArrowLeft") setI((n) => Math.max(0, n - 1));
+      // A slide carries its own copy and has no panel, so it takes the deck's
+      // way forward as well as the panel's.
+      if (e.key === "ArrowRight" && contentOf(steps[i]).kind === "slide") setI((n) => n + 1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onExit]);
+  }, [onExit, steps, i]);
 
   // A spotlight is anchored either way: to measured marks on a driveable
   // stage, or to a rectangle on one that can only be shown.
@@ -150,6 +154,9 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
   const restart = () => setI(0);
 
   const narrow = demo.blocked === "small";
+  // A slide is the whole viewport: it is composed copy, so a panel beside it
+  // would be saying the same thing twice.
+  const slide = shown.kind === "slide" ? shown.screen : null;
   // Nothing can be observed through an image or an embed, so a step showing
   // one can only be left by its button, whatever it was authored to wait for.
   const watching = !!driver && shown.kind === "app";
@@ -307,6 +314,41 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
 
       {/* Only a step that means to show its app complains about not having one. */}
       {shown.kind === "app" && !demo.live && !narrow && <StageNotice blocked={demo.blocked!} src={app?.src} />}
+
+      {/* A slide covers the whole viewport, panel included. It is drawn over
+          the frame rather than instead of it, so the app underneath keeps
+          running and the next step picks the reader up where they left off.
+          Crossing between the two chromes is a crossfade: the slide's push
+          transitions belong between slides, and this is not that. */}
+      <AnimatePresence initial={false}>
+        {slide && (
+          <motion.div
+            key="slide"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 1.01 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.995 }}
+            transition={{ duration: reduced ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }}
+            onClick={next}
+            style={{ position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }}
+          >
+            <Stage key={slide.id} background={bleedBg(slide)} backdrop={backdropFor(slide)}>
+              <ScreenView screen={slide} play reduced={!!reduced} logoSrc={content.preview?.logo} />
+            </Stage>
+
+            {/* The panel's chrome, kept where the panel would have been. */}
+            <div style={slideChrome} onClick={(e) => e.stopPropagation()}>
+              <span style={{ fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }}>
+                {i + 1} of {steps.length}
+              </span>
+              {onExit && (
+                <button type="button" onClick={onExit} style={ghost}>
+                  Exit
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -335,4 +377,19 @@ const ghost: React.CSSProperties = {
   cursor: "pointer",
   textDecoration: "underline",
   textUnderlineOffset: 3,
+};
+
+const slideChrome: React.CSSProperties = {
+  position: "absolute",
+  top: 20,
+  right: 24,
+  display: "flex",
+  alignItems: "center",
+  gap: 16,
+  padding: "6px 12px",
+  borderRadius: 999,
+  background: "rgba(255,255,255,0.86)",
+  backdropFilter: "blur(6px)",
+  boxShadow: "0 6px 20px -8px rgba(0,0,0,0.3)",
+  cursor: "default",
 };
