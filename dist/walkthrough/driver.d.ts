@@ -7,6 +7,14 @@ export interface MarkRect {
     h: number;
 }
 export type MarkRects = Record<string, MarkRect>;
+/** An element the author pointed at while picking a mark. `mark` is null when
+ * the element carries no data-walkthrough id — which is the one thing the
+ * builder most needs to be able to say. */
+export interface PickHit {
+    mark: string | null;
+    label: string;
+    rect: MarkRect;
+}
 export interface Driver {
     /** Resolves once the demo has a document to read. */
     ready(): Promise<void>;
@@ -20,11 +28,18 @@ export interface Driver {
     marks(ids: string[]): MarkRects;
     /** Scroll a mark into view inside the demo. */
     reveal(id: string): void;
+    /** The route the demo is showing, as a hash ("#/settings"). */
+    currentPath(): string;
     onClick(cb: (mark: string) => void): () => void;
     onPath(cb: (path: string) => void): () => void;
     onSignal(cb: (name: string, detail: unknown) => void): () => void;
     /** The demo scrolled or resized: whatever `marks` returned is now stale. */
     onLayout(cb: () => void): () => void;
+    /** Authoring: swallow the demo's own interactions and report what's pointed
+     * at instead, so a mark can be chosen by clicking it. */
+    setPicking(on: boolean): void;
+    onPick(cb: (hit: PickHit) => void): () => void;
+    onHover(cb: (hit: PickHit | null) => void): () => void;
     reset(): Promise<void>;
     dispose(): void;
 }

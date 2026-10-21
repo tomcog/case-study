@@ -1,0 +1,637 @@
+// ─── The walkthrough builder (edit mode) ───────────────────────────
+// Same shape as the case-study builder — rail, canvas, inspector — but the
+// canvas is the live demo rather than a screen, so what you author is what
+// plays. Selecting a step puts the demo into that step's state.
+//
+// Marks are picked by clicking the product: the demo is same-origin, so the
+// builder can read what was clicked and tell you when an element has no
+// data-walkthrough id to point at yet.
+
+import { useEffect, useMemo, useState } from "react";
+import { Reorder } from "motion/react";
+import { ChevronDown, ChevronUp, Copy, Crosshair, Image as ImageIcon, LayoutGrid, Play, Plus, Trash2, X } from "lucide-react";
+import { ACCENT } from "../core.js";
+import { Field, ImageField, PreviewCardSettings, ghostBtn, iconBtn, inputStyle, primaryBtn } from "../editors.js";
+import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
+import { DemoNotice, HoverOutline, Spotlight, toBox, useDemo } from "./stage.js";
+import type { PickHit } from "./driver.js";
+import type { StepAdvance, WalkthroughContent, WalkthroughStep } from "./types.js";
+
+const ADVANCE_KINDS: { value: StepAdvance["on"]; label: string; hint: string }[] = [
+  { value: "manual", label: "A button", hint: "The reader presses Next in the panel." },
+  { value: "click", label: "A click", hint: "The reader clicks a marked element in the demo." },
+  { value: "path", label: "A route", hint: "The demo navigates to a hash route." },
+  { value: "signal", label: "A signal", hint: "The demo fires wt:signal with this name." },
+  { value: "any", label: "Any of…", hint: "Whichever of these happens first." },
+];
+
+const uid = () => `step-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`;
+
+const newStep = (): WalkthroughStep => ({
+  id: uid(),
+  eyebrow: "Step",
+  title: "New step",
+  body: "What should the reader do here?",
+  advance: { on: "manual" },
+});
+
+/** Which field a picked mark should land in. */
+type Slot = { field: "spotlight" } | { field: "advance" } | { field: "any"; at: number };
+
+export function WalkthroughBuilder({ content, setContent, projectName, onClose }: {
+  content: WalkthroughContent;
+  setContent: (u: (prev: WalkthroughContent) => WalkthroughContent) => void;
+  projectName?: string;
+  /** Adds a "Done" button to the toolbar (e.g. back to a project list). */
+  onClose?: () => void;
+}) {
+  const [selected, setSelected] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [showThumb, setShowThumb] = useState(false);
+  const [picking, setPicking] = useState<Slot | null>(null);
+  const [hover, setHover] = useState<PickHit | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+
+  const steps = content.steps;
+  const index = Math.min(selected, Math.max(0, steps.length - 1));
+  const step = steps[index];
+
+  const markIds = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
+  const demo = useDemo(content.target, markIds);
+  const { driver } = demo;
+
+  const update = (patch: Partial<WalkthroughStep>) =>
+    setContent((prev) => ({ ...prev, steps: prev.steps.map((s, i) => (i === index ? { ...s, ...patch } : s)) }));
+
+  const setTarget = (patch: Partial<WalkthroughContent["target"]>) =>
+    setContent((prev) => ({ ...prev, target: { ...prev.target, ...patch } }));
+
+  const addStep = () => {
+    setContent((prev) => {
+      const next = [...prev.steps];
+      next.splice(index + 1, 0, newStep());
+      return { ...prev, steps: next };
+    });
+    setSelected(index + 1);
+  };
+
+  const duplicateStep = () => {
+    setContent((prev) => {
+      const next = [...prev.steps];
+      next.splice(index + 1, 0, { ...prev.steps[index], id: uid() });
+      return { ...prev, steps: next };
+    });
+    setSelected(index + 1);
+  };
+
+  const deleteStep = () => {
+    if (steps.length <= 1) return;
+    setContent((prev) => ({ ...prev, steps: prev.steps.filter((_, i) => i !== index) }));
+    setSelected(Math.max(0, index - 1));
+  };
+
+  const move = (delta: number) => {
+    const to = index + delta;
+    if (to < 0 || to >= steps.length) return;
+    setContent((prev) => {
+      const next = [...prev.steps];
+      const [s] = next.splice(index, 1);
+      next.splice(to, 0, s);
+      return { ...prev, steps: next };
+    });
+    setSelected(to);
+  };
+
+  // Selecting a step shows its state, the same way the reader would arrive at
+  // it out of order. Editing the step's copy must not reload the demo, so this
+  // watches the seed only.
+  const enterPath = step?.enter?.path ?? "";
+  const enterState = step?.enter?.state ?? "";
+  useEffect(() => {
+    if (!driver || !step) return;
+    let live = true;
+    const timers: number[] = [];
+    void (async () => {
+      await driver.enter(step, { reseed: true });
+      if (!live) return;
+      const first = marksOf(step.spotlight?.mark)[0];
+      if (first) driver.reveal(first);
+      demo.measure();
+      timers.push(window.setTimeout(demo.measure, 160), window.setTimeout(demo.measure, 480));
+    })();
+    return () => {
+      live = false;
+      timers.forEach((t) => clearTimeout(t));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driver, index, enterPath, enterState]);
+
+  const applyMark = (slot: Slot, mark: string) => {
+    if (slot.field === "spotlight") {
+      update({ spotlight: { ...(step.spotlight ?? {}), mark } });
+      return;
+    }
+    if (slot.field === "advance") {
+      update({ advance: { on: "click", mark } });
+      return;
+    }
+    const advance = step.advance;
+    if (advance.on !== "any") return;
+    update({ advance: { ...advance, of: advance.of.map((a, i) => (i === slot.at ? { on: "click", mark } : a)) } });
+  };
+
+  // Pick mode: the driver swallows the demo's own interactions and reports
+  // what was pointed at instead.
+  useEffect(() => {
+    if (!driver) return;
+    driver.setPicking(!!picking);
+    if (!picking) return;
+    const offPick = driver.onPick((hit) => {
+      if (!hit.mark) {
+        setWarning(`That ${hit.label} has no data-walkthrough id. Add one in the demo, then pick it again.`);
+        return;
+      }
+      applyMark(picking, hit.mark);
+      setWarning(null);
+      setPicking(null);
+    });
+    const offHover = driver.onHover(setHover);
+    return () => {
+      offPick();
+      offHover();
+      driver.setPicking(false);
+      setHover(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driver, picking, step]);
+
+  useEffect(() => {
+    if (!picking) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPicking(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [picking]);
+
+  const box = useMemo(
+    () => toBox(markIds.map((id) => demo.rects[id]).filter(Boolean), demo.scale, step?.spotlight?.pad ?? 6),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [demo.rects, markIds.join("|"), demo.scale, step],
+  );
+
+  const hoverBox = hover && toBox([hover.rect], demo.scale, 2);
+
+  if (playing) {
+    return <WalkthroughPlayer content={content} startIndex={index} onExit={() => setPlaying(false)} />;
+  }
+
+  if (!step) {
+    return (
+      <div style={shell}>
+        <div style={{ margin: "auto", textAlign: "center", color: "#5a554e" }}>
+          <p style={{ marginBottom: 14 }}>This walkthrough has no steps yet.</p>
+          <button onClick={addStep} style={{ ...primaryBtn, margin: "0 auto" }}>
+            <Plus size={16} /> Add the first step
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={shell}>
+      {/* Toolbar */}
+      <div style={toolbar}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 15 }}>
+          <LayoutGrid size={18} style={{ color: ACCENT }} /> Walkthrough Builder
+          {projectName && (
+            <>
+              <span style={{ color: "#cfcbc4", fontWeight: 400 }}>/</span>
+              <span style={{ color: "#5a554e", fontWeight: 600 }}>{projectName}</span>
+            </>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
+          <button onClick={() => setShowThumb((v) => !v)} style={ghostBtn} title="Projects page preview card">
+            <ImageIcon size={16} /> Project settings
+          </button>
+          <button onClick={() => setPlaying(true)} style={primaryBtn}>
+            <Play size={16} /> Preview
+          </button>
+          {onClose && <button onClick={onClose} style={{ ...ghostBtn, borderStyle: "solid" }}>Done</button>}
+          {showThumb && (
+            <PreviewCardSettings
+              preview={content.preview ?? {}}
+              onChange={(patch) => setContent((prev) => ({ ...prev, preview: { ...prev.preview, ...patch } }))}
+              onClose={() => setShowThumb(false)}
+            />
+          )}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        {/* Step rail */}
+        <div style={rail}>
+          <Reorder.Group
+            axis="y"
+            values={steps}
+            onReorder={(next) => {
+              const id = steps[index]?.id;
+              setContent((prev) => ({ ...prev, steps: next }));
+              const ni = next.findIndex((s) => s.id === id);
+              if (ni >= 0) setSelected(ni);
+            }}
+            style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}
+          >
+            {steps.map((s, i) => (
+              <Reorder.Item
+                key={s.id}
+                value={s}
+                onClick={() => setSelected(i)}
+                whileDrag={{ scale: 1.04, boxShadow: "0 10px 24px rgba(0,0,0,0.22)", cursor: "grabbing" }}
+                style={{
+                  position: "relative", textAlign: "left", borderRadius: 8, padding: 10, cursor: "grab", minHeight: 58,
+                  border: i === index ? `2px solid ${ACCENT}` : "1px solid #dcd8d2", background: "#fff", color: "#1a1a1a", overflow: "hidden",
+                }}
+              >
+                <div style={{ fontSize: 10, opacity: 0.5, position: "absolute", top: 6, right: 8 }}>{i + 1}</div>
+                <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: ACCENT, marginBottom: 4 }}>{s.eyebrow}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  {s.title || s.id}
+                </div>
+              </Reorder.Item>
+            ))}
+          </Reorder.Group>
+          <button onClick={addStep} style={{ ...ghostBtn, justifyContent: "center", marginTop: 4 }}>
+            <Plus size={16} /> Add step
+          </button>
+        </div>
+
+        {/* The live demo */}
+        <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden", display: "flex", background: demo.framed ? "#0f1115" : "#e9e7e3" }}>
+          {demo.framed ? (
+            <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+              <iframe ref={demo.frameRef} title="Demo" style={demo.frameStyle} />
+              {!picking && <Spotlight box={box} shape={step.spotlight?.shape} lock={false} />}
+              {picking && <HoverOutline box={hoverBox} ok={!!hover?.mark} />}
+              {picking && (
+                <div style={pickBanner}>
+                  <Crosshair size={15} />
+                  Click the element to mark
+                  <button onClick={() => setPicking(null)} style={pickCancel} title="Cancel (Esc)"><X size={14} /></button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <DemoNotice blocked={demo.blocked!} src={content.target.src} />
+          )}
+        </div>
+
+        {/* Inspector */}
+        <div style={inspector}>
+          <Field label="Demo" collapsible>
+            <input
+              value={content.target.src}
+              onChange={(e) => setTarget({ src: e.target.value })}
+              placeholder="/projects/<id>/demo/index.html"
+              style={inputStyle}
+            />
+            <p style={hint}>Served from this site, so the walkthrough can drive it. A build in the project's own demo/ folder.</p>
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <label style={{ ...hint, flex: 1 }}>
+                Width
+                <input
+                  type="number"
+                  value={content.target.width ?? ""}
+                  onChange={(e) => setTarget({ width: e.target.value ? Number(e.target.value) : undefined })}
+                  style={inputStyle}
+                />
+              </label>
+              <label style={{ ...hint, flex: 1 }}>
+                Min width
+                <input
+                  type="number"
+                  value={content.target.minWidth ?? ""}
+                  onChange={(e) => setTarget({ minWidth: e.target.value ? Number(e.target.value) : undefined })}
+                  style={inputStyle}
+                />
+              </label>
+            </div>
+          </Field>
+
+          <div style={{ display: "flex", gap: 6, margin: "18px 0" }}>
+            <button onClick={() => move(-1)} disabled={index === 0} title="Move up" style={iconBtn(index === 0)}><ChevronUp size={16} /></button>
+            <button onClick={() => move(1)} disabled={index === steps.length - 1} title="Move down" style={iconBtn(index === steps.length - 1)}><ChevronDown size={16} /></button>
+            <button onClick={duplicateStep} title="Duplicate" style={iconBtn(false)}><Copy size={16} /></button>
+            <button onClick={deleteStep} disabled={steps.length <= 1} title="Delete" style={iconBtn(steps.length <= 1)}><Trash2 size={16} /></button>
+          </div>
+
+          <Field label="Eyebrow">
+            <textarea value={step.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} rows={1} style={{ ...inputStyle, resize: "vertical" }} />
+          </Field>
+
+          <Field label="Title">
+            <textarea value={step.title ?? ""} onChange={(e) => update({ title: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
+          </Field>
+
+          <Field label="Body">
+            <textarea value={step.body ?? ""} onChange={(e) => update({ body: e.target.value })} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+          </Field>
+
+          <Field label="Panel image" collapsible>
+            <ImageField value={step.imageUrl ?? ""} onChange={(v) => update({ imageUrl: v || undefined })} label="Panel image" />
+          </Field>
+
+          <Field label="Starts at" collapsible>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={step.enter?.path ?? ""}
+                onChange={(e) => update({ enter: { ...step.enter, path: e.target.value || undefined } })}
+                placeholder="#/settings"
+                style={inputStyle}
+              />
+              <button
+                onClick={() => driver && update({ enter: { ...step.enter, path: driver.currentPath() || undefined } })}
+                disabled={!driver}
+                style={{ ...ghostBtn, whiteSpace: "nowrap" }}
+                title="Use the route the demo is showing"
+              >
+                Use current
+              </button>
+            </div>
+            <input
+              value={step.enter?.state ?? ""}
+              onChange={(e) => update({ enter: { ...step.enter, state: e.target.value || undefined } })}
+              placeholder="Seed, passed as ?wt="
+              style={{ ...inputStyle, marginTop: 6 }}
+            />
+            <p style={hint}>Applied when the reader arrives out of order. Walking forward keeps what they did.</p>
+          </Field>
+
+          <Field label="Spotlight" collapsible>
+            {step.spotlight ? (
+              <>
+                <MarkField
+                  value={marksOf(step.spotlight.mark).join(", ")}
+                  onChange={(v) => {
+                    const list = v.split(",").map((m) => m.trim()).filter(Boolean);
+                    update({ spotlight: { ...step.spotlight!, mark: list.length === 1 ? list[0] : list } });
+                  }}
+                  onPick={() => setPicking({ field: "spotlight" })}
+                  picking={picking?.field === "spotlight"}
+                  disabled={!demo.framed}
+                />
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  {(["rect", "pill"] as const).map((shape) => (
+                    <button
+                      key={shape}
+                      onClick={() => update({ spotlight: { ...step.spotlight!, shape } })}
+                      style={choice((step.spotlight!.shape ?? "rect") === shape)}
+                    >
+                      {shape === "rect" ? "Rounded" : "Pill"}
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    value={step.spotlight.pad ?? ""}
+                    onChange={(e) => update({ spotlight: { ...step.spotlight!, pad: e.target.value ? Number(e.target.value) : undefined } })}
+                    placeholder="Pad"
+                    style={{ ...inputStyle, width: 70 }}
+                  />
+                </div>
+                <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!step.spotlight.lock}
+                    onChange={(e) => update({ spotlight: { ...step.spotlight!, lock: e.target.checked || undefined } })}
+                  />
+                  Block clicks everywhere else
+                </label>
+                <button onClick={() => update({ spotlight: undefined })} style={{ ...ghostBtn, marginTop: 10 }}>Remove spotlight</button>
+              </>
+            ) : (
+              <button onClick={() => update({ spotlight: { mark: "" } })} style={ghostBtn}>
+                <Plus size={15} /> Add a spotlight
+              </button>
+            )}
+          </Field>
+
+          <Field label="Advances on" collapsible>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {ADVANCE_KINDS.map((k) => (
+                <button key={k.value} onClick={() => update({ advance: blankAdvance(k.value, step.advance) })} style={choice(step.advance.on === k.value)}>
+                  {k.label}
+                </button>
+              ))}
+            </div>
+            <p style={hint}>{ADVANCE_KINDS.find((k) => k.value === step.advance.on)?.hint}</p>
+
+            {step.advance.on === "manual" && (
+              <input
+                value={step.advance.label ?? ""}
+                onChange={(e) => update({ advance: { on: "manual", label: e.target.value || undefined } })}
+                placeholder="Button label (Next)"
+                style={inputStyle}
+              />
+            )}
+
+            {(step.advance.on === "click" || step.advance.on === "path" || step.advance.on === "signal") && (
+              <SimpleAdvance
+                advance={step.advance}
+                onChange={(a) => update({ advance: a })}
+                onPick={() => setPicking({ field: "advance" })}
+                picking={picking?.field === "advance"}
+                canPick={demo.framed}
+                currentPath={driver?.currentPath()}
+              />
+            )}
+
+            {step.advance.on === "any" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {step.advance.of.map((a, at) => (
+                  <div key={at} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10 }}>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      {(["click", "path", "signal"] as const).map((on) => (
+                        <button
+                          key={on}
+                          onClick={() => updateAny(step.advance as Extract<StepAdvance, { on: "any" }>, at, blankAdvance(on, a), update)}
+                          style={choice(a.on === on)}
+                        >
+                          {on}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => {
+                          const any = step.advance as Extract<StepAdvance, { on: "any" }>;
+                          update({ advance: { ...any, of: any.of.filter((_, i) => i !== at) } });
+                        }}
+                        style={{ ...iconBtn(false), width: 28, height: 28, marginLeft: "auto" }}
+                        title="Remove"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <SimpleAdvance
+                      advance={a}
+                      onChange={(next) => updateAny(step.advance as Extract<StepAdvance, { on: "any" }>, at, next, update)}
+                      onPick={() => setPicking({ field: "any", at })}
+                      picking={picking?.field === "any" && picking.at === at}
+                      canPick={demo.framed}
+                      currentPath={driver?.currentPath()}
+                    />
+                  </div>
+                ))}
+                <button
+                  onClick={() => {
+                    const any = step.advance as Extract<StepAdvance, { on: "any" }>;
+                    update({ advance: { ...any, of: [...any.of, { on: "click", mark: "" }] } });
+                  }}
+                  style={ghostBtn}
+                >
+                  <Plus size={15} /> Add a way
+                </button>
+              </div>
+            )}
+          </Field>
+
+          {warning && (
+            <div style={warn}>
+              {warning}
+              <button onClick={() => setWarning(null)} style={{ ...iconBtn(false), width: 26, height: 26, flex: "none" }} aria-label="Dismiss">
+                <X size={13} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Replace one branch of an "any" advance. */
+function updateAny(
+  any: Extract<StepAdvance, { on: "any" }>,
+  at: number,
+  next: StepAdvance,
+  update: (patch: Partial<WalkthroughStep>) => void,
+) {
+  update({ advance: { ...any, of: any.of.map((a, i) => (i === at ? next : a)) } });
+}
+
+/** A fresh advance of the given kind, keeping anything the old one can lend. */
+function blankAdvance(on: StepAdvance["on"], from?: StepAdvance): StepAdvance {
+  const mark = from && "mark" in from ? from.mark : "";
+  switch (on) {
+    case "manual":
+      return { on: "manual" };
+    case "click":
+      return { on: "click", mark };
+    case "path":
+      return { on: "path", path: "" };
+    case "signal":
+      return { on: "signal", name: "" };
+    case "any":
+      return { on: "any", of: [from && from.on !== "any" && from.on !== "manual" ? from : { on: "click", mark }] };
+  }
+}
+
+function SimpleAdvance({ advance, onChange, onPick, picking, canPick, currentPath }: {
+  advance: StepAdvance;
+  onChange: (a: StepAdvance) => void;
+  onPick: () => void;
+  picking: boolean;
+  canPick: boolean;
+  currentPath?: string;
+}) {
+  if (advance.on === "click") {
+    return (
+      <MarkField value={advance.mark} onChange={(mark) => onChange({ on: "click", mark })} onPick={onPick} picking={picking} disabled={!canPick} />
+    );
+  }
+  if (advance.on === "path") {
+    return (
+      <div style={{ display: "flex", gap: 6 }}>
+        <input value={advance.path} onChange={(e) => onChange({ on: "path", path: e.target.value })} placeholder="#/settings" style={inputStyle} />
+        <button onClick={() => currentPath && onChange({ on: "path", path: currentPath })} disabled={!currentPath} style={{ ...ghostBtn, whiteSpace: "nowrap" }}>
+          Use current
+        </button>
+      </div>
+    );
+  }
+  if (advance.on === "signal") {
+    return <input value={advance.name} onChange={(e) => onChange({ on: "signal", name: e.target.value })} placeholder="settings-saved" style={inputStyle} />;
+  }
+  return null;
+}
+
+function MarkField({ value, onChange, onPick, picking, disabled }: {
+  value: string;
+  onChange: (v: string) => void;
+  onPick: () => void;
+  picking: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="data-walkthrough id" style={inputStyle} />
+      <button
+        onClick={onPick}
+        disabled={disabled}
+        title={disabled ? "Needs the live demo" : "Pick it by clicking the demo"}
+        style={{
+          ...ghostBtn,
+          whiteSpace: "nowrap",
+          borderStyle: "solid",
+          ...(picking ? { background: ACCENT, color: "#fff", borderColor: ACCENT } : null),
+          ...(disabled ? { opacity: 0.5, cursor: "default" } : null),
+        }}
+      >
+        <Crosshair size={14} /> Pick
+      </button>
+    </div>
+  );
+}
+
+const shell: React.CSSProperties = {
+  position: "fixed", inset: 0, zIndex: 55, background: "#e9e7e3", color: "#1a1a1a", display: "flex", flexDirection: "column",
+};
+
+const toolbar: React.CSSProperties = {
+  height: 60, flexShrink: 0, background: "#fff", borderBottom: "1px solid #e3e0db",
+  display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px",
+};
+
+const rail: React.CSSProperties = {
+  width: 184, flexShrink: 0, background: "#f3f1ed", borderRight: "1px solid #e3e0db",
+  overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 8,
+};
+
+const inspector: React.CSSProperties = {
+  width: 320, flexShrink: 0, background: "#fff", borderLeft: "1px solid #e3e0db", overflowY: "auto", padding: 18, paddingBottom: 104,
+};
+
+const hint: React.CSSProperties = { fontSize: 11, color: "#8a857d", margin: "7px 0 0", lineHeight: 1.5 };
+
+const warn: React.CSSProperties = {
+  display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, lineHeight: 1.5,
+  background: "#fff8e6", border: "1px solid #f0dca8", color: "#6b5516", borderRadius: 8, padding: 10, marginTop: 8,
+};
+
+const pickBanner: React.CSSProperties = {
+  position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)",
+  display: "flex", alignItems: "center", gap: 8, background: "#fff", border: `1px solid ${ACCENT}`,
+  borderRadius: 999, padding: "7px 8px 7px 14px", fontSize: 13, fontWeight: 600, color: "#1a1a1a",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+};
+
+const pickCancel: React.CSSProperties = {
+  width: 24, height: 24, borderRadius: "50%", border: "none", background: "#f0eeea",
+  color: "#5a554e", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+};
+
+function choice(active: boolean): React.CSSProperties {
+  return {
+    fontSize: 12, padding: "7px 10px", borderRadius: 6, cursor: "pointer",
+    border: active ? `1.5px solid ${ACCENT}` : "1px solid #dcd8d2",
+    background: active ? "#fff5f6" : "#fff", color: "#1a1a1a",
+  };
+}

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { Card } from "@tomcoggia/ui";
 import {
-  CaseStudyBuilder, CaseStudyPlayer, CaseStudyProvider, Stage, ScreenView, WalkthroughPlayer,
-  bleedBg, backdropFor, isWalkthrough,
-  type CaseStudyContent, type ProjectContent, type ProjectKind,
+  CaseStudyBuilder, CaseStudyPlayer, CaseStudyProvider, Stage, ScreenView,
+  WalkthroughBuilder, WalkthroughPlayer, bleedBg, backdropFor, isWalkthrough,
+  type CaseStudyContent, type ProjectContent, type ProjectKind, type WalkthroughContent,
 } from "../src/index.js";
 import {
   beaconProject, canEdit, createProject, deleteProject, duplicateProject, getProject, listProjects,
@@ -335,16 +335,20 @@ function ProjectEditor({ id }: { id: string }) {
   const state = useProject(id);
   if (!state) return null;
   if ("error" in state) return <Status>{state.error}</Status>;
-  if (isWalkthrough(state.project)) return <Status>Walkthroughs don't have an editor yet — edit projects/{id}/project.json by hand.</Status>;
   return <Editor id={id} initial={state.project} />;
 }
 
+// A builder only ever edits the kind it was handed, so its updater can be
+// narrowed from the union the editor holds.
+const narrow = <T extends ProjectContent>(set: (u: (prev: ProjectContent) => ProjectContent) => void) =>
+  (u: (prev: T) => T) => set((prev) => u(prev as T));
+
 // Autosaves every change to projects/<id>/project.json, 300ms after typing stops.
 // A pending save is sent on the way out if the tab closes first.
-function Editor({ id, initial }: { id: string; initial: CaseStudyContent }) {
+function Editor({ id, initial }: { id: string; initial: ProjectContent }) {
   const [content, setContent] = useState(initial);
   const [error, setError] = useState<string | null>(null);
-  const pending = useRef<CaseStudyContent | null>(null);
+  const pending = useRef<ProjectContent | null>(null);
   const assets = useMemo(() => projectAssets(id), [id]);
 
   useEffect(() => {
@@ -374,7 +378,21 @@ function Editor({ id, initial }: { id: string; initial: CaseStudyContent }) {
 
   return (
     <CaseStudyProvider assets={assets}>
-      <CaseStudyBuilder content={content} setContent={setContent} projectName={content.title || id} onClose={() => go("#/")} />
+      {isWalkthrough(content) ? (
+        <WalkthroughBuilder
+          content={content}
+          setContent={narrow<WalkthroughContent>(setContent)}
+          projectName={content.title || id}
+          onClose={() => go("#/")}
+        />
+      ) : (
+        <CaseStudyBuilder
+          content={content}
+          setContent={narrow<CaseStudyContent>(setContent)}
+          projectName={content.title || id}
+          onClose={() => go("#/")}
+        />
+      )}
       {error && (
         <div className="toast" role="alert">
           {error}

@@ -5,20 +5,81 @@
 // the product, while a cross-origin target would need the same methods
 // implemented over postMessage against a small script in the product.
 const hash = (path) => (path ? `#${path.replace(/^#/, "")}` : "");
+/** The frame's elements come from another realm, so `instanceof Element` is
+ * always false here. Recognise them by shape instead. */
+const asElement = (node) => {
+    const el = node;
+    return el && typeof el.closest === "function" ? el : null;
+};
+/** What to call an element that has no mark of its own. */
+const describe = (el) => {
+    const tag = el.tagName.toLowerCase();
+    const text = (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
+    return text ? `${tag} “${text}”` : tag;
+};
 /** Drive a demo served from the player's own origin. */
 export function sameOriginDriver(frame, src) {
     const clicks = new Set();
     const paths = new Set();
     const signals = new Set();
     const layouts = new Set();
+    const picks = new Set();
+    const hovers = new Set();
+    let picking = false;
+    let hovered = null;
     const win = () => frame.contentWindow;
     const doc = () => frame.contentDocument;
+    const hitFrom = (node) => {
+        const el = asElement(node);
+        if (!el)
+            return null;
+        const marked = el.closest("[data-walkthrough]");
+        const chosen = marked ?? el;
+        const r = chosen.getBoundingClientRect();
+        return {
+            el: chosen,
+            hit: {
+                mark: marked?.getAttribute("data-walkthrough") ?? null,
+                label: describe(chosen),
+                rect: { x: r.x, y: r.y, w: r.width, h: r.height },
+            },
+        };
+    };
     const handleClick = (e) => {
-        const target = e.target;
-        const el = target && "closest" in target ? target.closest("[data-walkthrough]") : null;
+        if (picking) {
+            // The author is aiming at the product, not using it.
+            e.preventDefault();
+            e.stopPropagation();
+            const found = hitFrom(e.target);
+            if (found)
+                picks.forEach((cb) => cb(found.hit));
+            return;
+        }
+        const el = asElement(e.target)?.closest("[data-walkthrough]");
         const mark = el?.getAttribute("data-walkthrough");
         if (mark)
             clicks.forEach((cb) => cb(mark));
+    };
+    const handleSuppress = (e) => {
+        if (!picking)
+            return;
+        e.preventDefault();
+        e.stopPropagation();
+    };
+    const handleMove = (e) => {
+        if (!picking)
+            return;
+        const found = hitFrom(e.target);
+        if (found?.el === hovered)
+            return;
+        hovered = found?.el ?? null;
+        hovers.forEach((cb) => cb(found?.hit ?? null));
+    };
+    const handleLeave = () => {
+        if (!picking || !hovered)
+            return;
+        hovered = null;
+        hovers.forEach((cb) => cb(null));
     };
     const handleHash = () => {
         const path = win()?.location.hash;
@@ -42,12 +103,20 @@ export function sameOriginDriver(frame, src) {
         if (!w || !d)
             return;
         d.addEventListener("click", handleClick, true);
+        d.addEventListener("mousedown", handleSuppress, true);
+        d.addEventListener("mousemove", handleMove, true);
+        d.addEventListener("mouseleave", handleLeave, true);
         d.addEventListener("scroll", handleLayout, true);
         w.addEventListener("hashchange", handleHash);
         w.addEventListener("wt:signal", handleSignal);
         w.addEventListener("resize", handleLayout);
+        if (picking)
+            d.documentElement.style.cursor = "crosshair";
         detach = () => {
             d.removeEventListener("click", handleClick, true);
+            d.removeEventListener("mousedown", handleSuppress, true);
+            d.removeEventListener("mousemove", handleMove, true);
+            d.removeEventListener("mouseleave", handleLeave, true);
             d.removeEventListener("scroll", handleLayout, true);
             w.removeEventListener("hashchange", handleHash);
             w.removeEventListener("wt:signal", handleSignal);
@@ -86,6 +155,7 @@ export function sameOriginDriver(frame, src) {
         frame.src = "about:blank";
     });
     const loaded = () => !!doc() && doc().readyState !== "loading";
+    const query = (id) => doc()?.querySelector(`[data-walkthrough="${CSS.escape(id)}"]`) ?? null;
     return {
         ready() {
             if (loaded())
@@ -104,12 +174,9 @@ export function sameOriginDriver(frame, src) {
                 w.location.hash = hash(path);
         },
         marks(ids) {
-            const d = doc();
-            if (!d)
-                return {};
             const out = {};
             for (const id of ids) {
-                const el = d.querySelector(`[data-walkthrough="${CSS.escape(id)}"]`);
+                const el = query(id);
                 if (!el)
                     continue;
                 const r = el.getBoundingClientRect();
@@ -118,8 +185,10 @@ export function sameOriginDriver(frame, src) {
             return out;
         },
         reveal(id) {
-            const el = doc()?.querySelector(`[data-walkthrough="${CSS.escape(id)}"]`);
-            el?.scrollIntoView({ block: "center", behavior: "smooth" });
+            query(id)?.scrollIntoView({ block: "center", behavior: "smooth" });
+        },
+        currentPath() {
+            return win()?.location.hash ?? "";
         },
         onClick(cb) {
             clicks.add(cb);
@@ -137,16 +206,37 @@ export function sameOriginDriver(frame, src) {
             layouts.add(cb);
             return () => layouts.delete(cb);
         },
+        onPick(cb) {
+            picks.add(cb);
+            return () => picks.delete(cb);
+        },
+        onHover(cb) {
+            hovers.add(cb);
+            return () => hovers.delete(cb);
+        },
+        setPicking(on) {
+            picking = on;
+            const d = doc();
+            if (d)
+                d.documentElement.style.cursor = on ? "crosshair" : "";
+            if (!on && hovered) {
+                hovered = null;
+                hovers.forEach((cb) => cb(null));
+            }
+        },
         reset() {
             return load(url());
         },
         dispose() {
+            this.setPicking(false);
             frame.removeEventListener("load", attach);
             detach?.();
             clicks.clear();
             paths.clear();
             signals.clear();
             layouts.clear();
+            picks.clear();
+            hovers.clear();
         },
     };
 }
