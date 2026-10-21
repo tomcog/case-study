@@ -1,0 +1,70 @@
+{
+  "kind": "walkthrough",
+  "schemaVersion": 2,
+  "title": "Freenome — Provider Portal",
+  "draft": true,
+  "preview": {
+    "eyebrow": "Walkthrough",
+    "title": "Freenome — Provider Portal",
+    "body": "Where a practice watches its orders: find a patient, read a result, place the next test. Driven in the real app."
+  },
+  "target": { "src": "/projects/freenome/demo/provider-portal/index.html", "width": 1440, "minWidth": 940 },
+  "steps": [
+    {
+      "id": "orders",
+      "eyebrow": "Provider Portal",
+      "title": "Every order the practice has placed",
+      "body": "One list, newest first — **82 orders** across the practice's providers. The {**Status**} column is the whole point of the screen: it says what the lab is waiting on, and who it's waiting on.",
+      "enter": { "path": "#/", "state": "fresh" },
+      "advance": { "on": "manual", "label": "Show me" }
+    },
+    {
+      "id": "search",
+      "eyebrow": "Step two",
+      "title": "Find a patient",
+      "body": "A provider arrives knowing a name, not an order number. Search is by patient, and it filters as you type. [Try typing a few letters.]",
+      "spotlight": { "mark": "patient-search" },
+      "advance": { "on": "manual", "label": "Next" }
+    },
+    {
+      "id": "status",
+      "eyebrow": "Step three",
+      "title": "Or narrow by what's blocking",
+      "body": "{**On hold**} is the status that needs a human: the lab can't proceed until someone fixes something. Filtering to it turns the list into a to-do.",
+      "spotlight": { "mark": "status-filter" },
+      "advance": { "on": "manual", "label": "Next" }
+    },
+    {
+      "id": "open",
+      "eyebrow": "Step four",
+      "title": "Open an order",
+      "body": "Every order ID opens a details panel rather than a new page, so you keep your place in the list. **Click one.**",
+      "spotlight": { "mark": "open-order", "shape": "pill" },
+      "advance": { "on": "click", "mark": "open-order" }
+    },
+    {
+      "id": "panel",
+      "eyebrow": "Step five",
+      "title": "Everything about that order",
+      "body": "Patient, provider, specimen, and the lab's progress through it — plus the report once results are out. [Scroll the panel if you like.]",
+      "advance": { "on": "manual", "label": "Next" }
+    },
+    {
+      "id": "order-test",
+      "eyebrow": "Step six",
+      "title": "Place the next test",
+      "body": "Ordering starts from the same screen, so a provider never has to go looking for it. **Click Order a test.**",
+      "enter": { "path": "#/" },
+      "spotlight": { "mark": "order-test", "shape": "pill" },
+      "advance": { "on": "click", "mark": "order-test" }
+    },
+    {
+      "id": "new-order",
+      "eyebrow": "Last step",
+      "title": "The new-order form",
+      "body": "Patient, provider, test and clinical history in one pass — then a review step before it's placed. Nothing you do here touches a real database: this walkthrough runs the portal on fixtures.",
+      "enter": { "path": "#/orders/new" },
+      "advance": { "on": "manual", "label": "Done" }
+    }
+  ]
+}

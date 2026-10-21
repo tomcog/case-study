@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Badge - Signal">
+<path id="Badge" d="M24 2.40039C35.9293 2.40039 45.5996 12.0706 45.5996 24C45.5996 35.9294 35.9293 45.5996 24 45.5996C12.0707 45.5996 2.40039 35.9294 2.40039 24C2.40039 12.0706 12.0707 2.40039 24 2.40039Z" stroke="#B02C25" stroke-width="4.8"/>
+<path id="Icon/Result/Signal_Detected" fill-rule="evenodd" clip-rule="evenodd" d="M26.4 12H21.6V22H11.8V26.8H21.6V36H26.4V26.8H35.8V22H26.4V12Z" fill="#B02C25"/>
+</g>
+</svg>

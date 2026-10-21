@@ -126,8 +126,11 @@ export function sameOriginDriver(frame, src) {
     frame.addEventListener("load", attach);
     const url = (state, path) => {
         const next = new URL(src, window.location.href);
-        if (state)
-            next.searchParams.set("wt", state);
+        // ?wt= is always present, even with no seed to ask for: it is what tells the
+        // demo it is inside a walkthrough at all. Dropping it on a step that names
+        // no state would put the demo back into its normal mode — reaching for a
+        // real backend it isn't meant to have here.
+        next.searchParams.set("wt", state ?? "");
         next.hash = hash(path);
         return next.toString();
     };

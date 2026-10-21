@@ -13,7 +13,9 @@ export interface StepEnter {
     /** A hash route inside the demo, e.g. "#/settings". */
     path?: string;
     /** A seed the demo understands, passed as ?wt=<state>. Only applied when the
-     * step is arrived at out of order — walking forward keeps what the reader did. */
+     * step is arrived at out of order — walking forward keeps what the reader did.
+     * ?wt= is sent either way, with no value when a step names no seed, so the
+     * demo always knows it is in a walkthrough. */
     state?: string;
 }
 export interface Spotlight {

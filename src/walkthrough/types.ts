@@ -7,7 +7,8 @@
 // The demo it points at has to hold up five rules:
 //   1. data-walkthrough="<id>" on anything a step references (never selectors)
 //   2. hash routes, so `enter.path` is an assignment and a path advance is a hashchange
-//   3. boot from ?wt=<state>, so any step is reachable by reload
+//   3. boot from ?wt=<state> (sometimes empty), so any step is reachable by
+//      reload, and treat the parameter's presence as "I am in a walkthrough"
 //   4. fixtures, not network — deterministic for every reader
 //   5. built with base "./" into projects/<id>/demo/
 
@@ -28,7 +29,9 @@ export interface StepEnter {
   /** A hash route inside the demo, e.g. "#/settings". */
   path?: string;
   /** A seed the demo understands, passed as ?wt=<state>. Only applied when the
-   * step is arrived at out of order — walking forward keeps what the reader did. */
+   * step is arrived at out of order — walking forward keeps what the reader did.
+   * ?wt= is sent either way, with no value when a step names no seed, so the
+   * demo always knows it is in a walkthrough. */
   state?: string;
 }
 
