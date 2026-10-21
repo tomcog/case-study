@@ -79,5 +79,15 @@ export declare function projectSource(base: string): {
     get: (id: string, opts?: {
         signal?: AbortSignal;
     }) => Promise<WalkthroughContent>;
+    /** The apps those projects run, with their addresses made absolute. A step
+     * stores only an app's id, so a site rendering someone else's projects has
+     * to be handed the pool to resolve them against.
+     *
+     * An app served from another origin can be shown but not driven — the
+     * player says so rather than sitting there — so a project whose steps run
+     * apps is fully itself only on the site that serves them. */
+    apps(opts?: {
+        signal?: AbortSignal;
+    }): Promise<IngestedApp[]>;
 };
 export type ProjectSource = ReturnType<typeof projectSource>;

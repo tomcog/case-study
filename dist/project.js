@@ -181,6 +181,21 @@ export function projectSource(base) {
             return rows.map((row) => ({ ...row, cover: row.cover && screen(row.cover), preview: preview(row.preview ?? undefined) ?? null }));
         },
         get: (id, opts = {}) => loadProject(url(id), { ...opts, assetBase: root }),
+        /** The apps those projects run, with their addresses made absolute. A step
+         * stores only an app's id, so a site rendering someone else's projects has
+         * to be handed the pool to resolve them against.
+         *
+         * An app served from another origin can be shown but not driven — the
+         * player says so rather than sitting there — so a project whose steps run
+         * apps is fully itself only on the site that serves them. */
+        async apps(opts = {}) {
+            const res = await fetch(`${root}/apps/index.json`, { signal: opts.signal, cache: "no-cache" });
+            if (!res.ok)
+                return [];
+            const rows = await res.json();
+            const abs = absolutizer(root);
+            return rows.map((app) => ({ ...app, src: abs(app.src) ?? "" }));
+        },
     };
 }
 //# sourceMappingURL=project.js.map
