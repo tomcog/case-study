@@ -146,18 +146,38 @@ const sameRects = (a: MarkRects, b: MarkRects) => {
   });
 };
 
-/** Everything but the marked element, dimmed — and optionally click-proof. */
-export function Spotlight({ box, shape, lock }: { box: Box | null; shape?: "rect" | "pill"; lock?: boolean }) {
+/** A ring around the marked element, with the rest of the demo optionally
+ * dimmed and optionally click-proof. The two are independent: the shield that
+ * blocks clicks is the same four panels that do the dimming, so `lock` without
+ * `dim` just makes them invisible. */
+export function Spotlight({ box, shape, dim = true, lock }: {
+  box: Box | null;
+  shape?: "rect" | "pill";
+  dim?: boolean;
+  lock?: boolean;
+}) {
   if (!box) return null;
-  const scrim = (part: React.CSSProperties, key: string) => (
-    <div key={key} style={{ position: "absolute", background: "rgba(12,14,18,0.46)", pointerEvents: lock ? "auto" : "none", ...part }} />
+  const shield = (part: React.CSSProperties, key: string) => (
+    <div
+      key={key}
+      style={{
+        position: "absolute",
+        background: dim ? "rgba(12,14,18,0.46)" : "transparent",
+        pointerEvents: lock ? "auto" : "none",
+        ...part,
+      }}
+    />
   );
   return (
     <>
-      {scrim({ left: 0, top: 0, width: "100%", height: Math.max(0, box.y) }, "t")}
-      {scrim({ left: 0, top: box.y + box.h, width: "100%", bottom: 0 }, "b")}
-      {scrim({ left: 0, top: box.y, width: Math.max(0, box.x), height: box.h }, "l")}
-      {scrim({ left: box.x + box.w, top: box.y, right: 0, height: box.h }, "r")}
+      {(dim || lock) && (
+        <>
+          {shield({ left: 0, top: 0, width: "100%", height: Math.max(0, box.y) }, "t")}
+          {shield({ left: 0, top: box.y + box.h, width: "100%", bottom: 0 }, "b")}
+          {shield({ left: 0, top: box.y, width: Math.max(0, box.x), height: box.h }, "l")}
+          {shield({ left: box.x + box.w, top: box.y, right: 0, height: box.h }, "r")}
+        </>
+      )}
       <motion.div
         initial={false} // appear around the element, then travel between steps
         animate={{ left: box.x, top: box.y, width: box.w, height: box.h }}

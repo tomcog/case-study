@@ -125,12 +125,20 @@ const sameRects = (a, b) => {
         return y && x.x === y.x && x.y === y.y && x.w === y.w && x.h === y.h;
     });
 };
-/** Everything but the marked element, dimmed — and optionally click-proof. */
-export function Spotlight({ box, shape, lock }) {
+/** A ring around the marked element, with the rest of the demo optionally
+ * dimmed and optionally click-proof. The two are independent: the shield that
+ * blocks clicks is the same four panels that do the dimming, so `lock` without
+ * `dim` just makes them invisible. */
+export function Spotlight({ box, shape, dim = true, lock }) {
     if (!box)
         return null;
-    const scrim = (part, key) => (_jsx("div", { style: { position: "absolute", background: "rgba(12,14,18,0.46)", pointerEvents: lock ? "auto" : "none", ...part } }, key));
-    return (_jsxs(_Fragment, { children: [scrim({ left: 0, top: 0, width: "100%", height: Math.max(0, box.y) }, "t"), scrim({ left: 0, top: box.y + box.h, width: "100%", bottom: 0 }, "b"), scrim({ left: 0, top: box.y, width: Math.max(0, box.x), height: box.h }, "l"), scrim({ left: box.x + box.w, top: box.y, right: 0, height: box.h }, "r"), _jsx(motion.div, { initial: false, animate: { left: box.x, top: box.y, width: box.w, height: box.h }, transition: { type: "spring", stiffness: 420, damping: 36 }, style: {
+    const shield = (part, key) => (_jsx("div", { style: {
+            position: "absolute",
+            background: dim ? "rgba(12,14,18,0.46)" : "transparent",
+            pointerEvents: lock ? "auto" : "none",
+            ...part,
+        } }, key));
+    return (_jsxs(_Fragment, { children: [(dim || lock) && (_jsxs(_Fragment, { children: [shield({ left: 0, top: 0, width: "100%", height: Math.max(0, box.y) }, "t"), shield({ left: 0, top: box.y + box.h, width: "100%", bottom: 0 }, "b"), shield({ left: 0, top: box.y, width: Math.max(0, box.x), height: box.h }, "l"), shield({ left: box.x + box.w, top: box.y, right: 0, height: box.h }, "r")] })), _jsx(motion.div, { initial: false, animate: { left: box.x, top: box.y, width: box.w, height: box.h }, transition: { type: "spring", stiffness: 420, damping: 36 }, style: {
                     position: "absolute",
                     borderRadius: shape === "pill" ? 999 : 10,
                     boxShadow: `0 0 0 2px ${RED}, 0 10px 30px -8px rgba(0,0,0,0.5)`,

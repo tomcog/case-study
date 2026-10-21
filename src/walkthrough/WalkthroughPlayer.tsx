@@ -251,7 +251,7 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
       {demo.framed && (
         <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden", background: "#0f1115" }}>
           <iframe ref={demo.frameRef} title={content.title ?? "Product"} style={demo.frameStyle} />
-          <Spotlight box={box} shape={step?.spotlight?.shape} lock={step?.spotlight?.lock} />
+          <Spotlight box={box} shape={step?.spotlight?.shape} dim={step?.spotlight?.dim} lock={step?.spotlight?.lock} />
           {step?.callouts?.length ? (
             <Callouts items={step.callouts} rects={demo.rects} scale={demo.scale} bounds={demo.bounds} />
           ) : null}

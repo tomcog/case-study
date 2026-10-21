@@ -27,7 +27,11 @@ export interface Spotlight {
     shape?: "rect" | "pill";
     /** Padding around the element, in demo px (default 6). */
     pad?: number;
-    /** Block clicks everywhere but the marked element. */
+    /** Dim the rest of the demo (default true). Off leaves the product at full
+     * strength with only the ring to draw the eye. */
+    dim?: boolean;
+    /** Block clicks everywhere but the marked element. Independent of `dim`:
+     * the shield is there either way, it just isn't visible without it. */
     lock?: boolean;
 }
 /** A label pointing at something in the demo. Anchored to a mark rather than

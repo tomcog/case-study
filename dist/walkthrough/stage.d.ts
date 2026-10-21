@@ -26,10 +26,14 @@ export declare function useDemo(target: WalkthroughTarget, marks: string[]): {
         h: number;
     };
 };
-/** Everything but the marked element, dimmed — and optionally click-proof. */
-export declare function Spotlight({ box, shape, lock }: {
+/** A ring around the marked element, with the rest of the demo optionally
+ * dimmed and optionally click-proof. The two are independent: the shield that
+ * blocks clicks is the same four panels that do the dimming, so `lock` without
+ * `dim` just makes them invisible. */
+export declare function Spotlight({ box, shape, dim, lock }: {
     box: Box | null;
     shape?: "rect" | "pill";
+    dim?: boolean;
     lock?: boolean;
 }): import("react").JSX.Element | null;
 /** What the author is about to pick, outlined as they move over the demo. */

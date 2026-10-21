@@ -332,7 +332,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
           {demo.framed ? (
             <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden" }}>
               <iframe ref={demo.frameRef} title="Demo" style={demo.frameStyle} />
-              {!picking && <Spotlight box={box} shape={step.spotlight?.shape} lock={false} />}
+              {!picking && <Spotlight box={box} shape={step.spotlight?.shape} dim={step.spotlight?.dim} lock={false} />}
               {!picking && step.callouts?.length ? (
                 <Callouts items={step.callouts} rects={demo.rects} scale={demo.scale} bounds={demo.bounds} />
               ) : null}
@@ -501,6 +501,14 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                   />
                 </div>
                 <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={step.spotlight.dim !== false}
+                    onChange={(e) => update({ spotlight: { ...step.spotlight!, dim: e.target.checked ? undefined : false } })}
+                  />
+                  Dim the rest of the demo
+                </label>
+                <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 6 }}>
                   <input
                     type="checkbox"
                     checked={!!step.spotlight.lock}
