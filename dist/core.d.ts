@@ -57,6 +57,7 @@ export interface ProjectPreview {
     show?: boolean;
 }
 export interface CaseStudyContent {
+    kind?: "case-study";
     schemaVersion?: number;
     title?: string;
     draft?: boolean;

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { Card } from "@tomcoggia/ui";
 import {
-  CaseStudyBuilder, CaseStudyPlayer, CaseStudyProvider, Stage, ScreenView, bleedBg, backdropFor,
-  type CaseStudyContent, type Screen,
+  CaseStudyBuilder, CaseStudyPlayer, CaseStudyProvider, Stage, ScreenView, WalkthroughPlayer,
+  bleedBg, backdropFor, isWalkthrough,
+  type CaseStudyContent, type ProjectContent, type ProjectKind,
 } from "../src/index.js";
 import {
   beaconProject, canEdit, createProject, deleteProject, duplicateProject, getProject, listProjects,
@@ -15,6 +16,9 @@ import {
 //   #/             the project list
 //   #/<id>         plays a project
 //   #/<id>/edit    edits it (dev only)
+//
+// Both kinds of project play at #/<id>: a case study as a deck of screens, a
+// walkthrough as stepped copy beside its demo.
 
 const go = (to: string) => (window.location.hash = to);
 
@@ -37,7 +41,7 @@ export function App() {
 
 /** Loads one project; null while loading. */
 function useProject(id: string) {
-  const [state, setState] = useState<{ project: CaseStudyContent } | { error: string } | null>(null);
+  const [state, setState] = useState<{ project: ProjectContent } | { error: string } | null>(null);
   useEffect(() => {
     let live = true;
     getProject(id)
@@ -82,10 +86,12 @@ function ProjectList() {
     await refresh();
   }
 
-  async function create(title: string) {
+  async function create(title: string, kind: ProjectKind) {
     try {
-      const { id } = await createProject(title);
-      go(`#/${id}/edit`);
+      const { id } = await createProject(title, kind);
+      // Walkthroughs have no editor yet, so a new one opens in the player,
+      // which says what it still needs.
+      go(kind === "walkthrough" ? `#/${id}` : `#/${id}/edit`);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -133,7 +139,7 @@ function ProjectList() {
   );
 }
 
-function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string) => void; onCancel: () => void }) {
+function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string, kind: ProjectKind) => void; onCancel: () => void }) {
   const [title, setTitle] = useState("");
   const name = title.trim();
   return (
@@ -141,7 +147,7 @@ function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string) => v
       className="new"
       onSubmit={(e) => {
         e.preventDefault();
-        if (name) onCreate(name);
+        if (name) onCreate(name, "case-study");
       }}
     >
       <label className="new__label" htmlFor="new-title">Project name</label>
@@ -155,15 +161,21 @@ function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string) => v
           placeholder="e.g. SimpleScreen CRC"
           autoFocus
         />
-        <button className="btn btn--primary" type="submit" disabled={!name}>Create</button>
+        <button className="btn btn--primary" type="submit" disabled={!name}>Case study</button>
+        <button className="btn" type="button" disabled={!name} onClick={() => onCreate(name, "walkthrough")}>Walkthrough</button>
         <button className="btn" type="button" onClick={onCancel}>Cancel</button>
       </div>
       <p className="new__hint">
-        Its id will be <code>{slugPreview(name)}</code>. Other sites load the project by its id, so the id stays the same if you rename the project later.
+        Its id will be <code>{slugPreview(name)}</code>. Other sites load the project by its id, so the id stays the same if you rename the project later. A case study is a deck of screens; a walkthrough is stepped copy beside a live demo.
       </p>
     </form>
   );
 }
+
+const unit = ({ kind, count }: ProjectRow) => {
+  const noun = kind === "walkthrough" ? "step" : "screen";
+  return count === 1 ? noun : `${noun}s`;
+};
 
 // Mirrors freeId() in projects-plugin.ts (the server adds a suffix if the id is taken).
 const slugPreview = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "project";
@@ -179,7 +191,7 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
   return (
     <Card variant="flat" className="tile">
       <a href={`#/${row.id}`} className="tile__thumb" aria-label={`Play ${row.title}`}>
-        <Thumb screen={row.cover} />
+        <Thumb row={row} />
         <span className="tile__play"><Play size={18} /></span>
       </a>
       <div className="tile__body">
@@ -202,7 +214,7 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
           {row.draft && <span className="badge" title="Not published: other sites can't load it">Draft</span>}
         </div>
         <p className="tile__meta">
-          <code>{row.id}</code> · {row.screens} {row.screens === 1 ? "screen" : "screens"} · {ago(row.updatedAt)}
+          <code>{row.id}</code> · {row.count} {unit(row)} · {ago(row.updatedAt)}
         </p>
         <div className="tile__actions">
           {canEdit && (
@@ -235,13 +247,16 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
 }
 
 /** The first screen, drawn at stage size and scaled into the tile. */
-function Thumb({ screen }: { screen: Screen | null }) {
-  if (!screen) return <div className="tile__empty">No screens</div>;
-  return (
-    <Stage background={bleedBg(screen)} backdrop={backdropFor(screen)}>
-      <ScreenView screen={screen} play reduced />
-    </Stage>
-  );
+function Thumb({ row }: { row: ProjectRow }) {
+  if (row.cover) {
+    return (
+      <Stage background={bleedBg(row.cover)} backdrop={backdropFor(row.cover)}>
+        <ScreenView screen={row.cover} play reduced />
+      </Stage>
+    );
+  }
+  if (row.preview?.image) return <img className="tile__cover" src={row.preview.image} alt="" />;
+  return <div className="tile__empty">{row.kind === "walkthrough" ? "No preview image" : "No screens"}</div>;
 }
 
 function RenameInput({ initial, onDone }: { initial: string; onDone: (title: string) => void }) {
@@ -310,6 +325,7 @@ function ProjectPlayer({ id }: { id: string }) {
   if (!state) return null;
   if ("error" in state) return <Status>{state.error}</Status>;
   const { project } = state;
+  if (isWalkthrough(project)) return <WalkthroughPlayer content={project} onExit={() => go("#/")} />;
   return <CaseStudyPlayer screens={project.screens} logoSrc={project.preview?.logo} onExit={() => go("#/")} />;
 }
 
@@ -319,6 +335,7 @@ function ProjectEditor({ id }: { id: string }) {
   const state = useProject(id);
   if (!state) return null;
   if ("error" in state) return <Status>{state.error}</Status>;
+  if (isWalkthrough(state.project)) return <Status>Walkthroughs don't have an editor yet — edit projects/{id}/project.json by hand.</Status>;
   return <Editor id={id} initial={state.project} />;
 }
 

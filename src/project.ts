@@ -1,22 +1,51 @@
 import { DEFAULT_CONTENT } from "./core.js";
-import type { CaseStudyContent, Screen } from "./core.js";
+import type { CaseStudyContent, ProjectPreview, Screen } from "./core.js";
+import type { WalkthroughContent, WalkthroughStep } from "./walkthrough/types.js";
 
 // ─── Project files ─────────────────────────────────────────────────
-// A project is one JSON object (CaseStudyContent). These helpers make that
-// object safe to move between apps: versioned, migrated on load, and with
-// site-relative asset paths ("/images/…") pinned to the site they came from.
+// A project is one JSON object. These helpers make that object safe to move
+// between apps: versioned, migrated on load, and with site-relative asset paths
+// ("/images/…") pinned to the site they came from.
+//
+// There are two kinds. A case study is a deck of screens; a walkthrough is
+// stepped copy beside a live demo. `kind` tells them apart, and is absent on
+// everything saved before walkthroughs existed — so absent means case study.
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
+
+export type ProjectKind = "case-study" | "walkthrough";
+
+export type ProjectContent = CaseStudyContent | WalkthroughContent;
+
+export const isWalkthrough = (project: ProjectContent): project is WalkthroughContent => project.kind === "walkthrough";
 
 /** Bring any saved project up to the current shape. Never throws: unknown or
- * empty input falls back to the starter deck. Older projects (saved before
- * `schemaVersion` existed) are version 0 and need no field changes. Legacy
- * screens without a `theme` keep their look at render time (see screenTheme). */
-export function migrate(raw: unknown): CaseStudyContent {
-  if (!raw || typeof raw !== "object") return { ...DEFAULT_CONTENT, schemaVersion: SCHEMA_VERSION };
-  const p = raw as Partial<CaseStudyContent>;
+ * empty input falls back to the starter deck. Version 1 and the unversioned
+ * projects before it need no field changes — version 2 only added `kind`, and
+ * a case study is what a project without one is. Legacy screens without a
+ * `theme` keep their look at render time (see screenTheme). */
+export function migrate(raw: unknown): ProjectContent {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_CONTENT, kind: "case-study", schemaVersion: SCHEMA_VERSION };
+  const p = raw as Partial<ProjectContent>;
+  return p.kind === "walkthrough" ? walkthrough(p as Partial<WalkthroughContent>) : caseStudy(p as Partial<CaseStudyContent>);
+}
+
+function caseStudy(p: Partial<CaseStudyContent>): CaseStudyContent {
   const screens = Array.isArray(p.screens) && p.screens.length ? p.screens : DEFAULT_CONTENT.screens;
-  return { ...p, screens, schemaVersion: SCHEMA_VERSION };
+  return { ...p, kind: "case-study", screens, schemaVersion: SCHEMA_VERSION };
+}
+
+/** A walkthrough with nothing authored yet is left empty rather than filled
+ * with a starter: its steps only mean anything next to its own demo. */
+function walkthrough(p: Partial<WalkthroughContent>): WalkthroughContent {
+  const target = p.target && typeof p.target === "object" ? p.target : { src: "" };
+  return {
+    ...p,
+    kind: "walkthrough",
+    target: { ...target, src: typeof target.src === "string" ? target.src : "" },
+    steps: Array.isArray(p.steps) ? p.steps : [],
+    schemaVersion: SCHEMA_VERSION,
+  };
 }
 
 const isRelative = (u?: string) => !!u && u.startsWith("/") && !u.startsWith("//");
@@ -37,23 +66,42 @@ const screenWithAssetBase = (base: string) => {
   });
 };
 
+const stepWithAssetBase = (base: string) => {
+  const abs = absolutizer(base);
+  return (step: WalkthroughStep): WalkthroughStep => ({ ...step, imageUrl: abs(step.imageUrl) });
+};
+
+const previewWithAssetBase = (base: string) => {
+  const abs = absolutizer(base);
+  return (pv?: ProjectPreview) => pv && { ...pv, image: abs(pv.image), logo: abs(pv.logo), cardLogo: abs(pv.cardLogo) };
+};
+
 /** Rewrite every site-relative asset path in a project to an absolute URL on
  * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
- * Absolute URLs and empty fields are left alone. Returns a new object. */
-export function withAssetBase(project: CaseStudyContent, base: string): CaseStudyContent {
-  const abs = absolutizer(base);
-  const screen = screenWithAssetBase(base);
-  const pv = project.preview;
-  return {
-    ...project,
-    screens: project.screens.map(screen),
-    preview: pv && { ...pv, image: abs(pv.image), logo: abs(pv.logo), cardLogo: abs(pv.cardLogo) },
-  };
+ * Absolute URLs and empty fields are left alone. Returns a new object.
+ *
+ * A walkthrough's demo is pinned the same way. That makes the stored path
+ * honest about where the demo lives, and leaves it to the player to notice the
+ * demo is no longer same-origin and say so — it can only drive one it can read. */
+export function withAssetBase<T extends ProjectContent>(project: T, base: string): T {
+  const preview = previewWithAssetBase(base)(project.preview);
+  if (isWalkthrough(project)) {
+    const abs = absolutizer(base);
+    const next: WalkthroughContent = {
+      ...project,
+      preview,
+      target: { ...project.target, src: abs(project.target.src) ?? "" },
+      steps: project.steps.map(stepWithAssetBase(base)),
+    };
+    return next as T;
+  }
+  const next: CaseStudyContent = { ...project, preview, screens: project.screens.map(screenWithAssetBase(base)) };
+  return next as T;
 }
 
 /** Fetch a project file and migrate it. With `assetBase`, relative asset paths
  * are pinned to that origin (use it for projects hosted by another site). */
-export async function loadProject(url: string, opts: { assetBase?: string; signal?: AbortSignal } = {}): Promise<CaseStudyContent> {
+export async function loadProject(url: string, opts: { assetBase?: string; signal?: AbortSignal } = {}): Promise<ProjectContent> {
   const res = await fetch(url, { signal: opts.signal });
   if (!res.ok) throw new Error(`Couldn't load project (${res.status}): ${url}`);
   const project = migrate(await res.json());
@@ -62,7 +110,7 @@ export async function loadProject(url: string, opts: { assetBase?: string; signa
 
 /** The preview card a project authors for itself (props for ProjectPreviewCard).
  * The card logo falls back to the slide logo. */
-export function previewCard(project: CaseStudyContent) {
+export function previewCard(project: ProjectContent) {
   const p = project.preview ?? {};
   return {
     image: p.image, imageOverlay: p.imageOverlay, eyebrow: p.eyebrow, title: p.title, body: p.body,
@@ -73,11 +121,18 @@ export function previewCard(project: CaseStudyContent) {
 /** One row of a project source's index.json (written by ProjectBuilder). */
 export interface ProjectSummary {
   id: string;
+  kind: ProjectKind;
   title: string;
-  screens: number;
-  cover: Screen | null; // first screen, for a thumbnail
+  /** Screens in a case study, steps in a walkthrough. */
+  count: number;
+  /** A case study's first screen, to render a thumbnail from. Null otherwise. */
+  cover: Screen | null;
+  /** The card the project authors for itself: the thumbnail every kind has. */
+  preview: ProjectPreview | null;
   draft: boolean;       // only in ProjectBuilder's dev list; never published
   updatedAt: number;
+  /** @deprecated Use `count`. Screens only, so a walkthrough reports 0. */
+  screens: number;
 }
 
 /** Projects published by a ProjectBuilder site at `base` (e.g.
@@ -95,7 +150,8 @@ export function projectSource(base: string) {
       if (!res.ok) throw new Error(`Couldn't list projects (${res.status}): ${root}`);
       const rows: ProjectSummary[] = await res.json();
       const screen = screenWithAssetBase(root);
-      return rows.map((row) => ({ ...row, cover: row.cover && screen(row.cover) }));
+      const preview = previewWithAssetBase(root);
+      return rows.map((row) => ({ ...row, cover: row.cover && screen(row.cover), preview: preview(row.preview ?? undefined) ?? null }));
     },
     get: (id: string, opts: { signal?: AbortSignal } = {}) => loadProject(url(id), { ...opts, assetBase: root }),
   };

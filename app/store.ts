@@ -1,4 +1,7 @@
-import { loadProject, migrate, type CaseStudyAssets, type CaseStudyContent, type ProjectSummary } from "../src/index.js";
+import {
+  DEFAULT_WALKTHROUGH, loadProject, migrate,
+  type CaseStudyAssets, type ProjectContent, type ProjectKind, type ProjectSummary,
+} from "../src/index.js";
 
 // ─── Talking to projects/ ──────────────────────────────────────────
 // Reads work anywhere the app is served. Writes go to the dev server's
@@ -26,16 +29,18 @@ async function post<T = { ok: true }>(action: string, body: unknown): Promise<T>
   return json;
 }
 
-/** A new project starts from the package's starter deck, so it opens fully composed. */
-export const createProject = (title: string) => post<{ id: string }>("create", { title, data: migrate(null) });
-export const saveProject = (id: string, data: CaseStudyContent) => post("save", { id, data });
+/** A new project starts from its kind's starter, so it opens composed rather
+ * than as an empty shell. */
+export const createProject = (title: string, kind: ProjectKind = "case-study") =>
+  post<{ id: string }>("create", { title, data: migrate(kind === "walkthrough" ? DEFAULT_WALKTHROUGH : null) });
+export const saveProject = (id: string, data: ProjectContent) => post("save", { id, data });
 export const renameProject = (id: string, title: string) => post("rename", { id, title });
 export const publishProject = (id: string, published: boolean) => post("publish", { id, published });
 export const duplicateProject = (id: string, title: string) => post<{ id: string }>("duplicate", { id, title });
 export const deleteProject = (id: string) => post("delete", { id });
 
 /** Send a pending save even while the page is closing. */
-export function beaconProject(id: string, data: CaseStudyContent) {
+export function beaconProject(id: string, data: ProjectContent) {
   navigator.sendBeacon("/__projects/save", new Blob([JSON.stringify({ id, data })], { type: "application/json" }));
 }
 

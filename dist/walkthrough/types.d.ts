@@ -1,0 +1,71 @@
+import type { ProjectPreview } from "../core.js";
+export interface WalkthroughTarget {
+    /** The demo's entry file, site-relative: "/projects/<id>/demo/index.html".
+     * The player needs it same-origin; a cross-origin target can't be driven. */
+    src: string;
+    /** Viewport width to give the demo, in px. The stage scales to fit it. */
+    width?: number;
+    /** Below this stage width the player drops the frame for the copy alone. */
+    minWidth?: number;
+}
+/** How the product gets into the state a step talks about. */
+export interface StepEnter {
+    /** A hash route inside the demo, e.g. "#/settings". */
+    path?: string;
+    /** A seed the demo understands, passed as ?wt=<state>. Only applied when the
+     * step is arrived at out of order — walking forward keeps what the reader did. */
+    state?: string;
+}
+export interface Spotlight {
+    /** One or more data-walkthrough ids. The first one is what gets revealed. */
+    mark: string | string[];
+    shape?: "rect" | "pill";
+    /** Padding around the element, in demo px (default 6). */
+    pad?: number;
+    /** Block clicks everywhere but the marked element. */
+    lock?: boolean;
+}
+export type StepAdvance = {
+    on: "manual";
+    label?: string;
+} | {
+    on: "click";
+    mark: string;
+} | {
+    on: "path";
+    path: string;
+} | {
+    on: "signal";
+    name: string;
+} | {
+    on: "any";
+    of: StepAdvance[];
+};
+export interface WalkthroughStep {
+    /** Stable id. Step state seeds and deep links key off it. */
+    id: string;
+    eyebrow?: string;
+    title?: string;
+    /** Panel copy, in the same inline markup as a screen's text fields. */
+    body?: string;
+    /** Panel illustration, and what stands in for the frame on a small screen. */
+    imageUrl?: string;
+    enter?: StepEnter;
+    spotlight?: Spotlight;
+    advance: StepAdvance;
+    /** ms to wait before the panel offers a way past this step (default 12000). */
+    nudgeAfter?: number;
+}
+export interface WalkthroughContent {
+    kind: "walkthrough";
+    schemaVersion?: number;
+    title?: string;
+    draft?: boolean;
+    preview?: ProjectPreview;
+    target: WalkthroughTarget;
+    /** Which side the copy sits on (default "left"). */
+    panelSide?: "left" | "right";
+    steps: WalkthroughStep[];
+}
+/** What a new walkthrough starts as: one step, and no demo pointed at yet. */
+export declare const DEFAULT_WALKTHROUGH: WalkthroughContent;

@@ -80,6 +80,7 @@ export interface ProjectPreview {
 }
 
 export interface CaseStudyContent {
+  kind?: "case-study";    // absent on everything saved before walkthroughs existed
   schemaVersion?: number; // see migrate() in project.ts; absent = saved before versioning
   title?: string;         // the project's name, for apps that don't keep it elsewhere
   draft?: boolean;        // ProjectBuilder: left out of the published build (default false)

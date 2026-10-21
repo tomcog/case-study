@@ -4,6 +4,7 @@ import { basename, extname, join, resolve } from "node:path";
 
 // ─── Project files ─────────────────────────────────────────────────
 // Every project lives in projects/<id>/: project.json plus an images/ folder.
+// A walkthrough also carries its demo build in projects/<id>/demo/.
 // That folder is the one copy of the project; other sites load it from here.
 // Saving is dev only, so a change goes live the usual way: commit and push.
 //
@@ -23,6 +24,17 @@ import { basename, extname, join, resolve } from "node:path";
 
 const MIME: Record<string, string> = {
   ".json": "application/json",
+  // A project may carry a built demo app (projects/<id>/demo/), served from the
+  // same origin so a walkthrough can drive it. Without these it serves as
+  // application/octet-stream and the browser refuses to run it.
+  ".html": "text/html",
+  ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".css": "text/css",
+  ".map": "application/json",
+  ".woff2": "font/woff2",
+  ".ico": "image/x-icon",
+  ".txt": "text/plain",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -55,13 +67,19 @@ export function projectsPlugin(dir: string): Plugin {
       .filter((id) => drafts || !isDraft(id))
       .map((id) => {
         const data = read(id);
+        // A project with no `kind` predates walkthroughs, so it is a case study.
+        const kind = data.kind === "walkthrough" ? "walkthrough" : "case-study";
+        const screens = Array.isArray(data.screens) ? data.screens.length : 0;
         return {
           id,
+          kind,
           title: data.title || data.preview?.title || id,
-          screens: data.screens?.length ?? 0,
+          count: kind === "walkthrough" ? (Array.isArray(data.steps) ? data.steps.length : 0) : screens,
           cover: data.screens?.[0] ?? null,
+          preview: data.preview ?? null,
           draft: data.draft === true,
           updatedAt: statSync(projectFile(id)).mtimeMs,
+          screens,
         };
       })
       .sort((a, b) => b.updatedAt - a.updatedAt);

@@ -11,8 +11,8 @@ export type {
   CaseStudyContent, Screen, ScreenLayout, Theme, Metric, OverviewItem, GalleryImage, ProjectPreview,
 } from "./core.js";
 
-export { migrate, withAssetBase, loadProject, previewCard, projectSource, SCHEMA_VERSION } from "./project.js";
-export type { ProjectSummary, ProjectSource } from "./project.js";
+export { migrate, withAssetBase, loadProject, previewCard, projectSource, isWalkthrough, SCHEMA_VERSION } from "./project.js";
+export type { ProjectSummary, ProjectSource, ProjectContent, ProjectKind } from "./project.js";
 export { DEFAULT_ACCENT, DEFAULT_INK } from "./theme.js";
 
 // Building blocks the host app may reuse in its own screens (e.g. a project index editor).
@@ -25,3 +25,17 @@ export { LogoMark } from "./ui/LogoMark.js";
 export { PhoneMockup } from "./ui/PhoneMockup.js";
 export { ComputerFrame } from "./ui/ComputerFrame.js";
 export { renderStyledText } from "./ui/renderStyledText.js";
+
+// Walkthroughs: a side panel of stepped copy beside a live demo of the product.
+export { WalkthroughPlayer } from "./walkthrough/WalkthroughPlayer.js";
+export { sameOriginDriver } from "./walkthrough/driver.js";
+export { DEFAULT_WALKTHROUGH } from "./walkthrough/types.js";
+export type { Driver, MarkRect, MarkRects } from "./walkthrough/driver.js";
+export type {
+  WalkthroughContent,
+  WalkthroughStep,
+  WalkthroughTarget,
+  StepAdvance,
+  StepEnter,
+  Spotlight,
+} from "./walkthrough/types.js";
