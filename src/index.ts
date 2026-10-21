@@ -12,7 +12,7 @@ export type {
 } from "./core.js";
 
 export { migrate, withAssetBase, loadProject, previewCard, projectSource, isWalkthrough, SCHEMA_VERSION } from "./project.js";
-export type { ProjectSummary, ProjectSource, ProjectContent, ProjectKind } from "./project.js";
+export type { ProjectSummary, ProjectSource, ProjectContent, ProjectKind, IngestedApp } from "./project.js";
 export { DEFAULT_ACCENT, DEFAULT_INK } from "./theme.js";
 
 // Building blocks the host app may reuse in its own screens (e.g. a project index editor).
@@ -30,18 +30,16 @@ export { renderStyledText } from "./ui/renderStyledText.js";
 export { WalkthroughPlayer } from "./walkthrough/WalkthroughPlayer.js";
 export { WalkthroughBuilder } from "./walkthrough/WalkthroughBuilder.js";
 export { sameOriginDriver } from "./walkthrough/driver.js";
-export { DEFAULT_WALKTHROUGH, isDriveable, stageAt, stageIdAt, stageRuns, stepMarks } from "./walkthrough/types.js";
+export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, isLive, stepMarks } from "./walkthrough/types.js";
 export type { Driver, MarkRect, MarkRects, PickHit } from "./walkthrough/driver.js";
 export type {
   WalkthroughContent,
   WalkthroughStep,
-  Stage as WalkthroughStage,
-  StageKind,
-  StageRun,
+  StepContent,
+  StepAction,
+  AppRun,
   Area,
   StepAdvance,
-  StepEnter,
   Spotlight,
   Callout,
-  StillImage,
 } from "./walkthrough/types.js";

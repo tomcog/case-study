@@ -1,15 +1,13 @@
 import type { Driver, MarkRect, MarkRects } from "./driver.js";
-import type { Area, Callout, Stage, StillImage } from "./types.js";
+import type { Area, Callout } from "./types.js";
 export interface Box {
     x: number;
     y: number;
     w: number;
     h: number;
 }
-/** Why there is nothing on the stage, when there isn't. */
-export type Blocked = "no-stage" | "no-src" | "foreign" | "small";
-/** What the stage is doing: showing one of the three kinds, or nothing. */
-export type StageMode = "code" | "embed" | "mock" | "blocked";
+/** Why there is no app running, when there isn't. */
+export type Blocked = "no-app" | "foreign" | "small";
 /** The box around one or more demo rects, in stage pixels. */
 export declare function toBox(rects: MarkRect[], scale: number, pad?: number): Box | null;
 /** An Area resolved against the stage it sits on. Fractions in, pixels out. */
@@ -17,17 +15,22 @@ export declare function areaBox(area: Area | undefined, bounds: {
     w: number;
     h: number;
 }): Box | null;
-/** Mount the stage, keep it measured, and — where it can be read — report the
- * marks' geometry. */
-export declare function useStage(stage: Stage | null, marks: string[]): {
+/** Mount the app, keep it measured, and report its marks' geometry.
+ *
+ * `src` is the ingested app's entry, or undefined for a step running nothing.
+ * The frame is keyed by it upstream, so arriving at a different app is always
+ * a fresh document rather than whatever the last one left behind. */
+export declare function useApp(src: string | undefined, marks: string[], size?: {
+    width?: number;
+    minWidth?: number;
+}): {
     frameRef: import("react").RefObject<HTMLIFrameElement | null>;
     stageRef: import("react").RefObject<HTMLDivElement | null>;
     driver: Driver | null;
     rects: MarkRects;
     scale: number;
     measure: () => void;
-    mode: StageMode;
-    driveable: boolean;
+    live: boolean;
     blocked: Blocked | null;
     frameStyle: import("react").CSSProperties;
     bounds: {
@@ -61,19 +64,19 @@ export declare function AreaDraw({ bounds, onDone, onCancel }: {
     onDone: (area: Area) => void;
     onCancel: () => void;
 }): import("react").JSX.Element;
-/** A still covering the stage: a `mock` stage, or one step's own image laid
- * over whatever it runs in. It takes the clicks, so nothing underneath can be
- * poked through it. */
+/** An image covering the frame. It takes the clicks, so the app underneath
+ * keeps running but can't be poked through it. */
 export declare function StageStill({ image }: {
-    image: StillImage;
+    image: {
+        src: string;
+        fit?: "center" | "fill";
+    };
 }): import("react").JSX.Element;
-/** Why there's nothing on the stage. `stageId` tells the two empty cases
- * apart: a walkthrough with no stages at all, and a step pointed at one that
- * has since been deleted or renamed. */
-export declare function StageNotice({ blocked, src, stageId }: {
+/** Why there's nothing running. Only shown when the step displays its app and
+ * has none to display — an image or an embed needs no app at all. */
+export declare function StageNotice({ blocked, src }: {
     blocked: Blocked;
-    src: string;
-    stageId?: string | null;
+    src?: string;
 }): import("react").JSX.Element;
 export declare function Callouts({ items, boxFor, bounds }: {
     items: Callout[];

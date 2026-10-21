@@ -1,9 +1,13 @@
 // ─── Walkthrough driver ────────────────────────────────────────────
-// The seam between the player and the product. The player only ever talks to
-// this interface, so how it reaches the demo stays swappable: same origin
-// (below) reads the frame's document directly and needs nothing shipped inside
-// the product, while a cross-origin target would need the same methods
-// implemented over postMessage against a small script in the product.
+// The seam between the player and the app. The player only ever talks to this
+// interface, so how it reaches the app stays swappable: same origin (below)
+// reads the frame's document directly and needs nothing shipped inside the
+// app, while a cross-origin one would need the same methods implemented over
+// postMessage against a small script in it.
+//
+// Everything here reaches the app the way a reader does — by mark, through the
+// DOM — which is why an ingested app needs nothing added to it beyond the
+// marks a highlight already requires.
 const hash = (path) => (path ? `#${path.replace(/^#/, "")}` : "");
 /** The frame's elements come from another realm, so `instanceof Element` is
  * always false here. Recognise them by shape instead. */
@@ -167,13 +171,12 @@ export function sameOriginDriver(frame, src) {
         };
     }
     frame.addEventListener("load", attach);
-    const url = (state, path) => {
+    const url = (path) => {
         const next = new URL(src, window.location.href);
-        // ?wt= is always present, even with no seed to ask for: it is what tells the
-        // demo it is inside a walkthrough at all. Dropping it on a step that names
-        // no state would put the demo back into its normal mode — reaching for a
-        // real backend it isn't meant to have here.
-        next.searchParams.set("wt", state ?? "");
+        // ?wt= is what tells the app it is inside a walkthrough at all, so it is
+        // always sent. Without it an app built to use fixtures here would go back
+        // to its normal mode and reach for a backend it isn't meant to have.
+        next.searchParams.set("wt", "");
         next.hash = hash(path);
         return next.toString();
     };
@@ -208,16 +211,47 @@ export function sameOriginDriver(frame, src) {
                 return Promise.resolve();
             return new Promise((resolve) => frame.addEventListener("load", () => resolve(), { once: true }));
         },
-        async enter(step, opts = {}) {
-            const { path, state } = step.enter ?? {};
-            // A fresh frame, or a step arrived at out of order, boots from the seed.
-            if (opts.reseed || !loaded()) {
-                await load(url(state, path));
+        async open(path, opts = {}) {
+            // A step that boots the app, or a frame with nothing in it yet.
+            if (opts.reload || !loaded()) {
+                await load(url(path));
                 return;
             }
             const w = win();
             if (path && w && w.location.hash !== hash(path))
                 w.location.hash = hash(path);
+        },
+        click(mark) {
+            const el = query(mark);
+            if (!el)
+                return false;
+            el.click();
+            return true;
+        },
+        type(mark, text) {
+            const el = query(mark);
+            const w = win();
+            if (!el || !w)
+                return false;
+            if (el.isContentEditable) {
+                el.textContent = text;
+            }
+            else if ("value" in el) {
+                // Frameworks patch the value setter on the prototype to notice writes;
+                // assigning el.value directly goes round the patch and the app never
+                // hears about it.
+                const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")?.set;
+                if (setter)
+                    setter.call(el, text);
+                else
+                    el.value = text;
+            }
+            else {
+                return false;
+            }
+            el.dispatchEvent(new w.Event("input", { bubbles: true }));
+            el.dispatchEvent(new w.Event("change", { bubbles: true }));
+            return true;
         },
         marks(ids) {
             const out = {};

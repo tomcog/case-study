@@ -7,7 +7,7 @@ import { projectsPlugin } from "./app/projects-plugin";
 // so edits to the builder or player show up without a rebuild.
 export default defineConfig({
   root: "app",
-  plugins: [react(), projectsPlugin(fileURLToPath(new URL("./projects", import.meta.url)))],
+  plugins: [react(), projectsPlugin(fileURLToPath(new URL("./projects", import.meta.url)), fileURLToPath(new URL("./apps", import.meta.url)))],
   build: { outDir: "../app-dist", emptyOutDir: true },
   server: { port: 5187 },
 });

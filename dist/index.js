@@ -19,5 +19,5 @@ export { renderStyledText } from "./ui/renderStyledText.js";
 export { WalkthroughPlayer } from "./walkthrough/WalkthroughPlayer.js";
 export { WalkthroughBuilder } from "./walkthrough/WalkthroughBuilder.js";
 export { sameOriginDriver } from "./walkthrough/driver.js";
-export { DEFAULT_WALKTHROUGH, isDriveable, stageAt, stageIdAt, stageRuns, stepMarks } from "./walkthrough/types.js";
+export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, isLive, stepMarks } from "./walkthrough/types.js";
 //# sourceMappingURL=index.js.map

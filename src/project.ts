@@ -1,6 +1,6 @@
 import { DEFAULT_CONTENT } from "./core.js";
 import type { CaseStudyContent, ProjectPreview, Screen } from "./core.js";
-import type { Stage, StillImage, WalkthroughContent, WalkthroughStep } from "./walkthrough/types.js";
+import type { StepContent, WalkthroughContent, WalkthroughStep } from "./walkthrough/types.js";
 
 // ─── Project files ─────────────────────────────────────────────────
 // A project is one JSON object. These helpers make that object safe to move
@@ -11,7 +11,7 @@ import type { Stage, StillImage, WalkthroughContent, WalkthroughStep } from "./w
 // stepped copy beside a stage. `kind` tells them apart, and is absent on
 // everything saved before walkthroughs existed — so absent means case study.
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export type ProjectKind = "case-study" | "walkthrough";
 
@@ -19,31 +19,65 @@ export type ProjectContent = CaseStudyContent | WalkthroughContent;
 
 export const isWalkthrough = (project: ProjectContent): project is WalkthroughContent => project.kind === "walkthrough";
 
-/** The walkthrough shape before version 3, when there was one demo plus named
- * extras beside it. Kept only so those projects can be folded into `stages`. */
+/** An app ingested into the shared pool: a snapshot of someone's built output,
+ * copied in and served from this site. Steps reference the `id`, so renaming
+ * the label leaves them alone; `src` is where its entry file is served from,
+ * which a site hosting them elsewhere makes absolute. */
+export interface IngestedApp {
+  id: string;
+  label: string;
+  src: string;
+  /** Viewport width to give it, in px; the frame scales to fit. Below
+   * `minWidth` the player drops the frame and shows the copy alone. Both
+   * belong to the app rather than to each step that runs it. */
+  width?: number;
+  minWidth?: number;
+  ingestedAt?: number;
+}
+
+/** The walkthrough shapes before version 4, kept only so they can be folded
+ * into the per-step one. Version 2 had a single `target` demo with named
+ * `targets` beside it; version 3 made those one `stages` list. Both put the
+ * app on a shared record and left the step pointing at it — which is the part
+ * version 4 undoes, by giving every step its own answer. */
 interface LegacyTarget {
   src?: string;
   width?: number;
   minWidth?: number;
 }
 
+interface LegacyStage {
+  id?: string;
+  label?: string;
+  kind?: string;
+  src?: string;
+  width?: number;
+  minWidth?: number;
+  fit?: "center" | "fill";
+}
+
 interface LegacyWalkthrough {
   target?: LegacyTarget;
   targets?: Record<string, LegacyTarget>;
+  stages?: LegacyStage[];
 }
 
 interface LegacyStep {
   enter?: { app?: string; stage?: string; path?: string; state?: string };
-  stage?: StillImage;
+  stage?: { src?: string; fit?: "center" | "fill" };
+  still?: { src?: string; fit?: "center" | "fill" };
 }
 
 /** Bring any saved project up to the current shape. Never throws: unknown or
- * empty input falls back to the starter deck. Version 1 and the unversioned
- * projects before it need no field changes — version 2 only added `kind`, and
- * a case study is what a project without one is. Version 3 is walkthroughs
- * only: the privileged `target` and the named `targets` beside it became one
- * flat `stages` list, with `enter.app` becoming `enter.stage`. Legacy screens
- * without a `theme` keep their look at render time (see screenTheme). */
+ * empty input falls back to the starter deck. Versions 1 and 2 need no field
+ * changes for a case study — version 2 only added `kind`, and a case study is
+ * what a project without one is. Legacy screens without a `theme` keep their
+ * look at render time (see screenTheme).
+ *
+ * Walkthroughs changed twice. Version 3 folded the privileged demo and the
+ * named ones beside it into one `stages` list. Version 4 removes the list
+ * entirely: what a step runs, what it shows and where it starts are three
+ * fields on the step, so nothing is inherited and nothing is shared. */
 export function migrate(raw: unknown): ProjectContent {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_CONTENT, kind: "case-study", schemaVersion: SCHEMA_VERSION };
   const p = raw as Partial<ProjectContent>;
@@ -56,106 +90,77 @@ function caseStudy(p: Partial<CaseStudyContent>): CaseStudyContent {
 }
 
 /** A walkthrough with nothing authored yet is left empty rather than filled
- * with a starter: its steps only mean anything next to its own stages. */
+ * with a starter: its steps only mean anything next to the app they run. */
 function walkthrough(raw: Partial<WalkthroughContent> & LegacyWalkthrough): WalkthroughContent {
-  const { target, targets, ...rest } = raw;
-  const stages = foldStages(raw);
-  const first = stages[0]?.id ?? null;
-  const names = legacyNames(raw, stages);
+  const { target, targets, stages, ...rest } = raw;
+  const legacy = legacyStages(raw);
+  const steps = Array.isArray(raw.steps) ? raw.steps : [];
   return {
     ...rest,
     kind: "walkthrough",
-    stages,
-    steps: Array.isArray(raw.steps) ? raw.steps.map((s) => foldStep(s, names, first)) : [],
+    steps: legacy.length ? steps.map((s, i) => foldStep(s, steps, i, legacy)) : steps.map(plainStep),
     schemaVersion: SCHEMA_VERSION,
   };
 }
 
-const slug = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-
-/** A readable id for a demo folded in from the old shape: the folder its build
- * sits in, which is what an author would have called it anyway. */
-function idFromSrc(src: string, taken: Set<string>): string {
-  const parts = (src.split("?")[0] ?? "").split("/").filter(Boolean);
-  const last = parts[parts.length - 1] ?? "";
-  const folder = /\.[a-z0-9]+$/i.test(last) ? (parts[parts.length - 2] ?? "") : last;
-  const base = slug(folder);
-  let id = !base || base === "demo" ? "app" : base;
-  for (let n = 2; taken.has(id); n++) id = `${base || "app"}-${n}`;
-  taken.add(id);
-  return id;
-}
-
-const cleanStage = (s: Partial<Stage>, fallbackId: string): Stage => ({
-  ...s,
-  id: typeof s.id === "string" && s.id ? s.id : fallbackId,
-  kind: s.kind === "embed" || s.kind === "mock" ? s.kind : "code",
-  src: typeof s.src === "string" ? s.src : "",
-});
-
-/** The stages a saved walkthrough has, or the old `target` + `targets` folded
- * into the same list. The old default goes first, which keeps a walkthrough
- * that never named an app opening exactly where it used to. */
-function foldStages(raw: Partial<WalkthroughContent> & LegacyWalkthrough): Stage[] {
-  if (Array.isArray(raw.stages)) {
-    const taken = new Set<string>();
-    return raw.stages
-      .filter((s) => !!s && typeof s === "object")
-      .map((s) => cleanStage(s as Partial<Stage>, idFromSrc(typeof s.src === "string" ? s.src : "", taken)));
-  }
-  const taken = new Set<string>();
-  const out: Stage[] = [];
-  const fold = (t: LegacyTarget, label?: string) => {
-    const src = typeof t.src === "string" ? t.src : "";
-    const id = label ? uniq(slug(label) || "app", taken) : idFromSrc(src, taken);
-    out.push({ id, label: label ?? undefined, kind: "code", src, width: t.width, minWidth: t.minWidth });
-  };
-  if (raw.target && typeof raw.target === "object") fold(raw.target);
+/** The old shared records, in order, however they were spelled. */
+function legacyStages(raw: Partial<WalkthroughContent> & LegacyWalkthrough): LegacyStage[] {
+  if (Array.isArray(raw.stages)) return raw.stages.filter((s): s is LegacyStage => !!s && typeof s === "object");
+  const out: LegacyStage[] = [];
+  if (raw.target && typeof raw.target === "object") out.push({ id: "app", kind: "code", ...raw.target });
   for (const [name, t] of Object.entries(raw.targets ?? {})) {
-    if (t && typeof t === "object") fold(t, name);
+    if (t && typeof t === "object") out.push({ id: name, label: name, kind: "code", ...t });
   }
   return out;
 }
 
-function uniq(id: string, taken: Set<string>): string {
-  let out = id;
-  for (let n = 2; taken.has(out); n++) out = `${id}-${n}`;
-  taken.add(out);
-  return out;
+/** Which shared record a step resolved to under the old rules: the nearest one
+ * named at or before it, falling back to the first. */
+function legacyStageFor(steps: WalkthroughStep[], index: number, stages: LegacyStage[]): LegacyStage | undefined {
+  for (let i = Math.min(index, steps.length - 1); i >= 0; i--) {
+    const named = (steps[i] as WalkthroughStep & LegacyStep).enter;
+    const id = named?.stage ?? named?.app;
+    if (id) return stages.find((st) => st.id === id) ?? stages[0];
+  }
+  return stages[0];
 }
 
-/** Old `enter.app` names, mapped to the stage ids they became. */
-function legacyNames(raw: Partial<WalkthroughContent> & LegacyWalkthrough, stages: Stage[]): Map<string, string> {
-  const map = new Map<string, string>();
-  if (Array.isArray(raw.stages)) return map;
-  // The default was first, so the named ones line up with the rest in order.
-  const named = Object.keys(raw.targets ?? {});
-  const offset = raw.target && typeof raw.target === "object" ? 1 : 0;
-  named.forEach((name, i) => {
-    const stage = stages[offset + i];
-    if (stage) map.set(name, stage.id);
-  });
-  return map;
-}
+/** A step with the old shared record folded into it. What it ran becomes its
+ * own `app`, what it showed becomes its own `content`, and the seed is dropped
+ * — an app now opens in its default state for the screen it opens on. */
+function foldStep(raw: WalkthroughStep & LegacyStep, steps: WalkthroughStep[], index: number, stages: LegacyStage[]): WalkthroughStep {
+  const { enter, stage: legacyStill, still, ...step } = raw;
+  const record = legacyStageFor(steps, index, stages);
+  const cover = still ?? legacyStill;
+  const kind = record?.kind === "embed" || record?.kind === "mock" ? record.kind : "code";
 
-/** A step in the current shape. `enter.app` named a demo that may not have
- * existed — "default" among them — and that always meant the default one, so
- * anything unresolved becomes the first stage rather than nothing. */
-function foldStep(raw: WalkthroughStep & LegacyStep, names: Map<string, string>, first: string | null): WalkthroughStep {
-  const { stage: still, ...step } = raw;
-  const app = raw.enter?.app;
-  const enter = !raw.enter
-    ? undefined
-    : {
-        ...raw.enter,
-        app: undefined,
-        stage: app ? (names.get(app) ?? first ?? undefined) : raw.enter.stage,
-      };
+  let app: string | undefined;
+  let content: StepContent | undefined;
+  if (kind === "code") {
+    app = record?.id;
+    if (cover?.src) content = { kind: "image", src: cover.src, fit: cover.fit };
+  } else if (kind === "embed") {
+    content = { kind: "embed", url: record?.src ?? "", width: record?.width, minWidth: record?.minWidth };
+  } else {
+    content = { kind: "image", src: cover?.src || record?.src || "", fit: cover?.fit ?? record?.fit };
+  }
+
   return {
     ...step,
-    enter: enter && (enter.stage || enter.path || enter.state ? enter : undefined),
-    still: still ?? raw.still,
+    app,
+    start: kind === "code" ? enter?.path : undefined,
+    content,
+  };
+}
+
+/** A step already in the current shape, with the fields it may not have. */
+function plainStep(raw: WalkthroughStep & LegacyStep): WalkthroughStep {
+  const { enter, stage: legacyStill, still, ...step } = raw;
+  const cover = still ?? legacyStill;
+  return {
+    ...step,
+    start: step.start ?? enter?.path,
+    content: step.content ?? (cover?.src ? { kind: "image", src: cover.src, fit: cover.fit } : undefined),
   };
 }
 
@@ -182,7 +187,12 @@ const stepWithAssetBase = (base: string) => {
   return (step: WalkthroughStep): WalkthroughStep => ({
     ...step,
     imageUrl: abs(step.imageUrl),
-    still: step.still && { ...step.still, src: abs(step.still.src) ?? "" },
+    content:
+      step.content?.kind === "image"
+        ? { ...step.content, src: abs(step.content.src) ?? "" }
+        : step.content?.kind === "embed"
+          ? { ...step.content, url: abs(step.content.url) ?? "" }
+          : step.content,
   });
 };
 
@@ -195,19 +205,13 @@ const previewWithAssetBase = (base: string) => {
  * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
  * Absolute URLs and empty fields are left alone. Returns a new object.
  *
- * A walkthrough's stages are pinned the same way. That makes the stored path
- * honest about where each one lives, and leaves it to the player to notice a
- * demo is no longer same-origin and say so — it can only drive one it can read. */
+ * A walkthrough's own images and embeds are pinned the same way. The apps it
+ * runs are not: a step stores an app's id, and where that app is served from
+ * is the host's to say, since the pool is shared across projects. */
 export function withAssetBase<T extends ProjectContent>(project: T, base: string): T {
   const preview = previewWithAssetBase(base)(project.preview);
   if (isWalkthrough(project)) {
-    const abs = absolutizer(base);
-    const next: WalkthroughContent = {
-      ...project,
-      preview,
-      stages: project.stages.map((s) => ({ ...s, src: abs(s.src) ?? "" })),
-      steps: project.steps.map(stepWithAssetBase(base)),
-    };
+    const next: WalkthroughContent = { ...project, preview, steps: project.steps.map(stepWithAssetBase(base)) };
     return next as T;
   }
   const next: CaseStudyContent = { ...project, preview, screens: project.screens.map(screenWithAssetBase(base)) };

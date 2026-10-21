@@ -1,24 +1,42 @@
 import type { CaseStudyContent, ProjectPreview, Screen } from "./core.js";
 import type { WalkthroughContent } from "./walkthrough/types.js";
-export declare const SCHEMA_VERSION = 3;
+export declare const SCHEMA_VERSION = 4;
 export type ProjectKind = "case-study" | "walkthrough";
 export type ProjectContent = CaseStudyContent | WalkthroughContent;
 export declare const isWalkthrough: (project: ProjectContent) => project is WalkthroughContent;
+/** An app ingested into the shared pool: a snapshot of someone's built output,
+ * copied in and served from this site. Steps reference the `id`, so renaming
+ * the label leaves them alone; `src` is where its entry file is served from,
+ * which a site hosting them elsewhere makes absolute. */
+export interface IngestedApp {
+    id: string;
+    label: string;
+    src: string;
+    /** Viewport width to give it, in px; the frame scales to fit. Below
+     * `minWidth` the player drops the frame and shows the copy alone. Both
+     * belong to the app rather than to each step that runs it. */
+    width?: number;
+    minWidth?: number;
+    ingestedAt?: number;
+}
 /** Bring any saved project up to the current shape. Never throws: unknown or
- * empty input falls back to the starter deck. Version 1 and the unversioned
- * projects before it need no field changes — version 2 only added `kind`, and
- * a case study is what a project without one is. Version 3 is walkthroughs
- * only: the privileged `target` and the named `targets` beside it became one
- * flat `stages` list, with `enter.app` becoming `enter.stage`. Legacy screens
- * without a `theme` keep their look at render time (see screenTheme). */
+ * empty input falls back to the starter deck. Versions 1 and 2 need no field
+ * changes for a case study — version 2 only added `kind`, and a case study is
+ * what a project without one is. Legacy screens without a `theme` keep their
+ * look at render time (see screenTheme).
+ *
+ * Walkthroughs changed twice. Version 3 folded the privileged demo and the
+ * named ones beside it into one `stages` list. Version 4 removes the list
+ * entirely: what a step runs, what it shows and where it starts are three
+ * fields on the step, so nothing is inherited and nothing is shared. */
 export declare function migrate(raw: unknown): ProjectContent;
 /** Rewrite every site-relative asset path in a project to an absolute URL on
  * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
  * Absolute URLs and empty fields are left alone. Returns a new object.
  *
- * A walkthrough's stages are pinned the same way. That makes the stored path
- * honest about where each one lives, and leaves it to the player to notice a
- * demo is no longer same-origin and say so — it can only drive one it can read. */
+ * A walkthrough's own images and embeds are pinned the same way. The apps it
+ * runs are not: a step stores an app's id, and where that app is served from
+ * is the host's to say, since the pool is shared across projects. */
 export declare function withAssetBase<T extends ProjectContent>(project: T, base: string): T;
 /** Fetch a project file and migrate it. With `assetBase`, relative asset paths
  * are pinned to that origin (use it for projects hosted by another site). */

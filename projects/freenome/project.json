@@ -1,6 +1,6 @@
 {
   "kind": "walkthrough",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "title": "Freenome — Provider Portal",
   "draft": true,
   "preview": {
@@ -18,7 +18,9 @@
       "advance": {
         "on": "manual"
       },
-      "still": {
+      "app": "provider-portal",
+      "content": {
+        "kind": "image",
         "src": "/projects/freenome/images/Gemini_Generated_Image_l6531zl6531zl653-2.jpg",
         "fit": "fill"
       }
@@ -28,14 +30,12 @@
       "eyebrow": "Provider Portal / Orders",
       "title": "Every order the practice has placed",
       "body": "One list, newest first — **82 orders** across the practice's providers. The {**Status**} column is the whole point of the screen: it says what the lab is waiting on, and who it's waiting on.",
-      "enter": {
-        "path": "#/",
-        "state": "fresh"
-      },
       "advance": {
         "on": "manual",
         "label": "Show me"
-      }
+      },
+      "app": "provider-portal",
+      "start": "#/"
     },
     {
       "id": "search",
@@ -51,7 +51,8 @@
       "advance": {
         "on": "manual",
         "label": "Next"
-      }
+      },
+      "app": "provider-portal"
     },
     {
       "id": "status",
@@ -64,7 +65,8 @@
       "advance": {
         "on": "manual",
         "label": "Next"
-      }
+      },
+      "app": "provider-portal"
     },
     {
       "id": "open",
@@ -78,7 +80,8 @@
       "advance": {
         "on": "click",
         "mark": "open-order"
-      }
+      },
+      "app": "provider-portal"
     },
     {
       "id": "panel",
@@ -88,16 +91,14 @@
       "advance": {
         "on": "manual",
         "label": "Next"
-      }
+      },
+      "app": "provider-portal"
     },
     {
       "id": "order-test",
       "eyebrow": "Step six",
       "title": "Place the next test",
       "body": "Ordering starts from the same screen, so a provider never has to go looking for it. **Click Order a test.**",
-      "enter": {
-        "path": "#/"
-      },
       "spotlight": {
         "mark": "order-test",
         "shape": "pill"
@@ -105,30 +106,21 @@
       "advance": {
         "on": "click",
         "mark": "order-test"
-      }
+      },
+      "app": "provider-portal",
+      "start": "#/"
     },
     {
       "id": "new-order",
       "eyebrow": "Last step",
       "title": "The new-order form",
       "body": "Patient, provider, test and clinical history in one pass — then a review step before it's placed. Nothing you do here touches a real database: this walkthrough runs the portal on fixtures.",
-      "enter": {
-        "path": "#/orders/new"
-      },
       "advance": {
         "on": "manual",
         "label": "Done"
-      }
-    }
-  ],
-  "stages": [
-    {
-      "id": "provider-portal",
-      "label": "Provider Portal",
-      "kind": "demo",
-      "src": "/projects/freenome/demo/provider-portal/index.html",
-      "width": 1440,
-      "minWidth": 940
+      },
+      "app": "provider-portal",
+      "start": "#/orders/new"
     }
   ]
 }

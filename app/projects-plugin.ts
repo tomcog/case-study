@@ -2,11 +2,17 @@ import type { Plugin } from "vite";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 
-// ─── Project files ─────────────────────────────────────────────────
+// ─── Project files and ingested apps ───────────────────────────────
 // Every project lives in projects/<id>/: project.json plus an images/ folder.
-// A walkthrough also carries its demo build in projects/<id>/demo/.
 // That folder is the one copy of the project; other sites load it from here.
 // Saving is dev only, so a change goes live the usual way: commit and push.
+//
+// Ingested apps live beside them in apps/<id>/, one folder per app, holding
+// somebody's built output exactly as it came plus an app.json naming it. The
+// pool is shared: any walkthrough can run any app in it, which is why it sits
+// at the root rather than inside a project. Ingesting copies the build in and
+// never looks at the original again — a snapshot that can't change underneath
+// a demo that depends on it.
 //
 //   GET  /projects/index.json                       one row per project, built from disk
 //   GET  /projects/<id>/…                           project files, straight from disk
@@ -19,8 +25,15 @@ import { basename, extname, join, resolve } from "node:path";
 //   POST /__projects/upload     { id, fileName, dataUrl } → { path }  into projects/<id>/images/
 //   GET  /__projects/images?id=<id>                 image names in projects/<id>/images/
 //
-// A build copies projects/ into the output with a static index.json, giving a
-// read-only site that other apps can load projects from. Drafts are left out.
+//   GET  /apps/index.json                           one row per ingested app
+//   GET  /apps/<id>/…                               an app's files, straight from disk
+//   POST /__apps/ingest   { path, label }           → { id }  copies a built folder in
+//   POST /__apps/rename   { id, label }             → renames it (the id never changes)
+//   POST /__apps/delete   { id }                    → removes the folder
+//
+// A build copies projects/ and apps/ into the output, each with a static
+// index.json, giving a read-only site that other apps can load projects from.
+// Drafts are left out.
 
 const MIME: Record<string, string> = {
   ".json": "application/json",
@@ -48,7 +61,68 @@ const MIME: Record<string, string> = {
 const ID = /^[a-z0-9][a-z0-9-]*$/;
 const IMAGE = /\.(png|jpe?g|gif|webp|svg|avif|mp4)$/i;
 
-export function projectsPlugin(dir: string): Plugin {
+export function projectsPlugin(dir: string, appsDir: string): Plugin {
+  // ── Ingested apps ──
+  const appFile = (id: string) => join(appsDir, id, "app.json");
+  const appIds = () => (existsSync(appsDir) ? readdirSync(appsDir).filter((f) => ID.test(f) && existsSync(appFile(f))) : []);
+
+  /** One row per ingested app. The entry is whatever the build calls its
+   * HTML, which is index.html everywhere so far but is recorded rather than
+   * assumed. */
+  function apps() {
+    return appIds()
+      .map((id) => {
+        const meta = JSON.parse(readFileSync(appFile(id), "utf8"));
+        return {
+          id,
+          label: meta.label || id,
+          src: `/apps/${id}/${meta.entry || "index.html"}`,
+          width: meta.width,
+          minWidth: meta.minWidth,
+          ingestedAt: meta.ingestedAt ?? statSync(appFile(id)).mtimeMs,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  function freeAppId(label: string) {
+    const base = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "app";
+    let id = base;
+    for (let i = 2; existsSync(join(appsDir, id)); i++) id = `${base}-${i}`;
+    return id;
+  }
+
+  /** Copy a built folder into the pool. The source is a path on this machine,
+   * since ingesting is a dev-only act by the person running the builder. */
+  function ingest(input: any): [number, unknown] {
+    const from = resolve(String(input.path ?? "").replace(/^~/, process.env.HOME ?? "~"));
+    if (!existsSync(from) || !statSync(from).isDirectory()) return [400, { error: `No folder at ${from}` }];
+    const entry = ["index.html", "index.htm"].find((name) => existsSync(join(from, name)));
+    if (!entry) return [400, { error: "That folder has no index.html — point at a built output folder" }];
+    const label = String(input.label ?? basename(from)).trim() || basename(from);
+    const id = freeAppId(label);
+    cpSync(from, join(appsDir, id), { recursive: true, filter: (src) => basename(src) !== ".DS_Store" });
+    writeFileSync(appFile(id), `${JSON.stringify({ label, entry, ingestedAt: Date.now() }, null, 2)}\n`);
+    return [200, { id }];
+  }
+
+  function handleApps(path: string, input: any): [number, unknown] {
+    if (path === "/__apps/ingest") return ingest(input);
+    if (!ID.test(input.id ?? "") || !existsSync(appFile(input.id))) return [404, { error: "No such app" }];
+    if (path === "/__apps/rename") {
+      const meta = JSON.parse(readFileSync(appFile(input.id), "utf8"));
+      const patch: Record<string, unknown> = {};
+      for (const key of ["label", "width", "minWidth"]) if (key in input) patch[key] = input[key];
+      writeFileSync(appFile(input.id), `${JSON.stringify({ ...meta, ...patch }, null, 2)}\n`);
+      return [200, { ok: true }];
+    }
+    if (path === "/__apps/delete") {
+      rmSync(join(appsDir, input.id), { recursive: true, force: true });
+      return [200, { ok: true }];
+    }
+    return [404, { error: "Unknown action" }];
+  }
+
   const projectFile = (id: string) => join(dir, id, "project.json");
   const imagesDir = (id: string) => join(dir, id, "images");
   const ids = () => (existsSync(dir) ? readdirSync(dir).filter((f) => ID.test(f) && existsSync(projectFile(f))) : []);
@@ -169,7 +243,18 @@ export function projectsPlugin(dir: string): Plugin {
         // Other apps' dev servers read projects from here too (projectSource), so reads are open to any origin.
         if (req.method === "GET" && path.startsWith("/projects/")) res.setHeader("Access-Control-Allow-Origin", "*");
 
+        if (req.method === "GET" && path.startsWith("/apps/")) res.setHeader("Access-Control-Allow-Origin", "*");
+
         if (req.method === "GET" && path === "/projects/index.json") return reply(200, index({ drafts: true }));
+        if (req.method === "GET" && path === "/apps/index.json") return reply(200, apps());
+
+        if (req.method === "GET" && path.startsWith("/apps/")) {
+          const file = join(appsDir, decodeURIComponent(path.slice("/apps/".length)));
+          if (!file.startsWith(appsDir + "/") || !existsSync(file) || statSync(file).isDirectory()) return next();
+          const type = MIME[extname(file).toLowerCase()] ?? "application/octet-stream";
+          res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" }).end(readFileSync(file));
+          return;
+        }
 
         // Read from disk on every request: files saved since the server started are never stale.
         if (req.method === "GET" && path.startsWith("/projects/")) {
@@ -180,7 +265,7 @@ export function projectsPlugin(dir: string): Plugin {
           return;
         }
 
-        if (!path.startsWith("/__projects/")) return next();
+        if (!path.startsWith("/__projects/") && !path.startsWith("/__apps/")) return next();
 
         if (req.method === "GET" && path === "/__projects/images") {
           const id = url.searchParams.get("id") ?? "";
@@ -193,7 +278,8 @@ export function projectsPlugin(dir: string): Plugin {
         req.on("data", (chunk) => (body += chunk));
         req.on("end", () => {
           try {
-            reply(...handle(path, JSON.parse(body)));
+            const input = JSON.parse(body);
+            reply(...(path.startsWith("/__apps/") ? handleApps(path, input) : handle(path, input)));
           } catch (err) {
             reply(400, { error: (err as Error).message });
           }
@@ -203,12 +289,17 @@ export function projectsPlugin(dir: string): Plugin {
 
     writeBundle() {
       if (!existsSync(dir)) return;
+
       const drafts = new Set(ids().filter(isDraft).map((id) => join(dir, id)));
       cpSync(dir, join(outDir, "projects"), {
         recursive: true,
         filter: (src) => basename(src) !== ".DS_Store" && !drafts.has(src),
       });
       writeFileSync(join(outDir, "projects", "index.json"), `${JSON.stringify(index({ drafts: false }), null, 2)}\n`);
+
+      if (!existsSync(appsDir)) return;
+      cpSync(appsDir, join(outDir, "apps"), { recursive: true, filter: (src) => basename(src) !== ".DS_Store" });
+      writeFileSync(join(outDir, "apps", "index.json"), `${JSON.stringify(apps(), null, 2)}\n`);
     },
   };
 }

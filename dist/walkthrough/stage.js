@@ -1,17 +1,19 @@
 import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
-// ─── The stage ─────────────────────────────────────────────────────
-// Whatever a step is talking about, scaled to fit its pane, with the spotlight
-// and callouts drawn over it. The player and the builder share this so an
-// author sees exactly what a reader will.
+// ─── The frame ─────────────────────────────────────────────────────
+// The running app, scaled to fit its pane, with whatever the step displays
+// over it and the spotlight and callouts over that. The player and the builder
+// share this so an author sees exactly what a reader will.
 //
-// A driveable stage is read through a Driver, and every box it reports is in
-// demo pixels, multiplied by the stage's scale on its way out. There is no
-// fixed canvas as there is for a screen: the frame gets a real viewport width
-// and the stage scales to fit it.
+// The app is read through a Driver, and every box it reports is in app pixels,
+// multiplied by the frame's scale on its way out. There is no fixed canvas as
+// there is for a screen: the frame gets a real viewport width and scales to
+// fit it.
 //
-// An opaque stage — an embed or a still — reports nothing, so anything drawn
-// over it is positioned by an Area: fractions of the stage, resolved against
-// its measured bounds.
+// The app is mounted whenever a step names one, whether or not it is what the
+// step displays — an image or an embed is drawn over it, so it keeps running
+// and the next step picks the reader up where they left off. Those overlays
+// report nothing, so anything drawn on them is positioned by an Area:
+// fractions of the frame, resolved against its measured bounds.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { INK, RED } from "../theme.js";
@@ -33,30 +35,31 @@ export function areaBox(area, bounds) {
         return null;
     return { x: area.x * bounds.w, y: area.y * bounds.h, w: area.w * bounds.w, h: area.h * bounds.h };
 }
-/** Mount the stage, keep it measured, and — where it can be read — report the
- * marks' geometry. */
-export function useStage(stage, marks) {
+/** Mount the app, keep it measured, and report its marks' geometry.
+ *
+ * `src` is the ingested app's entry, or undefined for a step running nothing.
+ * The frame is keyed by it upstream, so arriving at a different app is always
+ * a fresh document rather than whatever the last one left behind. */
+export function useApp(src, marks, size) {
     const frameRef = useRef(null);
     const stageRef = useRef(null);
     const [driver, setDriver] = useState(null);
-    const [size, setSize] = useState({ w: 0, h: 0 });
+    const [bounds, setBounds] = useState({ w: 0, h: 0 });
     const [rects, setRects] = useState({});
     const [vw, setVw] = useState(() => window.innerWidth);
     const markKey = marks.join("|");
     const marksRef = useRef(marks);
     marksRef.current = marks;
-    const kind = stage?.kind ?? null;
-    const src = stage?.src ?? "";
     useEffect(() => {
         const on = () => setVw(window.innerWidth);
         window.addEventListener("resize", on);
         return () => window.removeEventListener("resize", on);
     }, []);
-    // A code stage on another origin can't be read from here, so say so rather
-    // than showing a frame that silently never responds. An embed is on another
-    // origin by design and makes no such promise, so this is only code's problem.
+    // An app on another origin can't be read from here, so say so rather than
+    // showing a frame that silently never responds. An embed is on another
+    // origin by design and makes no such promise; this is only the app's problem.
     const foreign = useMemo(() => {
-        if (!src || kind !== "code")
+        if (!src)
             return false;
         try {
             return new URL(src, window.location.href).origin !== window.location.origin;
@@ -64,21 +67,12 @@ export function useStage(stage, marks) {
         catch {
             return true;
         }
-    }, [src, kind]);
-    const blocked = !stage
-        ? "no-stage"
-        : !src
-            ? "no-src"
-            : foreign
-                ? "foreign"
-                : kind !== "mock" && vw < (stage.minWidth ?? 900)
-                    ? "small"
-                    : null;
-    const mode = blocked ? "blocked" : kind;
-    const driveable = mode === "code";
+    }, [src]);
+    const blocked = !src ? "no-app" : foreign ? "foreign" : vw < (size?.minWidth ?? 900) ? "small" : null;
+    const live = !blocked;
     useEffect(() => {
         const el = frameRef.current;
-        if (!driveable || !el)
+        if (!live || !el || !src)
             return;
         const next = sameOriginDriver(el, src);
         setDriver(next);
@@ -86,36 +80,35 @@ export function useStage(stage, marks) {
             next.dispose();
             setDriver(null);
         };
-    }, [driveable, src]);
+    }, [live, src]);
     useEffect(() => {
         const el = stageRef.current;
         if (!el)
             return;
         const ro = new ResizeObserver(([entry]) => {
             const r = entry.contentRect;
-            setSize({ w: r.width, h: r.height });
+            setBounds({ w: r.width, h: r.height });
         });
         ro.observe(el);
         return () => ro.disconnect();
-    }, [mode]);
-    // Every rect was measured inside one particular stage, so leaving it makes
-    // all of them wrong rather than merely out of date. Dropping them is what
-    // stops a mark from the demo you just left being drawn over the mock-up you
-    // arrived at, where nothing will ever correct it.
+    }, []);
+    // Every rect was measured inside one app, so leaving it makes all of them
+    // wrong rather than merely out of date. Dropping them is what stops a mark
+    // from the app you just left being drawn over the one you arrived at.
     useEffect(() => {
         setRects({});
-    }, [src, kind]);
+    }, [src]);
     const measure = useCallback(() => {
         if (!driver)
             return;
         const ids = marksRef.current;
         const next = ids.length ? driver.marks(ids) : {};
-        // The demo reports layout every frame while it animates; only a box that
+        // The app reports layout every frame while it animates; only a box that
         // actually moved is worth a render.
         setRects((prev) => (sameRects(prev, next) ? prev : next));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [driver, markKey]);
-    // Follow these marks as the demo reflows, not just when it scrolls.
+    // Follow these marks as the app reflows, not just when it scrolls.
     useEffect(() => {
         driver?.observe(marksRef.current);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,18 +120,18 @@ export function useStage(stage, marks) {
     }, [driver, measure]);
     useEffect(() => {
         measure();
-    }, [measure, size.w, size.h]);
-    const width = stage?.width ?? size.w;
-    const scale = size.w && width ? Math.min(1, size.w / width) : 1;
+    }, [measure, bounds.w, bounds.h]);
+    const width = size?.width ?? bounds.w;
+    const scale = bounds.w && width ? Math.min(1, bounds.w / width) : 1;
     const frameStyle = {
         width: width || "100%",
-        height: scale ? size.h / scale : "100%",
+        height: scale ? bounds.h / scale : "100%",
         border: 0,
         display: "block",
         transform: `scale(${scale})`,
         transformOrigin: "top left",
     };
-    return { frameRef, stageRef, driver, rects, scale, measure, mode, driveable, blocked, frameStyle, bounds: size };
+    return { frameRef, stageRef, driver, rects, scale, measure, live, blocked, frameStyle, bounds };
 }
 const sameRects = (a, b) => {
     const keys = Object.keys(a);
@@ -230,9 +223,8 @@ export function AreaDraw({ bounds, onDone, onCancel }) {
                 borderRadius: 8,
             } })) }));
 }
-/** A still covering the stage: a `mock` stage, or one step's own image laid
- * over whatever it runs in. It takes the clicks, so nothing underneath can be
- * poked through it. */
+/** An image covering the frame. It takes the clicks, so the app underneath
+ * keeps running but can't be poked through it. */
 export function StageStill({ image }) {
     const fill = image.fit === "fill";
     return (_jsx("div", { style: {
@@ -247,15 +239,14 @@ export function StageStill({ image }) {
                 ? { width: "100%", height: "100%", objectFit: "cover", display: "block" }
                 : { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block", borderRadius: 10, boxShadow: "0 20px 50px -20px rgba(0,0,0,0.6)" } })) }));
 }
-/** Why there's nothing on the stage. `stageId` tells the two empty cases
- * apart: a walkthrough with no stages at all, and a step pointed at one that
- * has since been deleted or renamed. */
-export function StageNotice({ blocked, src, stageId }) {
-    const text = blocked === "no-stage" ? (stageId ? (_jsxs(_Fragment, { children: ["This step runs in ", _jsx("strong", { children: stageId }), ", which this walkthrough no longer has. Point it at one of its stages, or add that one back."] })) : (_jsx(_Fragment, { children: "This walkthrough has no stages yet. Add one \u2014 code you built and serve from this site, a framed URL, or an image." }))) : blocked === "no-src" ? (_jsx(_Fragment, { children: "This stage has no address yet." })) : blocked === "foreign" ? (_jsxs(_Fragment, { children: [_jsx("strong", { children: src }), " is on another origin, so it can't be driven from here. Play this walkthrough on the site that hosts the app, or make this stage an ", _jsx("strong", { children: "embed" }), ", which is shown rather than driven."] })) : (_jsx(_Fragment, { children: "This stage needs a wider window than this one." }));
+/** Why there's nothing running. Only shown when the step displays its app and
+ * has none to display — an image or an embed needs no app at all. */
+export function StageNotice({ blocked, src }) {
+    const text = blocked === "no-app" ? (_jsx(_Fragment, { children: "This step isn't running an app. Pick one, or give it something else to display." })) : blocked === "foreign" ? (_jsxs(_Fragment, { children: [_jsx("strong", { children: src }), " is on another origin, so it can't be driven from here. Play this walkthrough on the site that serves the app, or display it as an ", _jsx("strong", { children: "embed" }), ", which is shown rather than driven."] })) : (_jsx(_Fragment, { children: "This app needs a wider window than this one." }));
     return (_jsx("div", { style: { flex: 1, display: "grid", placeItems: "center", padding: 32, color: "#6f6a66", fontSize: 14, textAlign: "center" }, children: _jsx("p", { style: { maxWidth: 440, lineHeight: 1.6 }, children: text }) }));
 }
 // ─── Callouts ──────────────────────────────────────────────────────
-// Labels anchored to something on the stage. The anchor comes from the caller
+// Labels anchored to something in the frame. The anchor comes from the caller
 // — a measured mark, or an Area resolved against the bounds — but the bubble
 // is always drawn at the stage's own scale: a demo shown at 0.4 would
 // otherwise have callouts no one could read.

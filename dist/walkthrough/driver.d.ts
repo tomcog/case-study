@@ -1,4 +1,3 @@
-import type { WalkthroughStep } from "./types.js";
 /** An element's box in the demo's own viewport coordinates. */
 export interface MarkRect {
     x: number;
@@ -18,12 +17,19 @@ export interface PickHit {
 export interface Driver {
     /** Resolves once the demo has a document to read. */
     ready(): Promise<void>;
-    /** Put the product into the state this step describes.
-     * `reseed` reloads the demo with the step's `?wt=` state; walking forward
-     * leaves it off, so the reader keeps whatever they just did. */
-    enter(step: WalkthroughStep, opts?: {
-        reseed?: boolean;
+    /** Put the app at this route. `reload` boots it fresh there, which is what a
+     * step that starts a run does; without it the route is merely assigned, so
+     * the reader keeps whatever they just did. */
+    open(path?: string, opts?: {
+        reload?: boolean;
     }): Promise<void>;
+    /** Do to the app what a reader would, by mark. False when the mark isn't
+     * there to act on, which the builder reports rather than failing silently. */
+    click(mark: string): boolean;
+    /** Put text in a marked field. Goes in through the property setter the
+     * element's own framework listens on, then fires the events it expects, so
+     * a React or Vue app updates its state rather than being painted over. */
+    type(mark: string, text: string): boolean;
     /** Current geometry of the given marks. Missing marks are left out. */
     marks(ids: string[]): MarkRects;
     /** Scroll a mark into view inside the demo. */

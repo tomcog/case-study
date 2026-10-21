@@ -112,6 +112,6 @@
     "logoColor": "#1838d8",
     "imageOverlay": true
   },
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "kind": "case-study"
 }

@@ -1,6 +1,6 @@
 import {
   DEFAULT_WALKTHROUGH, loadProject, migrate,
-  type CaseStudyAssets, type ProjectContent, type ProjectKind, type ProjectSummary,
+  type CaseStudyAssets, type IngestedApp, type ProjectContent, type ProjectKind, type ProjectSummary,
 } from "../src/index.js";
 
 // ─── Talking to projects/ ──────────────────────────────────────────
@@ -38,6 +38,32 @@ export const renameProject = (id: string, title: string) => post("rename", { id,
 export const publishProject = (id: string, published: boolean) => post("publish", { id, published });
 export const duplicateProject = (id: string, title: string) => post<{ id: string }>("duplicate", { id, title });
 export const deleteProject = (id: string) => post("delete", { id });
+
+// ─── Talking to apps/ ──────────────────────────────────────────────
+// The pool is shared by every project, so it is read the same way the project
+// list is and written by the same dev-only plugin.
+
+export async function listApps(): Promise<IngestedApp[]> {
+  const res = await fetch("/apps/index.json", { cache: "no-store" });
+  return res.ok ? res.json() : [];
+}
+
+async function postApp<T = { ok: true }>(action: string, body: unknown): Promise<T> {
+  const res = await fetch(`/__apps/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? `Couldn't ${action} (${res.status})`);
+  return json;
+}
+
+/** Copy a built folder on this machine into the pool. `path` is a folder
+ * holding an index.html — the output of someone's build, not its source. */
+export const ingestApp = (path: string, label: string) => postApp<{ id: string }>("ingest", { path, label });
+export const patchApp = (id: string, patch: Partial<IngestedApp>) => postApp("rename", { id, ...patch });
+export const deleteApp = (id: string) => postApp("delete", { id });
 
 /** Send a pending save even while the page is closing. */
 export function beaconProject(id: string, data: ProjectContent) {

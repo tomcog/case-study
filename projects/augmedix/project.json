@@ -119,6 +119,6 @@
     "body": "A health-tech company providing remote medical documentation so clinicians can focus on patients.",
     "cardLogo": "/projects/augmedix/images/augmedix-logo-color.svg"
   },
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "kind": "case-study"
 }

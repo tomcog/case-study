@@ -11,11 +11,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
-import { Callouts, Spotlight, StageNotice, StageStill, areaBox, toBox, useStage } from "./stage.js";
+import { Callouts, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
 import type { Box } from "./stage.js";
 import type { Driver } from "./driver.js";
-import { stageAt, stageIdAt, stepMarks } from "./types.js";
-import type { Callout, StepAdvance, WalkthroughContent } from "./types.js";
+import { bootsApp, contentOf, stepMarks } from "./types.js";
+import type { Callout, StepAction, StepAdvance, WalkthroughContent } from "./types.js";
+import type { IngestedApp } from "../project.js";
 
 const PANEL_W = 400;
 const LINE = "#e6e4e1";
@@ -44,8 +45,21 @@ function watch(driver: Driver, advance: StepAdvance, done: () => void): () => vo
   }
 }
 
-export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
+/** Run the step's actions in order, stopping if the step moves on under us. */
+async function perform(driver: Driver, actions: StepAction[], live: () => boolean) {
+  for (const action of actions) {
+    if (!live()) return;
+    if (action.do === "wait") await new Promise((r) => setTimeout(r, action.ms));
+    else if (action.do === "click") driver.click(action.mark);
+    else driver.type(action.mark, action.text);
+  }
+}
+
+export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }: {
   content: WalkthroughContent;
+  /** The pool this walkthrough's steps draw from; a step stores an app's id,
+   * and where that app is served from is the host's to say. */
+  apps?: IngestedApp[];
   startIndex?: number;
   onExit?: () => void;
 }) {
@@ -54,8 +68,6 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
 
   const [i, setI] = useState(startIndex);
   const [nudge, setNudge] = useState(false);
-  const arrivedFrom = useRef<number | null>(null); // null = nothing visited yet, so the first step still seeds
-  const loadedStage = useRef<string | null>(null); // the stage the live document belongs to
 
   const step = steps[i];
   const finished = i >= steps.length;
@@ -65,12 +77,11 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
   const markKey = markIds.join("|");
   const spotMarks = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
 
-  // Which stage this step runs in. Changing it swaps the document, which the
-  // stage handles by standing up a driver for the new one — or none at all,
-  // where the new stage is one that can only be shown.
-  const stageId = stageIdAt(content, i);
-  const stage = useMemo(() => stageAt(content, i), [content, i]);
-  const demo = useStage(stage, markIds);
+  // The app this step runs, and what it displays over it. Changing the app
+  // swaps the document; displaying something else leaves it running underneath.
+  const app = useMemo(() => apps.find((a) => a.id === step?.app), [apps, step?.app]);
+  const shown = contentOf(step);
+  const demo = useApp(app?.src, markIds, app);
   const { driver, measure } = demo;
 
   const next = useCallback(() => setI((n) => n + 1), []);
@@ -78,25 +89,23 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
   useEffect(() => {
     if (!step) return;
     let live = true;
-    const forward = arrivedFrom.current === i - 1;
-    arrivedFrom.current = i;
     setNudge(false);
 
     const timers: number[] = [];
     let off = () => {};
     if (driver) {
-      // A fresh document always takes the step's seed. Only walking forward
-      // inside the stage the reader is already using leaves it off, so their
-      // work survives the step — which is why coming back to an app later
-      // lands where the step points rather than where they left it.
-      const reseed = !forward || loadedStage.current !== stageId;
-      loadedStage.current = stageId;
+      // A step that names a different app than the one before it boots that
+      // app at its starting screen. Within a run nothing reloads, so whatever
+      // the reader did on the last step is still there on this one.
+      const boots = bootsApp(steps, i);
       void (async () => {
-        await driver.enter(step, { reseed });
+        await driver.open(boots ? step.start : undefined, { reload: boots });
+        if (!live) return;
+        if (step.actions?.length) await perform(driver, step.actions, () => live);
         if (!live) return;
         if (markIds[0]) driver.reveal(markIds[0]);
         measure();
-        // Re-measure while the demo's own transitions and the smooth scroll settle.
+        // Re-measure while the app's own transitions and the smooth scroll settle.
         timers.push(window.setTimeout(measure, 140), window.setTimeout(measure, 460));
       })();
       off = watch(driver, step.advance, () => live && next());
@@ -111,7 +120,7 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
       clearTimeout(nudgeAt);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver, i, step, markKey, stageId]);
+  }, [driver, i, step, markKey]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -138,16 +147,13 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
     return rect ? toBox([rect], demo.scale, 0) : null;
   };
 
-  const restart = () => {
-    arrivedFrom.current = null;
-    setI(0);
-  };
+  const restart = () => setI(0);
 
   const narrow = demo.blocked === "small";
-  const still = step?.still;
-  // Nothing observes an opaque stage, so a step on one can only be left by
-  // its button, whatever it was authored to wait for.
-  const manual = !driver || step?.advance.on === "manual";
+  // Nothing can be observed through an image or an embed, so a step showing
+  // one can only be left by its button, whatever it was authored to wait for.
+  const watching = !!driver && shown.kind === "app";
+  const manual = !watching || step?.advance.on === "manual";
   const manualLabel = step?.advance.on === "manual" ? (step.advance.label ?? "Next") : "Next";
 
   return (
@@ -276,43 +282,31 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
         </div>
       </div>
 
-      {demo.mode !== "blocked" && stage && (
+      {(demo.live || shown.kind !== "app") && !narrow && (
         <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden", background: "#0f1115" }}>
-          {demo.mode === "mock" ? (
-            <StageStill image={{ src: stage.src, fit: stage.fit }} />
-          ) : (
-            // Keyed by stage, so arriving in one is always a fresh document
-            // rather than whatever the last stage left in a reused frame.
+          {/* The app sits underneath whatever the step displays, so it keeps
+              running while an image or an embed covers it. Keyed by its src,
+              so arriving at a different app is always a fresh document. */}
+          {demo.live && app && <iframe key={app.src} ref={demo.frameRef} title={app.label} style={demo.frameStyle} />}
+
+          {shown.kind === "image" && <StageStill image={shown} />}
+          {shown.kind === "embed" && (
             <iframe
-              key={stage.id}
-              ref={demo.frameRef}
-              title={stage.label ?? content.title ?? "Product"}
-              src={demo.mode === "embed" ? stage.src : undefined}
+              key={shown.url}
+              src={shown.url}
+              title={content.title ?? "Embedded page"}
               allowFullScreen
-              style={demo.frameStyle}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
             />
           )}
-          {still ? (
-            <StageStill image={still} />
-          ) : (
-            <>
-              <Spotlight box={box} shape={step?.spotlight?.shape} dim={step?.spotlight?.dim} lock={step?.spotlight?.lock} />
-              {step?.callouts?.length ? <Callouts items={step.callouts} boxFor={calloutBox} bounds={demo.bounds} /> : null}
-            </>
-          )}
+
+          <Spotlight box={box} shape={step?.spotlight?.shape} dim={step?.spotlight?.dim} lock={step?.spotlight?.lock} />
+          {step?.callouts?.length ? <Callouts items={step.callouts} boxFor={calloutBox} bounds={demo.bounds} /> : null}
         </div>
       )}
 
-      {/* A step's own image needs no stage, so it shows even when there's none. */}
-      {demo.mode === "blocked" && !narrow && still && (
-        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-          <StageStill image={still} />
-        </div>
-      )}
-
-      {demo.mode === "blocked" && !narrow && !still && (
-        <StageNotice blocked={demo.blocked!} src={stage?.src ?? ""} stageId={stageId} />
-      )}
+      {/* Only a step that means to show its app complains about not having one. */}
+      {shown.kind === "app" && !demo.live && !narrow && <StageNotice blocked={demo.blocked!} src={app?.src} />}
     </div>
   );
 }

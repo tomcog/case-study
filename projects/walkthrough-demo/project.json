@@ -1,28 +1,26 @@
 {
   "kind": "walkthrough",
-  "schemaVersion": 3,
-  "title": "Relay — first deploy",
+  "schemaVersion": 4,
+  "title": "Relay \u2014 first deploy",
   "draft": true,
   "preview": {
     "eyebrow": "Walkthrough",
-    "title": "Relay — first deploy",
-    "body": "Create a project, turn on auto-publish, and ship it — in the product itself."
+    "title": "Relay \u2014 first deploy",
+    "body": "Create a project, turn on auto-publish, and ship it \u2014 in the product itself."
   },
   "steps": [
     {
       "id": "open",
       "eyebrow": "Step one",
       "title": "Start a project",
-      "body": "Relay opens on the team's {**Overview**}. Nothing is deployed yet — hit **New project** to begin.",
-      "enter": {
-        "path": "#/overview",
-        "state": "fresh",
-        "stage": "app"
-      },
+      "body": "Relay opens on the team's {**Overview**}. Nothing is deployed yet \u2014 hit **New project** to begin.",
       "advance": {
         "on": "manual"
       },
-      "still": {
+      "app": "relay",
+      "start": "#/overview",
+      "content": {
+        "kind": "image",
         "src": "/projects/walkthrough-demo/images/Lab-testing-scaled.jpg",
         "fit": "fill"
       }
@@ -31,14 +29,16 @@
       "id": "name",
       "eyebrow": "Step two",
       "title": "Give it a name",
-      "body": "The name becomes the project's subdomain, so it has to be URL-safe. Type anything you like — [or leave the placeholder].",
+      "body": "The name becomes the project's subdomain, so it has to be URL-safe. Type anything you like \u2014 [or leave the placeholder].",
       "spotlight": {
         "mark": "project-name"
       },
       "advance": {
         "on": "manual",
         "label": "I've named it"
-      }
+      },
+      "app": "relay",
+      "start": "#projects/freenome/demo/provider-portal/"
     },
     {
       "id": "create",
@@ -52,17 +52,14 @@
       "advance": {
         "on": "signal",
         "name": "project-created"
-      }
+      },
+      "app": "relay"
     },
     {
       "id": "settings",
       "eyebrow": "Step four",
       "title": "Open Settings",
-      "body": "Your new project is in the list. Next, the one setting worth changing on day one — find it under **Settings**.",
-      "enter": {
-        "path": "#/overview",
-        "state": "has-projects"
-      },
+      "body": "Your new project is in the list. Next, the one setting worth changing on day one \u2014 find it under **Settings**.",
       "spotlight": {
         "mark": "nav-settings",
         "shape": "pill"
@@ -70,17 +67,15 @@
       "advance": {
         "on": "path",
         "path": "#/settings"
-      }
+      },
+      "app": "relay",
+      "start": "#/overview"
     },
     {
       "id": "auto",
       "eyebrow": "Step five",
       "title": "Auto-publish previews",
       "body": "With this on, a preview that passes its checks is promoted straight to production. Turn it on.",
-      "enter": {
-        "path": "#/settings",
-        "state": "has-projects"
-      },
       "spotlight": {
         "mark": "auto-publish",
         "lock": true
@@ -97,13 +92,15 @@
             "name": "settings-saved"
           }
         ]
-      }
+      },
+      "app": "relay",
+      "start": "#/settings"
     },
     {
       "id": "save",
       "eyebrow": "Last step",
       "title": "Save the change",
-      "body": "Settings don't apply until they're saved — that's deliberate, so a half-finished change never ships.",
+      "body": "Settings don't apply until they're saved \u2014 that's deliberate, so a half-finished change never ships.",
       "spotlight": {
         "mark": "save",
         "shape": "pill"
@@ -111,16 +108,8 @@
       "advance": {
         "on": "signal",
         "name": "settings-saved"
-      }
-    }
-  ],
-  "stages": [
-    {
-      "id": "app",
-      "kind": "demo",
-      "src": "/projects/walkthrough-demo/demo/index.html",
-      "width": 1240,
-      "minWidth": 920
+      },
+      "app": "relay"
     }
   ]
 }

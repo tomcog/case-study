@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { Button, ButtonRound, Card, InputText, Tag } from "@tomcoggia/ui";
 import {
@@ -7,9 +7,10 @@ import {
   type CaseStudyContent, type ProjectContent, type ProjectKind, type WalkthroughContent,
 } from "../src/index.js";
 import {
-  beaconProject, canEdit, createProject, deleteProject, duplicateProject, getProject, listProjects,
-  projectAssets, publishProject, renameProject, saveProject, type ProjectRow,
+  beaconProject, canEdit, createProject, deleteApp, deleteProject, duplicateProject, getProject, ingestApp,
+  listApps, listProjects, patchApp, projectAssets, publishProject, renameProject, saveProject, type ProjectRow,
 } from "./store";
+import type { IngestedApp } from "../src/index.js";
 
 // ─── ProjectBuilder ────────────────────────────────────────────────
 // Create, manage and edit the projects in projects/. Hash routes:
@@ -330,12 +331,23 @@ function ago(ms: number) {
 
 // ─── Play ──────────────────────────────────────────────────────────
 
+/** The shared pool, reloaded whenever something changes it. */
+function useApps() {
+  const [apps, setApps] = useState<IngestedApp[]>([]);
+  const refresh = useCallback(() => listApps().then(setApps).catch(() => setApps([])), []);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+  return { apps, refresh };
+}
+
 function ProjectPlayer({ id }: { id: string }) {
   const state = useProject(id);
+  const { apps } = useApps();
   if (!state) return null;
   if ("error" in state) return <Status>{state.error}</Status>;
   const { project } = state;
-  if (isWalkthrough(project)) return <WalkthroughPlayer content={project} onExit={() => go("#/")} />;
+  if (isWalkthrough(project)) return <WalkthroughPlayer content={project} apps={apps} onExit={() => go("#/")} />;
   return <CaseStudyPlayer screens={project.screens} logoSrc={project.preview?.logo} onExit={() => go("#/")} />;
 }
 
@@ -357,6 +369,11 @@ const narrow = <T extends ProjectContent>(set: (u: (prev: ProjectContent) => Pro
 // A pending save is sent on the way out if the tab closes first.
 function Editor({ id, initial }: { id: string; initial: ProjectContent }) {
   const [content, setContent] = useState(initial);
+  const { apps, refresh: refreshApps } = useApps();
+  // Ingesting reaches the filesystem, so the builder hands it back here. Each
+  // one reloads the pool, which is what puts a new app in the step's dropdown.
+  const after = <A extends unknown[]>(run: (...a: A) => Promise<unknown>) =>
+    (...args: A) => run(...args).then(refreshApps);
   const [error, setError] = useState<string | null>(null);
   const pending = useRef<ProjectContent | null>(null);
   const assets = useMemo(() => projectAssets(id), [id]);
@@ -392,6 +409,10 @@ function Editor({ id, initial }: { id: string; initial: ProjectContent }) {
         <WalkthroughBuilder
           content={content}
           setContent={narrow<WalkthroughContent>(setContent)}
+          apps={apps}
+          onIngestApp={after(ingestApp)}
+          onPatchApp={after(patchApp)}
+          onDeleteApp={after(deleteApp)}
           projectName={content.title || id}
           onClose={() => go("#/")}
         />
