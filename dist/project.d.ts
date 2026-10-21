@@ -1,21 +1,23 @@
 import type { CaseStudyContent, ProjectPreview, Screen } from "./core.js";
 import type { WalkthroughContent } from "./walkthrough/types.js";
-export declare const SCHEMA_VERSION = 2;
+export declare const SCHEMA_VERSION = 3;
 export type ProjectKind = "case-study" | "walkthrough";
 export type ProjectContent = CaseStudyContent | WalkthroughContent;
 export declare const isWalkthrough: (project: ProjectContent) => project is WalkthroughContent;
 /** Bring any saved project up to the current shape. Never throws: unknown or
  * empty input falls back to the starter deck. Version 1 and the unversioned
  * projects before it need no field changes — version 2 only added `kind`, and
- * a case study is what a project without one is. Legacy screens without a
- * `theme` keep their look at render time (see screenTheme). */
+ * a case study is what a project without one is. Version 3 is walkthroughs
+ * only: the privileged `target` and the named `targets` beside it became one
+ * flat `stages` list, with `enter.app` becoming `enter.stage`. Legacy screens
+ * without a `theme` keep their look at render time (see screenTheme). */
 export declare function migrate(raw: unknown): ProjectContent;
 /** Rewrite every site-relative asset path in a project to an absolute URL on
  * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
  * Absolute URLs and empty fields are left alone. Returns a new object.
  *
- * A walkthrough's demo is pinned the same way. That makes the stored path
- * honest about where the demo lives, and leaves it to the player to notice the
+ * A walkthrough's stages are pinned the same way. That makes the stored path
+ * honest about where each one lives, and leaves it to the player to notice a
  * demo is no longer same-origin and say so — it can only drive one it can read. */
 export declare function withAssetBase<T extends ProjectContent>(project: T, base: string): T;
 /** Fetch a project file and migrate it. With `assetBase`, relative asset paths

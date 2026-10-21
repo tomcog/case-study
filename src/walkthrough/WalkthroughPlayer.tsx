@@ -1,18 +1,21 @@
 // ─── Walkthrough player ────────────────────────────────────────────
-// Full-viewport, two panes: stepped copy beside the live product. The product
-// is an iframe driven through a Driver, and the spotlight is drawn here in the
-// parent from the element boxes the driver reports, so the highlight keeps
-// this package's look rather than the product's. The stage itself (frame,
-// scaling, overlay) is shared with the builder — see stage.tsx.
+// Full-viewport, two panes: stepped copy beside whatever the step is about.
+// A driveable stage is an iframe reached through a Driver, and the spotlight is
+// drawn here in the parent from the boxes the driver reports, so the highlight
+// keeps this package's look rather than the product's. An opaque stage reports
+// nothing, so it is shown, its overlays are positioned by Area, and the reader
+// moves on with the panel's button. The stage itself (frame, scaling, overlay)
+// is shared with the builder — see stage.tsx.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
-import { Callouts, DemoNotice, Spotlight, toBox, useDemo } from "./stage.js";
+import { Callouts, Spotlight, StageNotice, StageStill, areaBox, toBox, useStage } from "./stage.js";
+import type { Box } from "./stage.js";
 import type { Driver } from "./driver.js";
-import { stepMarks, targetAt } from "./types.js";
-import type { StepAdvance, WalkthroughContent } from "./types.js";
+import { stageAt, stageIdAt, stepMarks } from "./types.js";
+import type { Callout, StepAdvance, WalkthroughContent } from "./types.js";
 
 const PANEL_W = 400;
 const LINE = "#e6e4e1";
@@ -52,6 +55,7 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
   const [i, setI] = useState(startIndex);
   const [nudge, setNudge] = useState(false);
   const arrivedFrom = useRef<number | null>(null); // null = nothing visited yet, so the first step still seeds
+  const loadedStage = useRef<string | null>(null); // the stage the live document belongs to
 
   const step = steps[i];
   const finished = i >= steps.length;
@@ -61,34 +65,43 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
   const markKey = markIds.join("|");
   const spotMarks = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
 
-  // Which app this step runs in. Changing it swaps the framed document, which
-  // the stage handles by standing up a driver for the new demo.
-  const target = useMemo(() => targetAt(content, i), [content, i]);
-  const demo = useDemo(target, markIds);
+  // Which stage this step runs in. Changing it swaps the document, which the
+  // stage handles by standing up a driver for the new one — or none at all,
+  // where the new stage is one that can only be shown.
+  const stageId = stageIdAt(content, i);
+  const stage = useMemo(() => stageAt(content, i), [content, i]);
+  const demo = useStage(stage, markIds);
   const { driver, measure } = demo;
 
   const next = useCallback(() => setI((n) => n + 1), []);
 
   useEffect(() => {
-    if (!driver || !step) return;
+    if (!step) return;
     let live = true;
-    // Walking forward keeps whatever the reader just did; any other arrival
-    // (first mount, Back, a jump) reloads the demo from the step's seed.
-    const reseed = arrivedFrom.current !== i - 1;
+    const forward = arrivedFrom.current === i - 1;
     arrivedFrom.current = i;
     setNudge(false);
 
     const timers: number[] = [];
-    void (async () => {
-      await driver.enter(step, { reseed });
-      if (!live) return;
-      if (markIds[0]) driver.reveal(markIds[0]);
-      measure();
-      // Re-measure while the demo's own transitions and the smooth scroll settle.
-      timers.push(window.setTimeout(measure, 140), window.setTimeout(measure, 460));
-    })();
+    let off = () => {};
+    if (driver) {
+      // A fresh document always takes the step's seed. Only walking forward
+      // inside the stage the reader is already using leaves it off, so their
+      // work survives the step — which is why coming back to an app later
+      // lands where the step points rather than where they left it.
+      const reseed = !forward || loadedStage.current !== stageId;
+      loadedStage.current = stageId;
+      void (async () => {
+        await driver.enter(step, { reseed });
+        if (!live) return;
+        if (markIds[0]) driver.reveal(markIds[0]);
+        measure();
+        // Re-measure while the demo's own transitions and the smooth scroll settle.
+        timers.push(window.setTimeout(measure, 140), window.setTimeout(measure, 460));
+      })();
+      off = watch(driver, step.advance, () => live && next());
+    }
 
-    const off = watch(driver, step.advance, () => live && next());
     const nudgeAt = window.setTimeout(() => live && setNudge(true), step.nudgeAfter ?? 12000);
 
     return () => {
@@ -98,7 +111,7 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
       clearTimeout(nudgeAt);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver, i, step, markKey]);
+  }, [driver, i, step, markKey, stageId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -109,11 +122,21 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [onExit]);
 
-  const box = useMemo(
-    () => toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), demo.scale, step?.spotlight?.pad ?? 6),
+  // A spotlight is anchored either way: to measured marks on a driveable
+  // stage, or to a rectangle on one that can only be shown.
+  const box = useMemo(() => {
+    const spot = step?.spotlight;
+    if (!spot) return null;
+    if (spot.area) return areaBox(spot.area, demo.bounds);
+    return toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), demo.scale, spot.pad ?? 6);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [demo.rects, spotMarks.join("|"), demo.scale, step],
-  );
+  }, [demo.rects, spotMarks.join("|"), demo.scale, demo.bounds, step]);
+
+  const calloutBox = (callout: Callout): Box | null => {
+    if (callout.area) return areaBox(callout.area, demo.bounds);
+    const rect = callout.mark ? demo.rects[callout.mark] : undefined;
+    return rect ? toBox([rect], demo.scale, 0) : null;
+  };
 
   const restart = () => {
     arrivedFrom.current = null;
@@ -121,6 +144,11 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
   };
 
   const narrow = demo.blocked === "small";
+  const still = step?.still;
+  // Nothing observes an opaque stage, so a step on one can only be left by
+  // its button, whatever it was authored to wait for.
+  const manual = !driver || step?.advance.on === "manual";
+  const manualLabel = step?.advance.on === "manual" ? (step.advance.label ?? "Next") : "Next";
 
   return (
     <div
@@ -205,20 +233,20 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
         </div>
 
         <div style={{ paddingTop: 22 }}>
-          {step && step.advance.on === "manual" && (
+          {step && manual && (
             <button type="button" onClick={next} style={primary}>
-              {step.advance.label ?? "Next"}
+              {manualLabel}
             </button>
           )}
 
-          {step && step.advance.on !== "manual" && (
+          {step && !manual && (
             <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: MUTED, minHeight: 38 }}>
               <motion.span
                 animate={reduced ? {} : { opacity: [1, 0.25, 1] }}
                 transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
                 style={{ width: 7, height: 7, borderRadius: "50%", background: RED, flex: "none" }}
               />
-              {demo.framed ? "Your turn — do it in the app" : narrow ? "Open this on a wider screen to try it" : "This step needs the live demo"}
+              Your turn — do it in the app
             </div>
           )}
 
@@ -234,7 +262,7 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
                 Back
               </button>
             )}
-            {step && step.advance.on !== "manual" && nudge && (
+            {step && !manual && nudge && (
               <button type="button" onClick={next} style={ghost}>
                 Skip this step
               </button>
@@ -248,17 +276,43 @@ export function WalkthroughPlayer({ content, startIndex = 0, onExit }: {
         </div>
       </div>
 
-      {demo.framed && (
+      {demo.mode !== "blocked" && stage && (
         <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden", background: "#0f1115" }}>
-          <iframe ref={demo.frameRef} title={content.title ?? "Product"} style={demo.frameStyle} />
-          <Spotlight box={box} shape={step?.spotlight?.shape} dim={step?.spotlight?.dim} lock={step?.spotlight?.lock} />
-          {step?.callouts?.length ? (
-            <Callouts items={step.callouts} rects={demo.rects} scale={demo.scale} bounds={demo.bounds} />
-          ) : null}
+          {demo.mode === "mock" ? (
+            <StageStill image={{ src: stage.src, fit: stage.fit }} />
+          ) : (
+            // Keyed by stage, so arriving in one is always a fresh document
+            // rather than whatever the last stage left in a reused frame.
+            <iframe
+              key={stage.id}
+              ref={demo.frameRef}
+              title={stage.label ?? content.title ?? "Product"}
+              src={demo.mode === "embed" ? stage.src : undefined}
+              allowFullScreen
+              style={demo.frameStyle}
+            />
+          )}
+          {still ? (
+            <StageStill image={still} />
+          ) : (
+            <>
+              <Spotlight box={box} shape={step?.spotlight?.shape} dim={step?.spotlight?.dim} lock={step?.spotlight?.lock} />
+              {step?.callouts?.length ? <Callouts items={step.callouts} boxFor={calloutBox} bounds={demo.bounds} /> : null}
+            </>
+          )}
         </div>
       )}
 
-      {!demo.framed && !narrow && <DemoNotice blocked={demo.blocked!} src={target.src} />}
+      {/* A step's own image needs no stage, so it shows even when there's none. */}
+      {demo.mode === "blocked" && !narrow && still && (
+        <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+          <StageStill image={still} />
+        </div>
+      )}
+
+      {demo.mode === "blocked" && !narrow && !still && (
+        <StageNotice blocked={demo.blocked!} src={stage?.src ?? ""} stageId={stageId} />
+      )}
     </div>
   );
 }

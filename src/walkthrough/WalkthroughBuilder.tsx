@@ -1,22 +1,29 @@
 // ─── The walkthrough builder (edit mode) ───────────────────────────
 // Same shape as the case-study builder — rail, canvas, inspector — but the
-// canvas is the live demo rather than a screen, so what you author is what
-// plays. Selecting a step puts the demo into that step's state.
+// canvas is the stage rather than a screen, so what you author is what plays.
+// Selecting a step puts its stage into the state that step describes.
 //
-// Marks are picked by clicking the product: the demo is same-origin, so the
-// builder can read what was clicked and tell you when an element has no
-// data-walkthrough id to point at yet.
+// Stages are edited in one place, from the toolbar, because a stage belongs to
+// the walkthrough and not to the step you happen to have selected: several
+// steps run in one, and an address typed into a step's inspector would quietly
+// move all of them. A step only ever picks which stage it runs in.
+//
+// On a driveable stage, marks are picked by clicking the product: it is
+// same-origin, so the builder can read what was clicked and say when an
+// element has no data-walkthrough id to point at yet. On an opaque one there
+// is nothing to read, so the author drags the rectangle instead.
 
 import { useEffect, useMemo, useState } from "react";
 import { Reorder } from "motion/react";
-import { ChevronDown, ChevronUp, Copy, Crosshair, Image as ImageIcon, LayoutGrid, Play, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, Crosshair, Image as ImageIcon, LayoutGrid, Layers, Play, Plus, Square, Trash2, X } from "lucide-react";
 import { ACCENT } from "../core.js";
 import { Field, ImageField, PreviewCardSettings, ghostBtn, iconBtn, inputStyle, primaryBtn } from "../editors.js";
 import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
-import { Callouts, DemoNotice, HoverOutline, Spotlight, toBox, useDemo } from "./stage.js";
+import { AreaDraw, Callouts, HoverOutline, Spotlight, StageNotice, StageStill, areaBox, toBox, useStage } from "./stage.js";
+import type { Box } from "./stage.js";
 import type { PickHit } from "./driver.js";
-import { allTargets, appAt, stepMarks, targetAt } from "./types.js";
-import type { Callout, StepAdvance, WalkthroughContent, WalkthroughStep, WalkthroughTarget } from "./types.js";
+import { isDriveable, stageAt, stageIdAt, stageRuns, stepMarks } from "./types.js";
+import type { Area, Callout, Stage, StageKind, StepAdvance, WalkthroughContent, WalkthroughStep } from "./types.js";
 
 const ADVANCE_KINDS: { value: StepAdvance["on"]; label: string; hint: string }[] = [
   { value: "manual", label: "A button", hint: "The reader presses Next in the panel." },
@@ -24,6 +31,12 @@ const ADVANCE_KINDS: { value: StepAdvance["on"]; label: string; hint: string }[]
   { value: "path", label: "A route", hint: "The demo navigates to a hash route." },
   { value: "signal", label: "A signal", hint: "The demo fires wt:signal with this name." },
   { value: "any", label: "Any of…", hint: "Whichever of these happens first." },
+];
+
+const STAGE_KINDS: { value: StageKind; label: string; hint: string }[] = [
+  { value: "demo", label: "Demo", hint: "A build served from this site. The reader uses it, and steps can watch what they do." },
+  { value: "embed", label: "Embed", hint: "Any other URL in a frame — a Figma prototype, a live site. The reader can click inside it; we can't see them do it." },
+  { value: "mock", label: "Mock-up", hint: "A still image, for an app that doesn't exist yet." },
 ];
 
 const uid = () => `step-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`;
@@ -36,7 +49,20 @@ const newStep = (): WalkthroughStep => ({
   advance: { on: "manual" },
 });
 
-/** Which field a picked mark should land in. */
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+/** Stage ids are slugs of the name they were created with, and never change —
+ * steps point at them, so a rename would have to chase every step that does. */
+function newStageId(stages: Stage[], from: string): string {
+  const base = slug(from) || "stage";
+  let id = base;
+  for (let n = 2; stages.some((s) => s.id === id); n++) id = `${base}-${n}`;
+  return id;
+}
+
+const stageName = (stage?: Stage | null, fallback?: string | null) => stage?.label || stage?.id || fallback || "No stage";
+
+/** Which field a picked mark or a drawn area should land in. */
 type Slot = { field: "spotlight" } | { field: "advance" } | { field: "any"; at: number } | { field: "callout"; at: number };
 
 export function WalkthroughBuilder({ content, setContent, projectName, onClose }: {
@@ -49,7 +75,9 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
   const [selected, setSelected] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [showThumb, setShowThumb] = useState(false);
+  const [showStages, setShowStages] = useState(false);
   const [picking, setPicking] = useState<Slot | null>(null);
+  const [drawing, setDrawing] = useState<Slot | null>(null);
   const [hover, setHover] = useState<PickHit | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -59,67 +87,59 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
 
   const markIds = useMemo(() => stepMarks(step), [step]);
   const spotMarks = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
-  // The app the selected step runs in, which is what the canvas shows.
-  const target = useMemo(() => targetAt(content, index), [content, index]);
-  const demo = useDemo(target, markIds);
+  // The stage the selected step runs in, which is what the canvas shows.
+  const stageId = stageIdAt(content, index);
+  const stage = useMemo(() => stageAt(content, index), [content, index]);
+  const demo = useStage(stage, markIds);
   const { driver } = demo;
-  const named = allTargets(content);
+  const runs = useMemo(() => stageRuns(content), [content]);
+  const runStarts = useMemo(() => new Map(runs.map((r) => [r.from, r])), [runs]);
+
+  // What this stage lets a step do. Opaque stages can't be read into, so they
+  // anchor by rectangle and the reader leaves them with the panel's button.
+  const driveable = demo.driveable && !!driver;
+  const opaque = !!stage && !isDriveable(stage);
 
   const update = (patch: Partial<WalkthroughStep>) =>
     setContent((prev) => ({ ...prev, steps: prev.steps.map((s, i) => (i === index ? { ...s, ...patch } : s)) }));
 
-  /** Edit whichever demo the selected step runs in. */
-  const setTarget = (patch: Partial<WalkthroughTarget>) =>
+  // ── Stages ──
+  const patchStage = (id: string, patch: Partial<Stage>) =>
+    setContent((prev) => ({ ...prev, stages: prev.stages.map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
+
+  const addStage = () =>
     setContent((prev) => {
-      const app = appAt(prev, index);
-      if (!app) return { ...prev, target: { ...prev.target, ...patch } };
-      return { ...prev, targets: { ...prev.targets, [app]: { ...(prev.targets?.[app] ?? { src: "" }), ...patch } } };
+      const name = `Stage ${prev.stages.length + 1}`;
+      const stage: Stage = { id: newStageId(prev.stages, name), label: name, kind: "demo", src: "", width: 1280, minWidth: 900 };
+      return { ...prev, stages: [...prev.stages, stage] };
     });
 
-  const patchNamed = (name: string, patch: Partial<WalkthroughTarget>) =>
+  /** Removing a stage frees the steps that named it rather than deleting them:
+   * they fall back to carrying on, and the rail shows where they landed. */
+  const removeStage = (id: string) =>
     setContent((prev) => ({
       ...prev,
-      targets: { ...prev.targets, [name]: { ...(prev.targets?.[name] ?? { src: "" }), ...patch } },
+      stages: prev.stages.filter((s) => s.id !== id),
+      steps: prev.steps.map((s) => (s.enter?.stage === id ? { ...s, enter: clean({ ...s.enter, stage: undefined }) } : s)),
     }));
 
-  const addTarget = () => {
+  const moveStage = (id: string, delta: number) =>
     setContent((prev) => {
-      let name = "app-2";
-      for (let n = 2; prev.targets?.[name]; n++) name = `app-${n + 1}`;
-      return { ...prev, targets: { ...prev.targets, [name]: { src: "", width: prev.target.width, minWidth: prev.target.minWidth } } };
+      const at = prev.stages.findIndex((s) => s.id === id);
+      const to = at + delta;
+      if (at < 0 || to < 0 || to >= prev.stages.length) return prev;
+      const next = [...prev.stages];
+      const [s] = next.splice(at, 1);
+      next.splice(to, 0, s);
+      return { ...prev, stages: next };
     });
-  };
 
-  /** Renaming a demo carries the steps that point at it along with it. */
-  const renameTarget = (from: string, to: string) => {
-    if (!to.trim() || to === from) return;
-    setContent((prev) => {
-      const entries = Object.entries(prev.targets ?? {}).map(([k, v]) => [k === from ? to : k, v] as const);
-      return {
-        ...prev,
-        targets: Object.fromEntries(entries),
-        steps: prev.steps.map((st) => (st.enter?.app === from ? { ...st, enter: { ...st.enter, app: to } } : st)),
-      };
-    });
-  };
-
-  const removeTarget = (name: string) => {
-    setContent((prev) => {
-      const next = { ...prev.targets };
-      delete next[name];
-      return {
-        ...prev,
-        targets: next,
-        steps: prev.steps.map((st) => (st.enter?.app === name ? { ...st, enter: { ...st.enter, app: undefined } } : st)),
-      };
-    });
-  };
-
+  // ── Steps ──
   const patchCallout = (at: number, patch: Partial<Callout>) =>
     update({ callouts: (step.callouts ?? []).map((c, i) => (i === at ? { ...c, ...patch } : c)) });
 
   const addCallout = () =>
-    update({ callouts: [...(step.callouts ?? []), { mark: "", text: "Describe this element." }] });
+    update({ callouts: [...(step.callouts ?? []), { text: "Describe this element." }] });
 
   const removeCallout = (at: number) => update({ callouts: (step.callouts ?? []).filter((_, i) => i !== at) });
 
@@ -161,7 +181,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
 
   // Selecting a step shows its state, the same way the reader would arrive at
   // it out of order. Editing the step's copy must not reload the demo, so this
-  // watches the seed only.
+  // watches the stage and the seed only.
   const enterPath = step?.enter?.path ?? "";
   const enterState = step?.enter?.state ?? "";
   useEffect(() => {
@@ -181,15 +201,15 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
       timers.forEach((t) => clearTimeout(t));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver, index, enterPath, enterState]);
+  }, [driver, index, stageId, enterPath, enterState]);
 
   const applyMark = (slot: Slot, mark: string) => {
     if (slot.field === "spotlight") {
-      update({ spotlight: { ...(step.spotlight ?? {}), mark } });
+      update({ spotlight: { ...(step.spotlight ?? {}), mark, area: undefined } });
       return;
     }
     if (slot.field === "callout") {
-      update({ callouts: (step.callouts ?? []).map((c, i) => (i === slot.at ? { ...c, mark } : c)) });
+      update({ callouts: (step.callouts ?? []).map((c, i) => (i === slot.at ? { ...c, mark, area: undefined } : c)) });
       return;
     }
     if (slot.field === "advance") {
@@ -199,6 +219,13 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
     const advance = step.advance;
     if (advance.on !== "any") return;
     update({ advance: { ...advance, of: advance.of.map((a, i) => (i === slot.at ? { on: "click", mark } : a)) } });
+  };
+
+  const applyArea = (slot: Slot, area: Area) => {
+    if (slot.field === "spotlight") update({ spotlight: { ...(step.spotlight ?? {}), area, mark: undefined } });
+    if (slot.field === "callout") {
+      update({ callouts: (step.callouts ?? []).map((c, i) => (i === slot.at ? { ...c, area, mark: undefined } : c)) });
+    }
   };
 
   // Pick mode: the driver swallows the demo's own interactions and reports
@@ -233,13 +260,23 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
     return () => window.removeEventListener("keydown", onKey);
   }, [picking]);
 
-  const box = useMemo(
-    () => toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), demo.scale, step?.spotlight?.pad ?? 6),
+  const box = useMemo(() => {
+    const spot = step?.spotlight;
+    if (!spot) return null;
+    if (spot.area) return areaBox(spot.area, demo.bounds);
+    return toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), demo.scale, spot.pad ?? 6);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [demo.rects, spotMarks.join("|"), demo.scale, step],
-  );
+  }, [demo.rects, spotMarks.join("|"), demo.scale, demo.bounds, step]);
+
+  const calloutBox = (callout: Callout): Box | null => {
+    if (callout.area) return areaBox(callout.area, demo.bounds);
+    const rect = callout.mark ? demo.rects[callout.mark] : undefined;
+    return rect ? toBox([rect], demo.scale, 0) : null;
+  };
 
   const hoverBox = hover && toBox([hover.rect], demo.scale, 2);
+  const still = step?.still;
+  const overlaid = !!picking || !!drawing || !!still;
 
   if (playing) {
     return <WalkthroughPlayer content={content} startIndex={index} onExit={() => setPlaying(false)} />;
@@ -258,6 +295,8 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
     );
   }
 
+  const activeStage = step.enter?.stage ?? (index === 0 ? content.stages[0]?.id : undefined);
+
   return (
     <div style={shell}>
       {/* Toolbar */}
@@ -272,6 +311,10 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
+          <button onClick={() => setShowStages((v) => !v)} style={ghostBtn} title="The apps, embeds and mock-ups this walkthrough shows">
+            <Layers size={16} /> Stages
+            <span style={{ color: "#8a857d", fontWeight: 400 }}>{content.stages.length}</span>
+          </button>
           <button onClick={() => setShowThumb((v) => !v)} style={ghostBtn} title="Projects page preview card">
             <ImageIcon size={16} /> Project settings
           </button>
@@ -279,6 +322,16 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
             <Play size={16} /> Preview
           </button>
           {onClose && <button onClick={onClose} style={{ ...ghostBtn, borderStyle: "solid" }}>Done</button>}
+          {showStages && (
+            <StagesPanel
+              content={content}
+              onPatch={patchStage}
+              onAdd={addStage}
+              onRemove={removeStage}
+              onMove={moveStage}
+              onClose={() => setShowStages(false)}
+            />
+          )}
           {showThumb && (
             <PreviewCardSettings
               preview={content.preview ?? {}}
@@ -290,7 +343,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
       </div>
 
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        {/* Step rail */}
+        {/* Step rail, banded by the runs that share a stage */}
         <div style={rail}>
           <Reorder.Group
             axis="y"
@@ -303,101 +356,194 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
             }}
             style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}
           >
-            {steps.map((s, i) => (
-              <Reorder.Item
-                key={s.id}
-                value={s}
-                onClick={() => setSelected(i)}
-                whileDrag={{ scale: 1.04, boxShadow: "0 10px 24px rgba(0,0,0,0.22)", cursor: "grabbing" }}
-                style={{
-                  position: "relative", textAlign: "left", borderRadius: 8, padding: 10, cursor: "grab", minHeight: 58,
-                  border: i === index ? `2px solid ${ACCENT}` : "1px solid #dcd8d2", background: "#fff", color: "#1a1a1a", overflow: "hidden",
-                }}
-              >
-                <div style={{ fontSize: 10, opacity: 0.5, position: "absolute", top: 6, right: 8 }}>{i + 1}</div>
-                <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: ACCENT, marginBottom: 4 }}>{s.eyebrow}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                  {s.title || s.id}
-                </div>
-              </Reorder.Item>
-            ))}
+            {steps.map((s, i) => {
+              const run = runStarts.get(i);
+              return (
+                <Reorder.Item
+                  key={s.id}
+                  value={s}
+                  onClick={() => setSelected(i)}
+                  whileDrag={{ scale: 1.04, boxShadow: "0 10px 24px rgba(0,0,0,0.22)", cursor: "grabbing" }}
+                  style={{ cursor: "grab" }}
+                >
+                  {run && (
+                    <div style={runBand}>
+                      <Layers size={11} style={{ flex: "none", opacity: 0.7 }} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {stageName(run.stage, run.stageId)}
+                      </span>
+                      <span style={{ marginLeft: "auto", opacity: 0.6 }}>{run.to - run.from + 1}</span>
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      position: "relative", textAlign: "left", borderRadius: 8, padding: 10, minHeight: 58,
+                      border: i === index ? `2px solid ${ACCENT}` : "1px solid #dcd8d2", background: "#fff", color: "#1a1a1a", overflow: "hidden",
+                    }}
+                  >
+                    <div style={{ fontSize: 10, opacity: 0.5, position: "absolute", top: 6, right: 8 }}>{i + 1}</div>
+                    <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: ACCENT, marginBottom: 4 }}>{s.eyebrow}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      {s.title || s.id}
+                    </div>
+                  </div>
+                </Reorder.Item>
+              );
+            })}
           </Reorder.Group>
           <button onClick={addStep} style={{ ...ghostBtn, justifyContent: "center", marginTop: 4 }}>
             <Plus size={16} /> Add step
           </button>
         </div>
 
-        {/* The live demo */}
-        <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden", display: "flex", background: demo.framed ? "#0f1115" : "#e9e7e3" }}>
-          {demo.framed ? (
+        {/* The stage */}
+        <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden", display: "flex", background: demo.mode === "blocked" ? "#e9e7e3" : "#0f1115" }}>
+          {demo.mode !== "blocked" && stage ? (
             <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-              <iframe ref={demo.frameRef} title="Demo" style={demo.frameStyle} />
-              {!picking && <Spotlight box={box} shape={step.spotlight?.shape} dim={step.spotlight?.dim} lock={false} />}
-              {!picking && step.callouts?.length ? (
-                <Callouts items={step.callouts} rects={demo.rects} scale={demo.scale} bounds={demo.bounds} />
-              ) : null}
+              {demo.mode === "mock" ? (
+                <StageStill image={{ src: stage.src, fit: stage.fit }} />
+              ) : (
+                <iframe
+                  key={stage.id}
+                  ref={demo.frameRef}
+                  title={stageName(stage)}
+                  src={demo.mode === "embed" ? stage.src : undefined}
+                  allowFullScreen
+                  style={demo.frameStyle}
+                />
+              )}
+              {still && <StageStill image={still} />}
+              {!overlaid && <Spotlight box={box} shape={step.spotlight?.shape} dim={step.spotlight?.dim} lock={false} />}
+              {!overlaid && step.callouts?.length ? <Callouts items={step.callouts} boxFor={calloutBox} bounds={demo.bounds} /> : null}
               {picking && <HoverOutline box={hoverBox} ok={!!hover?.mark} />}
-              {picking && (
+              {drawing && (
+                <AreaDraw
+                  bounds={demo.bounds}
+                  onDone={(area) => {
+                    applyArea(drawing, area);
+                    setDrawing(null);
+                  }}
+                  onCancel={() => setDrawing(null)}
+                />
+              )}
+              {(picking || drawing) && (
                 <div style={pickBanner}>
-                  <Crosshair size={15} />
-                  Click the element to mark
-                  <button onClick={() => setPicking(null)} style={pickCancel} title="Cancel (Esc)"><X size={14} /></button>
+                  {picking ? <Crosshair size={15} /> : <Square size={15} />}
+                  {picking ? "Click the element to mark" : "Drag the area to point at"}
+                  <button
+                    onClick={() => (picking ? setPicking(null) : setDrawing(null))}
+                    style={pickCancel}
+                    title="Cancel (Esc)"
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
               )}
             </div>
+          ) : still ? (
+            <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+              <StageStill image={still} />
+            </div>
           ) : (
-            <DemoNotice blocked={demo.blocked!} src={target.src} />
+            <StageNotice blocked={demo.blocked!} src={stage?.src ?? ""} stageId={stageId} />
           )}
         </div>
 
         {/* Inspector */}
         <div style={inspector}>
-          <Field label="Demo" collapsible>
-            <p style={{ ...hint, marginTop: 0 }}>
-              This step runs in <strong>{appAt(content, index) ?? "the default demo"}</strong>.
-            </p>
-            <input value={target.src} onChange={(e) => setTarget({ src: e.target.value })} placeholder="/projects/<id>/demo/index.html" style={inputStyle} />
-            <p style={hint}>Served from this site, so the walkthrough can drive it. A build in the project's own demo/ folder.</p>
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-              <label style={{ ...hint, flex: 1 }}>
-                Width
-                <input
-                  type="number"
-                  value={target.width ?? ""}
-                  onChange={(e) => setTarget({ width: e.target.value ? Number(e.target.value) : undefined })}
-                  style={inputStyle}
-                />
-              </label>
-              <label style={{ ...hint, flex: 1 }}>
-                Min width
-                <input
-                  type="number"
-                  value={target.minWidth ?? ""}
-                  onChange={(e) => setTarget({ minWidth: e.target.value ? Number(e.target.value) : undefined })}
-                  style={inputStyle}
-                />
-              </label>
+          <Field label="Runs in" collapsible>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {index > 0 && (
+                <button onClick={() => update({ enter: clean({ ...step.enter, stage: undefined }) })} style={choice(!step.enter?.stage)}>
+                  Carry on
+                </button>
+              )}
+              {content.stages.map((s) => (
+                <button key={s.id} onClick={() => update({ enter: { ...step.enter, stage: s.id } })} style={choice(activeStage === s.id)}>
+                  {stageName(s)}
+                </button>
+              ))}
             </div>
+            {!content.stages.length && (
+              <p style={hint}>
+                No stages yet — <button onClick={() => setShowStages(true)} style={linkBtn}>add one</button> and this step will have
+                somewhere to run.
+              </p>
+            )}
+            {!!content.stages.length && (
+              <p style={hint}>
+                {step.enter?.stage
+                  ? `Starts a run here. The steps after it stay in ${stageName(stage, stageId)} until one names another stage.`
+                  : index === 0
+                    ? `Opens in ${stageName(stage, stageId)}, the first stage.`
+                    : `Carries on in ${stageName(stage, stageId)}, from the steps before it.`}
+              </p>
+            )}
 
-            {Object.entries(content.targets ?? {}).map(([name, t]) => (
-              <div key={name} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10, marginTop: 10 }}>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input key={name} defaultValue={name} onBlur={(e) => renameTarget(name, e.target.value)} style={inputStyle} />
-                  <button onClick={() => removeTarget(name)} style={{ ...iconBtn(false), width: 30, height: 30 }} title="Remove this demo">
-                    <X size={13} />
+            {driveable && (
+              <>
+                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                  <input
+                    value={step.enter?.path ?? ""}
+                    onChange={(e) => update({ enter: clean({ ...step.enter, path: e.target.value || undefined }) })}
+                    placeholder="#/settings"
+                    style={inputStyle}
+                  />
+                  <button
+                    onClick={() => driver && update({ enter: clean({ ...step.enter, path: driver.currentPath() || undefined }) })}
+                    disabled={!driver}
+                    style={{ ...ghostBtn, whiteSpace: "nowrap" }}
+                    title="Use the route the demo is showing"
+                  >
+                    Use current
                   </button>
                 </div>
                 <input
-                  value={t.src}
-                  onChange={(e) => patchNamed(name, { src: e.target.value })}
-                  placeholder="/projects/<id>/demo/<app>/index.html"
+                  value={step.enter?.state ?? ""}
+                  onChange={(e) => update({ enter: clean({ ...step.enter, state: e.target.value || undefined }) })}
+                  placeholder="Seed, passed as ?wt="
                   style={{ ...inputStyle, marginTop: 6 }}
                 />
-              </div>
-            ))}
-            <button onClick={addTarget} style={{ ...ghostBtn, marginTop: 10 }}>
-              <Plus size={15} /> Add another app
-            </button>
+                <p style={hint}>
+                  Applied whenever the document is made — a jump, or arriving in a stage that isn't on screen. Walking forward inside
+                  one keeps what the reader did.
+                </p>
+              </>
+            )}
+            {opaque && <p style={hint}>An embed or a mock-up can't be routed or seeded from here.</p>}
+          </Field>
+
+          <Field label="Cover" collapsible>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => update({ still: undefined })} style={choice(!still)}>
+                The stage
+              </button>
+              <button
+                onClick={() =>
+                  // The image takes the stage's clicks, so only the panel's
+                  // button can move the reader on from it.
+                  update({ still: { src: "", ...step.still }, advance: step.advance.on === "manual" ? step.advance : { on: "manual" } })
+                }
+                style={choice(!!still)}
+              >
+                An image
+              </button>
+            </div>
+            {still && (
+              <>
+                <div style={{ marginTop: 10 }}>
+                  <ImageField value={still.src} onChange={(v) => update({ still: { ...still, src: v } })} label="Cover image" />
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  {(["center", "fill"] as const).map((fit) => (
+                    <button key={fit} onClick={() => update({ still: { ...still, fit } })} style={choice((still.fit ?? "center") === fit)}>
+                      {fit === "center" ? "Centered" : "Fill"}
+                    </button>
+                  ))}
+                </div>
+                <p style={hint}>Laid over this step's stage, which stays loaded underneath, so the next step picks up where the reader left off.</p>
+              </>
+            )}
           </Field>
 
           <div style={{ display: "flex", gap: 6, margin: "18px 0" }}>
@@ -423,64 +569,21 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
             <ImageField value={step.imageUrl ?? ""} onChange={(v) => update({ imageUrl: v || undefined })} label="Panel image" />
           </Field>
 
-          <Field label="Starts at" collapsible>
-            {named.length > 1 && (
-              <>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                  <button onClick={() => update({ enter: { ...step.enter, app: undefined } })} style={choice(!step.enter?.app)}>
-                    Carry on
-                  </button>
-                  <button onClick={() => update({ enter: { ...step.enter, app: "default" } })} style={choice(step.enter?.app === "default")}>
-                    {"Default"}
-                  </button>
-                  {Object.keys(content.targets ?? {}).map((name) => (
-                    <button key={name} onClick={() => update({ enter: { ...step.enter, app: name } })} style={choice(step.enter?.app === name)}>
-                      {name}
-                    </button>
-                  ))}
-                </div>
-                <p style={{ ...hint, marginTop: 0, marginBottom: 10 }}>
-                  “Carry on” stays in whichever app the steps before this one named.
-                </p>
-              </>
-            )}
-            <div style={{ display: "flex", gap: 6 }}>
-              <input
-                value={step.enter?.path ?? ""}
-                onChange={(e) => update({ enter: { ...step.enter, path: e.target.value || undefined } })}
-                placeholder="#/settings"
-                style={inputStyle}
-              />
-              <button
-                onClick={() => driver && update({ enter: { ...step.enter, path: driver.currentPath() || undefined } })}
-                disabled={!driver}
-                style={{ ...ghostBtn, whiteSpace: "nowrap" }}
-                title="Use the route the demo is showing"
-              >
-                Use current
-              </button>
-            </div>
-            <input
-              value={step.enter?.state ?? ""}
-              onChange={(e) => update({ enter: { ...step.enter, state: e.target.value || undefined } })}
-              placeholder="Seed, passed as ?wt="
-              style={{ ...inputStyle, marginTop: 6 }}
-            />
-            <p style={hint}>Applied when the reader arrives out of order. Walking forward keeps what they did.</p>
-          </Field>
-
           <Field label="Spotlight" collapsible>
             {step.spotlight ? (
               <>
-                <MarkField
-                  value={marksOf(step.spotlight.mark).join(", ")}
-                  onChange={(v) => {
+                <Anchor
+                  mark={marksOf(step.spotlight.mark).join(", ")}
+                  area={step.spotlight.area}
+                  opaque={opaque}
+                  onMark={(v) => {
                     const list = v.split(",").map((m) => m.trim()).filter(Boolean);
                     update({ spotlight: { ...step.spotlight!, mark: list.length === 1 ? list[0] : list } });
                   }}
                   onPick={() => setPicking({ field: "spotlight" })}
-                  picking={picking?.field === "spotlight"}
-                  disabled={!demo.framed}
+                  onDraw={() => setDrawing({ field: "spotlight" })}
+                  busy={picking?.field === "spotlight" || drawing?.field === "spotlight"}
+                  disabled={demo.mode === "blocked" || !!still || (!opaque && !driveable)}
                 />
                 <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                   {(["rect", "pill"] as const).map((shape) => (
@@ -492,13 +595,15 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                       {shape === "rect" ? "Rounded" : "Pill"}
                     </button>
                   ))}
-                  <input
-                    type="number"
-                    value={step.spotlight.pad ?? ""}
-                    onChange={(e) => update({ spotlight: { ...step.spotlight!, pad: e.target.value ? Number(e.target.value) : undefined } })}
-                    placeholder="Pad"
-                    style={{ ...inputStyle, width: 70 }}
-                  />
+                  {!opaque && (
+                    <input
+                      type="number"
+                      value={step.spotlight.pad ?? ""}
+                      onChange={(e) => update({ spotlight: { ...step.spotlight!, pad: e.target.value ? Number(e.target.value) : undefined } })}
+                      placeholder="Pad"
+                      style={{ ...inputStyle, width: 70 }}
+                    />
+                  )}
                 </div>
                 <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
                   <input
@@ -506,7 +611,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                     checked={step.spotlight.dim !== false}
                     onChange={(e) => update({ spotlight: { ...step.spotlight!, dim: e.target.checked ? undefined : false } })}
                   />
-                  Dim the rest of the demo
+                  Dim the rest of the stage
                 </label>
                 <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 6 }}>
                   <input
@@ -519,7 +624,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                 <button onClick={() => update({ spotlight: undefined })} style={{ ...ghostBtn, marginTop: 10 }}>Remove spotlight</button>
               </>
             ) : (
-              <button onClick={() => update({ spotlight: { mark: "" } })} style={ghostBtn}>
+              <button onClick={() => update({ spotlight: {} })} style={ghostBtn}>
                 <Plus size={15} /> Add a spotlight
               </button>
             )}
@@ -528,12 +633,15 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
           <Field label="Callouts" collapsible>
             {(step.callouts ?? []).map((callout, at) => (
               <div key={at} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10, marginBottom: 8 }}>
-                <MarkField
-                  value={callout.mark}
-                  onChange={(v) => patchCallout(at, { mark: v })}
+                <Anchor
+                  mark={callout.mark ?? ""}
+                  area={callout.area}
+                  opaque={opaque}
+                  onMark={(v) => patchCallout(at, { mark: v })}
                   onPick={() => setPicking({ field: "callout", at })}
-                  picking={picking?.field === "callout" && picking.at === at}
-                  disabled={!demo.framed}
+                  onDraw={() => setDrawing({ field: "callout", at })}
+                  busy={(picking?.field === "callout" && picking.at === at) || (drawing?.field === "callout" && drawing.at === at)}
+                  disabled={demo.mode === "blocked" || !!still || (!opaque && !driveable)}
                 />
                 <textarea
                   value={callout.text}
@@ -561,18 +669,26 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
             <button onClick={addCallout} style={ghostBtn}>
               <Plus size={15} /> Add a callout
             </button>
-            <p style={hint}>Anchored to a mark, so they follow the element as the demo reflows.</p>
+            <p style={hint}>
+              {opaque
+                ? "Anchored to an area of the stage, which an embed or a mock-up can't move out from under them."
+                : "Anchored to a mark, so they follow the element as the demo reflows."}
+            </p>
           </Field>
 
           <Field label="Advances on" collapsible>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              {ADVANCE_KINDS.map((k) => (
+              {ADVANCE_KINDS.filter((k) => !opaque || k.value === "manual").map((k) => (
                 <button key={k.value} onClick={() => update({ advance: blankAdvance(k.value, step.advance) })} style={choice(step.advance.on === k.value)}>
                   {k.label}
                 </button>
               ))}
             </div>
-            <p style={hint}>{ADVANCE_KINDS.find((k) => k.value === step.advance.on)?.hint}</p>
+            <p style={hint}>
+              {opaque
+                ? "Nothing can be observed inside an embed or a mock-up, so a step on one is left with the panel's button."
+                : ADVANCE_KINDS.find((k) => k.value === step.advance.on)?.hint}
+            </p>
 
             {step.advance.on === "manual" && (
               <input
@@ -583,18 +699,24 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
               />
             )}
 
-            {(step.advance.on === "click" || step.advance.on === "path" || step.advance.on === "signal") && (
+            {opaque && step.advance.on !== "manual" && (
+              <div style={warn}>
+                This step waits for something inside the stage, which can't be seen from here. The player will show its button instead.
+              </div>
+            )}
+
+            {!opaque && (step.advance.on === "click" || step.advance.on === "path" || step.advance.on === "signal") && (
               <SimpleAdvance
                 advance={step.advance}
                 onChange={(a) => update({ advance: a })}
                 onPick={() => setPicking({ field: "advance" })}
                 picking={picking?.field === "advance"}
-                canPick={demo.framed}
+                canPick={driveable && !still}
                 currentPath={driver?.currentPath()}
               />
             )}
 
-            {step.advance.on === "any" && (
+            {!opaque && step.advance.on === "any" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {step.advance.of.map((a, at) => (
                   <div key={at} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10 }}>
@@ -624,7 +746,7 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
                       onChange={(next) => updateAny(step.advance as Extract<StepAdvance, { on: "any" }>, at, next, update)}
                       onPick={() => setPicking({ field: "any", at })}
                       picking={picking?.field === "any" && picking.at === at}
-                      canPick={demo.framed}
+                      canPick={driveable && !still}
                       currentPath={driver?.currentPath()}
                     />
                   </div>
@@ -652,6 +774,182 @@ export function WalkthroughBuilder({ content, setContent, projectName, onClose }
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Drop an `enter` that no longer says anything, so a step that runs wherever
+ * it lands doesn't carry an empty object around. */
+function clean(enter: { stage?: string; path?: string; state?: string }) {
+  return enter.stage || enter.path || enter.state ? enter : undefined;
+}
+
+/** Every stage the walkthrough can show, edited in one place. Addresses live
+ * here and nowhere else: a step points at a stage, it doesn't own one. */
+function StagesPanel({ content, onPatch, onAdd, onRemove, onMove, onClose }: {
+  content: WalkthroughContent;
+  onPatch: (id: string, patch: Partial<Stage>) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  onMove: (id: string, delta: number) => void;
+  onClose: () => void;
+}) {
+  const used = (id: string) => content.steps.filter((_, i) => stageIdAt(content, i) === id).length;
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 90 }} />
+      <div style={stagesPanel}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Stages</div>
+        <div style={{ fontSize: 11, color: "#8c8c8c", marginBottom: 14, lineHeight: 1.5 }}>
+          What this walkthrough can put on the stage. Steps name one; changing an address here changes it for every step that does.
+        </div>
+
+        {content.stages.map((stage, i) => (
+          <div key={stage.id} style={{ border: "1px solid #e3e0db", borderRadius: 9, padding: 11, marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input
+                value={stage.label ?? ""}
+                onChange={(e) => onPatch(stage.id, { label: e.target.value })}
+                placeholder={stage.id}
+                style={inputStyle}
+              />
+              <button onClick={() => onMove(stage.id, -1)} disabled={i === 0} style={{ ...iconBtn(i === 0), width: 28, height: 28 }} title="Move up">
+                <ChevronUp size={13} />
+              </button>
+              <button
+                onClick={() => onMove(stage.id, 1)}
+                disabled={i === content.stages.length - 1}
+                style={{ ...iconBtn(i === content.stages.length - 1), width: 28, height: 28 }}
+                title="Move down"
+              >
+                <ChevronDown size={13} />
+              </button>
+              <button onClick={() => onRemove(stage.id)} style={{ ...iconBtn(false), width: 28, height: 28 }} title="Remove this stage">
+                <X size={13} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              {STAGE_KINDS.map((k) => (
+                <button key={k.value} onClick={() => onPatch(stage.id, { kind: k.value })} style={choice(stage.kind === k.value)}>
+                  {k.label}
+                </button>
+              ))}
+            </div>
+            <p style={hint}>{STAGE_KINDS.find((k) => k.value === stage.kind)?.hint}</p>
+
+            {stage.kind === "mock" ? (
+              <>
+                <div style={{ marginTop: 8 }}>
+                  <ImageField value={stage.src} onChange={(v) => onPatch(stage.id, { src: v })} label="Mock-up image" />
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  {(["center", "fill"] as const).map((fit) => (
+                    <button key={fit} onClick={() => onPatch(stage.id, { fit })} style={choice((stage.fit ?? "center") === fit)}>
+                      {fit === "center" ? "Centered" : "Fill"}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <input
+                  value={stage.src}
+                  onChange={(e) => onPatch(stage.id, { src: e.target.value })}
+                  placeholder={stage.kind === "demo" ? "/projects/<id>/demo/<app>/index.html" : "https://embed.figma.com/…"}
+                  style={{ ...inputStyle, marginTop: 8 }}
+                />
+                <p style={hint}>
+                  {stage.kind === "demo"
+                    ? "Served from this site, so the walkthrough can drive it. A build in the project's own demo/ folder."
+                    : "Whatever URL the source gives you to embed. It runs on its own origin, so it's shown rather than driven."}
+                </p>
+                <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                  <label style={{ ...hint, flex: 1 }}>
+                    Width
+                    <input
+                      type="number"
+                      value={stage.width ?? ""}
+                      onChange={(e) => onPatch(stage.id, { width: e.target.value ? Number(e.target.value) : undefined })}
+                      style={inputStyle}
+                    />
+                  </label>
+                  <label style={{ ...hint, flex: 1 }}>
+                    Min width
+                    <input
+                      type="number"
+                      value={stage.minWidth ?? ""}
+                      onChange={(e) => onPatch(stage.id, { minWidth: e.target.value ? Number(e.target.value) : undefined })}
+                      style={inputStyle}
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+
+            <p style={{ ...hint, display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <code style={{ fontSize: 10.5, opacity: 0.75 }}>{stage.id}</code>
+              <span>{used(stage.id)} {used(stage.id) === 1 ? "step" : "steps"}</span>
+            </p>
+          </div>
+        ))}
+
+        <button onClick={onAdd} style={{ ...ghostBtn, justifyContent: "center", width: "100%" }}>
+          <Plus size={15} /> Add a stage
+        </button>
+      </div>
+    </>
+  );
+}
+
+/** Where a spotlight or a callout points: a mark on a driveable stage, an area
+ * on one that can only be shown. The same field, because it is the same idea —
+ * only the way of naming the spot differs. */
+function Anchor({ mark, area, opaque, onMark, onPick, onDraw, busy, disabled }: {
+  mark: string;
+  area?: Area;
+  opaque: boolean;
+  onMark: (v: string) => void;
+  onPick: () => void;
+  onDraw: () => void;
+  busy: boolean;
+  disabled: boolean;
+}) {
+  if (opaque) {
+    const at = area ? `${Math.round(area.x * 100)}%, ${Math.round(area.y * 100)}% · ${Math.round(area.w * 100)}×${Math.round(area.h * 100)}` : "Nothing yet";
+    return (
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <span style={{ ...inputStyle, display: "flex", alignItems: "center", color: area ? "#1a1a1a" : "#8a857d", fontSize: 12 }}>{at}</span>
+        <button
+          onClick={onDraw}
+          disabled={disabled}
+          title={disabled ? "Needs the stage" : "Drag the area on the stage"}
+          style={{
+            ...ghostBtn, whiteSpace: "nowrap", borderStyle: "solid",
+            ...(busy ? { background: ACCENT, color: "#fff", borderColor: ACCENT } : null),
+            ...(disabled ? { opacity: 0.5, cursor: "default" } : null),
+          }}
+        >
+          <Square size={14} /> Draw
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <input value={mark} onChange={(e) => onMark(e.target.value)} placeholder="data-walkthrough id" style={inputStyle} />
+      <button
+        onClick={onPick}
+        disabled={disabled}
+        title={disabled ? "Needs the live demo" : "Pick it by clicking the demo"}
+        style={{
+          ...ghostBtn, whiteSpace: "nowrap", borderStyle: "solid",
+          ...(busy ? { background: ACCENT, color: "#fff", borderColor: ACCENT } : null),
+          ...(disabled ? { opacity: 0.5, cursor: "default" } : null),
+        }}
+      >
+        <Crosshair size={14} /> Pick
+      </button>
     </div>
   );
 }
@@ -693,7 +991,15 @@ function SimpleAdvance({ advance, onChange, onPick, picking, canPick, currentPat
 }) {
   if (advance.on === "click") {
     return (
-      <MarkField value={advance.mark} onChange={(mark) => onChange({ on: "click", mark })} onPick={onPick} picking={picking} disabled={!canPick} />
+      <Anchor
+        mark={advance.mark}
+        opaque={false}
+        onMark={(mark) => onChange({ on: "click", mark })}
+        onPick={onPick}
+        onDraw={() => {}}
+        busy={picking}
+        disabled={!canPick}
+      />
     );
   }
   if (advance.on === "path") {
@@ -710,34 +1016,6 @@ function SimpleAdvance({ advance, onChange, onPick, picking, canPick, currentPat
     return <input value={advance.name} onChange={(e) => onChange({ on: "signal", name: e.target.value })} placeholder="settings-saved" style={inputStyle} />;
   }
   return null;
-}
-
-function MarkField({ value, onChange, onPick, picking, disabled }: {
-  value: string;
-  onChange: (v: string) => void;
-  onPick: () => void;
-  picking: boolean;
-  disabled: boolean;
-}) {
-  return (
-    <div style={{ display: "flex", gap: 6 }}>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="data-walkthrough id" style={inputStyle} />
-      <button
-        onClick={onPick}
-        disabled={disabled}
-        title={disabled ? "Needs the live demo" : "Pick it by clicking the demo"}
-        style={{
-          ...ghostBtn,
-          whiteSpace: "nowrap",
-          borderStyle: "solid",
-          ...(picking ? { background: ACCENT, color: "#fff", borderColor: ACCENT } : null),
-          ...(disabled ? { opacity: 0.5, cursor: "default" } : null),
-        }}
-      >
-        <Crosshair size={14} /> Pick
-      </button>
-    </div>
-  );
 }
 
 const shell: React.CSSProperties = {
@@ -758,7 +1036,24 @@ const inspector: React.CSSProperties = {
   width: 320, flexShrink: 0, background: "#fff", borderLeft: "1px solid #e3e0db", overflowY: "auto", padding: 18, paddingBottom: 104,
 };
 
+const stagesPanel: React.CSSProperties = {
+  position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 91, width: 360, maxHeight: "80vh", overflowY: "auto",
+  background: "#fff", border: "1px solid #e3e0db", borderRadius: 10, boxShadow: "0 18px 44px rgba(0,0,0,0.16)", padding: 16, textAlign: "left",
+};
+
+/** The band that opens each run of steps sharing a stage. Derived from the
+ * steps, so dragging one into another run simply moves the band. */
+const runBand: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 5, margin: "2px 0 6px",
+  fontSize: 9.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#8a857d",
+};
+
 const hint: React.CSSProperties = { fontSize: 11, color: "#8a857d", margin: "7px 0 0", lineHeight: 1.5 };
+
+const linkBtn: React.CSSProperties = {
+  appearance: "none", border: 0, background: "none", padding: 0, font: "inherit", color: ACCENT,
+  cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2,
+};
 
 const warn: React.CSSProperties = {
   display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, lineHeight: 1.5,
@@ -769,7 +1064,7 @@ const pickBanner: React.CSSProperties = {
   position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)",
   display: "flex", alignItems: "center", gap: 8, background: "#fff", border: `1px solid ${ACCENT}`,
   borderRadius: 999, padding: "7px 8px 7px 14px", fontSize: 13, fontWeight: 600, color: "#1a1a1a",
-  boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.25)", zIndex: 5,
 };
 
 const pickCancel: React.CSSProperties = {

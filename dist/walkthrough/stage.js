@@ -1,12 +1,17 @@
 import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
-// ─── Demo stage ────────────────────────────────────────────────────
-// The live product scaled to fit its pane, and the spotlight drawn over it.
-// The player and the builder share this so an author sees exactly what a
-// reader will.
+// ─── The stage ─────────────────────────────────────────────────────
+// Whatever a step is talking about, scaled to fit its pane, with the spotlight
+// and callouts drawn over it. The player and the builder share this so an
+// author sees exactly what a reader will.
 //
-// There is no fixed canvas here as there is for a screen: the frame gets a
-// real viewport width and the stage scales to fit it, so every box the driver
-// reports is in demo pixels and is multiplied by that scale on its way out.
+// A driveable stage is read through a Driver, and every box it reports is in
+// demo pixels, multiplied by the stage's scale on its way out. There is no
+// fixed canvas as there is for a screen: the frame gets a real viewport width
+// and the stage scales to fit it.
+//
+// An opaque stage — an embed or a still — reports nothing, so anything drawn
+// over it is positioned by an Area: fractions of the stage, resolved against
+// its measured bounds.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { INK, RED } from "../theme.js";
@@ -22,8 +27,15 @@ export function toBox(rects, scale, pad = 6) {
     const y2 = Math.max(...rects.map((r) => r.y + r.h)) + pad;
     return { x: x1 * scale, y: y1 * scale, w: (x2 - x1) * scale, h: (y2 - y1) * scale };
 }
-/** Mount the demo, keep it measured, and report the marks' geometry. */
-export function useDemo(target, marks) {
+/** An Area resolved against the stage it sits on. Fractions in, pixels out. */
+export function areaBox(area, bounds) {
+    if (!area)
+        return null;
+    return { x: area.x * bounds.w, y: area.y * bounds.h, w: area.w * bounds.w, h: area.h * bounds.h };
+}
+/** Mount the stage, keep it measured, and — where it can be read — report the
+ * marks' geometry. */
+export function useStage(stage, marks) {
     const frameRef = useRef(null);
     const stageRef = useRef(null);
     const [driver, setDriver] = useState(null);
@@ -33,42 +45,48 @@ export function useDemo(target, marks) {
     const markKey = marks.join("|");
     const marksRef = useRef(marks);
     marksRef.current = marks;
+    const kind = stage?.kind ?? null;
+    const src = stage?.src ?? "";
     useEffect(() => {
         const on = () => setVw(window.innerWidth);
         window.addEventListener("resize", on);
         return () => window.removeEventListener("resize", on);
     }, []);
     // A demo on another origin can't be read from here, so say so rather than
-    // showing a frame that silently never responds.
+    // showing a frame that silently never responds. An embed is on another
+    // origin by design and makes no such promise, so this is a demo's problem.
     const foreign = useMemo(() => {
-        if (!target.src)
+        if (!src || kind !== "demo")
             return false;
         try {
-            return new URL(target.src, window.location.href).origin !== window.location.origin;
+            return new URL(src, window.location.href).origin !== window.location.origin;
         }
         catch {
             return true;
         }
-    }, [target.src]);
-    const blocked = !target.src
-        ? "no-demo"
-        : foreign
-            ? "foreign"
-            : vw < (target.minWidth ?? 900)
-                ? "small"
-                : null;
-    const framed = !blocked;
+    }, [src, kind]);
+    const blocked = !stage
+        ? "no-stage"
+        : !src
+            ? "no-src"
+            : foreign
+                ? "foreign"
+                : kind !== "mock" && vw < (stage.minWidth ?? 900)
+                    ? "small"
+                    : null;
+    const mode = blocked ? "blocked" : kind;
+    const driveable = mode === "demo";
     useEffect(() => {
         const el = frameRef.current;
-        if (!framed || !el)
+        if (!driveable || !el)
             return;
-        const next = sameOriginDriver(el, target.src);
+        const next = sameOriginDriver(el, src);
         setDriver(next);
         return () => {
             next.dispose();
             setDriver(null);
         };
-    }, [framed, target.src]);
+    }, [driveable, src]);
     useEffect(() => {
         const el = stageRef.current;
         if (!el)
@@ -79,7 +97,14 @@ export function useDemo(target, marks) {
         });
         ro.observe(el);
         return () => ro.disconnect();
-    }, [framed]);
+    }, [mode]);
+    // Every rect was measured inside one particular stage, so leaving it makes
+    // all of them wrong rather than merely out of date. Dropping them is what
+    // stops a mark from the demo you just left being drawn over the mock-up you
+    // arrived at, where nothing will ever correct it.
+    useEffect(() => {
+        setRects({});
+    }, [src, kind]);
     const measure = useCallback(() => {
         if (!driver)
             return;
@@ -103,7 +128,7 @@ export function useDemo(target, marks) {
     useEffect(() => {
         measure();
     }, [measure, size.w, size.h]);
-    const width = target.width ?? size.w;
+    const width = stage?.width ?? size.w;
     const scale = size.w && width ? Math.min(1, size.w / width) : 1;
     const frameStyle = {
         width: width || "100%",
@@ -113,7 +138,7 @@ export function useDemo(target, marks) {
         transform: `scale(${scale})`,
         transformOrigin: "top left",
     };
-    return { frameRef, stageRef, driver, rects, scale, measure, framed, blocked, frameStyle, bounds: size };
+    return { frameRef, stageRef, driver, rects, scale, measure, mode, driveable, blocked, frameStyle, bounds: size };
 }
 const sameRects = (a, b) => {
     const keys = Object.keys(a);
@@ -125,7 +150,7 @@ const sameRects = (a, b) => {
         return y && x.x === y.x && x.y === y.y && x.w === y.w && x.h === y.h;
     });
 };
-/** A ring around the marked element, with the rest of the demo optionally
+/** A ring around the marked element, with the rest of the stage optionally
  * dimmed and optionally click-proof. The two are independent: the shield that
  * blocks clicks is the same four panels that do the dimming, so `lock` without
  * `dim` just makes them invisible. */
@@ -161,15 +186,79 @@ export function HoverOutline({ box, ok }) {
             pointerEvents: "none",
         } }));
 }
-/** Why there's no live demo to show. */
-export function DemoNotice({ blocked, src }) {
-    const text = blocked === "no-demo" ? (_jsxs(_Fragment, { children: ["This walkthrough doesn't point at a demo yet. Set its ", _jsx("strong", { children: "demo path" }), " to something served from this site, such as", " ", _jsx("code", { children: "/projects/<id>/demo/index.html" }), "."] })) : blocked === "foreign" ? (_jsxs(_Fragment, { children: [_jsx("strong", { children: src }), " is on another origin, so it can't be driven from here \u2014 play this walkthrough on the site that hosts the demo."] })) : (_jsx(_Fragment, { children: "The demo needs a wider window than this one." }));
-    return (_jsx("div", { style: { flex: 1, display: "grid", placeItems: "center", padding: 32, color: "#6f6a66", fontSize: 14, textAlign: "center" }, children: _jsx("p", { style: { maxWidth: 420, lineHeight: 1.6 }, children: text }) }));
+/** Drag a rectangle on the stage. This is how an opaque stage gets pointed at:
+ * there is nothing to click for a mark, so the author draws the box instead.
+ * Reported as fractions, so it survives the stage being any size later. */
+export function AreaDraw({ bounds, onDone, onCancel }) {
+    const [from, setFrom] = useState(null);
+    const [to, setTo] = useState(null);
+    useEffect(() => {
+        const onKey = (e) => e.key === "Escape" && onCancel();
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [onCancel]);
+    const at = (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    const box = from && to && {
+        x: Math.min(from.x, to.x),
+        y: Math.min(from.y, to.y),
+        w: Math.abs(to.x - from.x),
+        h: Math.abs(to.y - from.y),
+    };
+    const finish = () => {
+        if (box && box.w > 6 && box.h > 6 && bounds.w && bounds.h) {
+            onDone({ x: box.x / bounds.w, y: box.y / bounds.h, w: box.w / bounds.w, h: box.h / bounds.h });
+        }
+        else {
+            onCancel();
+        }
+    };
+    return (_jsx("div", { onMouseDown: (e) => {
+            const p = at(e);
+            setFrom(p);
+            setTo(p);
+        }, onMouseMove: (e) => from && setTo(at(e)), onMouseUp: finish, onMouseLeave: () => from && finish(), style: { position: "absolute", inset: 0, cursor: "crosshair", background: "rgba(12,14,18,0.18)" }, children: box && (_jsx("div", { style: {
+                position: "absolute",
+                left: box.x,
+                top: box.y,
+                width: box.w,
+                height: box.h,
+                border: `2px solid ${RED}`,
+                background: "rgba(229,26,56,0.10)",
+                borderRadius: 8,
+            } })) }));
+}
+/** A still covering the stage: a `mock` stage, or one step's own image laid
+ * over whatever it runs in. It takes the clicks, so nothing underneath can be
+ * poked through it. */
+export function StageStill({ image }) {
+    const fill = image.fit === "fill";
+    return (_jsx("div", { style: {
+            position: "absolute",
+            inset: 0,
+            background: "#0f1115",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: fill ? 0 : 40,
+        }, children: image.src && (_jsx("img", { src: image.src, alt: "", style: fill
+                ? { width: "100%", height: "100%", objectFit: "cover", display: "block" }
+                : { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block", borderRadius: 10, boxShadow: "0 20px 50px -20px rgba(0,0,0,0.6)" } })) }));
+}
+/** Why there's nothing on the stage. `stageId` tells the two empty cases
+ * apart: a walkthrough with no stages at all, and a step pointed at one that
+ * has since been deleted or renamed. */
+export function StageNotice({ blocked, src, stageId }) {
+    const text = blocked === "no-stage" ? (stageId ? (_jsxs(_Fragment, { children: ["This step runs in ", _jsx("strong", { children: stageId }), ", which this walkthrough no longer has. Point it at one of its stages, or add that one back."] })) : (_jsx(_Fragment, { children: "This walkthrough has no stages yet. Add one \u2014 an app served from this site, a Figma embed, or a mock-up image." }))) : blocked === "no-src" ? (_jsx(_Fragment, { children: "This stage has no address yet." })) : blocked === "foreign" ? (_jsxs(_Fragment, { children: [_jsx("strong", { children: src }), " is on another origin, so it can't be driven from here. Play this walkthrough on the site that hosts the demo, or make this stage an ", _jsx("strong", { children: "embed" }), ", which is shown rather than driven."] })) : (_jsx(_Fragment, { children: "This stage needs a wider window than this one." }));
+    return (_jsx("div", { style: { flex: 1, display: "grid", placeItems: "center", padding: 32, color: "#6f6a66", fontSize: 14, textAlign: "center" }, children: _jsx("p", { style: { maxWidth: 440, lineHeight: 1.6 }, children: text }) }));
 }
 // ─── Callouts ──────────────────────────────────────────────────────
-// Labels anchored to elements in the demo. The anchor moves with the demo's
-// scale, but the bubble itself is drawn at the stage's own scale: a demo shown
-// at 0.4 would otherwise have callouts no one could read.
+// Labels anchored to something on the stage. The anchor comes from the caller
+// — a measured mark, or an Area resolved against the bounds — but the bubble
+// is always drawn at the stage's own scale: a demo shown at 0.4 would
+// otherwise have callouts no one could read.
 const BUBBLE_W = 236;
 const GAP = 16;
 /** The side with room for the bubble, preferring the one that was asked for. */
@@ -185,21 +274,20 @@ function sideFor(box, bounds, wanted) {
         return wanted;
     return ["right", "left", "bottom", "top"].find(fits) ?? wanted ?? "right";
 }
-export function Callouts({ items, rects, scale, bounds }) {
+export function Callouts({ items, boxFor, bounds }) {
     const placed = items
         .map((callout, i) => {
-        const rect = rects[callout.mark];
-        const box = rect && toBox([rect], scale, 0);
+        const box = boxFor(callout);
         if (!box)
             return null;
-        // An anchor scrolled out of the demo has nothing to point at.
+        // An anchor scrolled out of the stage has nothing to point at.
         const cx = box.x + box.w / 2;
         const cy = box.y + box.h / 2;
         if (cx < 0 || cy < 0 || cx > bounds.w || cy > bounds.h)
             return null;
         const side = sideFor(box, bounds, callout.placement);
-        const dx = (callout.offset?.x ?? 0) * scale;
-        const dy = (callout.offset?.y ?? 0) * scale;
+        const dx = callout.offset?.x ?? 0;
+        const dy = callout.offset?.y ?? 0;
         const edge = side === "right" ? { x: box.x + box.w, y: cy }
             : side === "left" ? { x: box.x, y: cy }
                 : side === "bottom" ? { x: cx, y: box.y + box.h }
@@ -223,7 +311,7 @@ export function Callouts({ items, rects, scale, bounds }) {
         const placedAt = side === "top" || side === "bottom"
             ? { x: clamp(x, half + PAD, bounds.w - half - PAD), y }
             : { x, y: clamp(y, 44 + PAD, bounds.h - 44 - PAD) };
-        return { key: `${callout.mark}-${i}`, callout, edge, anchor: placedAt, shift };
+        return { key: `${callout.mark ?? "area"}-${i}`, callout, edge, anchor: placedAt, shift };
     })
         .filter((p) => !!p);
     if (!placed.length)

@@ -1,11 +1,16 @@
-// ─── Demo stage ────────────────────────────────────────────────────
-// The live product scaled to fit its pane, and the spotlight drawn over it.
-// The player and the builder share this so an author sees exactly what a
-// reader will.
+// ─── The stage ─────────────────────────────────────────────────────
+// Whatever a step is talking about, scaled to fit its pane, with the spotlight
+// and callouts drawn over it. The player and the builder share this so an
+// author sees exactly what a reader will.
 //
-// There is no fixed canvas here as there is for a screen: the frame gets a
-// real viewport width and the stage scales to fit it, so every box the driver
-// reports is in demo pixels and is multiplied by that scale on its way out.
+// A driveable stage is read through a Driver, and every box it reports is in
+// demo pixels, multiplied by the stage's scale on its way out. There is no
+// fixed canvas as there is for a screen: the frame gets a real viewport width
+// and the stage scales to fit it.
+//
+// An opaque stage — an embed or a still — reports nothing, so anything drawn
+// over it is positioned by an Area: fractions of the stage, resolved against
+// its measured bounds.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
@@ -13,7 +18,7 @@ import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
 import { sameOriginDriver } from "./driver.js";
 import type { Driver, MarkRect, MarkRects } from "./driver.js";
-import type { Callout, WalkthroughTarget } from "./types.js";
+import type { Area, Callout, Stage, StillImage } from "./types.js";
 
 export interface Box {
   x: number;
@@ -22,8 +27,11 @@ export interface Box {
   h: number;
 }
 
-/** Why the demo can't be driven here, when it can't. */
-export type Blocked = "no-demo" | "foreign" | "small";
+/** Why there is nothing on the stage, when there isn't. */
+export type Blocked = "no-stage" | "no-src" | "foreign" | "small";
+
+/** What the stage is doing: showing one of the three kinds, or nothing. */
+export type StageMode = "demo" | "embed" | "mock" | "blocked";
 
 /** The box around one or more demo rects, in stage pixels. */
 export function toBox(rects: MarkRect[], scale: number, pad = 6): Box | null {
@@ -35,8 +43,15 @@ export function toBox(rects: MarkRect[], scale: number, pad = 6): Box | null {
   return { x: x1 * scale, y: y1 * scale, w: (x2 - x1) * scale, h: (y2 - y1) * scale };
 }
 
-/** Mount the demo, keep it measured, and report the marks' geometry. */
-export function useDemo(target: WalkthroughTarget, marks: string[]) {
+/** An Area resolved against the stage it sits on. Fractions in, pixels out. */
+export function areaBox(area: Area | undefined, bounds: { w: number; h: number }): Box | null {
+  if (!area) return null;
+  return { x: area.x * bounds.w, y: area.y * bounds.h, w: area.w * bounds.w, h: area.h * bounds.h };
+}
+
+/** Mount the stage, keep it measured, and — where it can be read — report the
+ * marks' geometry. */
+export function useStage(stage: Stage | null, marks: string[]) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [driver, setDriver] = useState<Driver | null>(null);
@@ -48,6 +63,9 @@ export function useDemo(target: WalkthroughTarget, marks: string[]) {
   const marksRef = useRef(marks);
   marksRef.current = marks;
 
+  const kind = stage?.kind ?? null;
+  const src = stage?.src ?? "";
+
   useEffect(() => {
     const on = () => setVw(window.innerWidth);
     window.addEventListener("resize", on);
@@ -55,35 +73,40 @@ export function useDemo(target: WalkthroughTarget, marks: string[]) {
   }, []);
 
   // A demo on another origin can't be read from here, so say so rather than
-  // showing a frame that silently never responds.
+  // showing a frame that silently never responds. An embed is on another
+  // origin by design and makes no such promise, so this is a demo's problem.
   const foreign = useMemo(() => {
-    if (!target.src) return false;
+    if (!src || kind !== "demo") return false;
     try {
-      return new URL(target.src, window.location.href).origin !== window.location.origin;
+      return new URL(src, window.location.href).origin !== window.location.origin;
     } catch {
       return true;
     }
-  }, [target.src]);
+  }, [src, kind]);
 
-  const blocked: Blocked | null = !target.src
-    ? "no-demo"
-    : foreign
-      ? "foreign"
-      : vw < (target.minWidth ?? 900)
-        ? "small"
-        : null;
-  const framed = !blocked;
+  const blocked: Blocked | null = !stage
+    ? "no-stage"
+    : !src
+      ? "no-src"
+      : foreign
+        ? "foreign"
+        : kind !== "mock" && vw < (stage.minWidth ?? 900)
+          ? "small"
+          : null;
+
+  const mode: StageMode = blocked ? "blocked" : (kind as StageMode);
+  const driveable = mode === "demo";
 
   useEffect(() => {
     const el = frameRef.current;
-    if (!framed || !el) return;
-    const next = sameOriginDriver(el, target.src);
+    if (!driveable || !el) return;
+    const next = sameOriginDriver(el, src);
     setDriver(next);
     return () => {
       next.dispose();
       setDriver(null);
     };
-  }, [framed, target.src]);
+  }, [driveable, src]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -94,7 +117,15 @@ export function useDemo(target: WalkthroughTarget, marks: string[]) {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [framed]);
+  }, [mode]);
+
+  // Every rect was measured inside one particular stage, so leaving it makes
+  // all of them wrong rather than merely out of date. Dropping them is what
+  // stops a mark from the demo you just left being drawn over the mock-up you
+  // arrived at, where nothing will ever correct it.
+  useEffect(() => {
+    setRects({});
+  }, [src, kind]);
 
   const measure = useCallback(() => {
     if (!driver) return;
@@ -121,7 +152,7 @@ export function useDemo(target: WalkthroughTarget, marks: string[]) {
     measure();
   }, [measure, size.w, size.h]);
 
-  const width = target.width ?? size.w;
+  const width = stage?.width ?? size.w;
   const scale = size.w && width ? Math.min(1, size.w / width) : 1;
 
   const frameStyle: React.CSSProperties = {
@@ -133,7 +164,7 @@ export function useDemo(target: WalkthroughTarget, marks: string[]) {
     transformOrigin: "top left",
   };
 
-  return { frameRef, stageRef, driver, rects, scale, measure, framed, blocked, frameStyle, bounds: size };
+  return { frameRef, stageRef, driver, rects, scale, measure, mode, driveable, blocked, frameStyle, bounds: size };
 }
 
 const sameRects = (a: MarkRects, b: MarkRects) => {
@@ -146,7 +177,7 @@ const sameRects = (a: MarkRects, b: MarkRects) => {
   });
 };
 
-/** A ring around the marked element, with the rest of the demo optionally
+/** A ring around the marked element, with the rest of the stage optionally
  * dimmed and optionally click-proof. The two are independent: the shield that
  * blocks clicks is the same four panels that do the dimming, so `lock` without
  * `dim` just makes them invisible. */
@@ -213,33 +244,141 @@ export function HoverOutline({ box, ok }: { box: Box | null; ok: boolean }) {
   );
 }
 
-/** Why there's no live demo to show. */
-export function DemoNotice({ blocked, src }: { blocked: Blocked; src: string }) {
+/** Drag a rectangle on the stage. This is how an opaque stage gets pointed at:
+ * there is nothing to click for a mark, so the author draws the box instead.
+ * Reported as fractions, so it survives the stage being any size later. */
+export function AreaDraw({ bounds, onDone, onCancel }: {
+  bounds: { w: number; h: number };
+  onDone: (area: Area) => void;
+  onCancel: () => void;
+}) {
+  const [from, setFrom] = useState<{ x: number; y: number } | null>(null);
+  const [to, setTo] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCancel();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  const at = (e: React.MouseEvent) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+
+  const box = from && to && {
+    x: Math.min(from.x, to.x),
+    y: Math.min(from.y, to.y),
+    w: Math.abs(to.x - from.x),
+    h: Math.abs(to.y - from.y),
+  };
+
+  const finish = () => {
+    if (box && box.w > 6 && box.h > 6 && bounds.w && bounds.h) {
+      onDone({ x: box.x / bounds.w, y: box.y / bounds.h, w: box.w / bounds.w, h: box.h / bounds.h });
+    } else {
+      onCancel();
+    }
+  };
+
+  return (
+    <div
+      onMouseDown={(e) => {
+        const p = at(e);
+        setFrom(p);
+        setTo(p);
+      }}
+      onMouseMove={(e) => from && setTo(at(e))}
+      onMouseUp={finish}
+      onMouseLeave={() => from && finish()}
+      style={{ position: "absolute", inset: 0, cursor: "crosshair", background: "rgba(12,14,18,0.18)" }}
+    >
+      {box && (
+        <div
+          style={{
+            position: "absolute",
+            left: box.x,
+            top: box.y,
+            width: box.w,
+            height: box.h,
+            border: `2px solid ${RED}`,
+            background: "rgba(229,26,56,0.10)",
+            borderRadius: 8,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** A still covering the stage: a `mock` stage, or one step's own image laid
+ * over whatever it runs in. It takes the clicks, so nothing underneath can be
+ * poked through it. */
+export function StageStill({ image }: { image: StillImage }) {
+  const fill = image.fit === "fill";
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: "#0f1115",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: fill ? 0 : 40,
+      }}
+    >
+      {image.src && (
+        <img
+          src={image.src}
+          alt=""
+          style={
+            fill
+              ? { width: "100%", height: "100%", objectFit: "cover", display: "block" }
+              : { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block", borderRadius: 10, boxShadow: "0 20px 50px -20px rgba(0,0,0,0.6)" }
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+/** Why there's nothing on the stage. `stageId` tells the two empty cases
+ * apart: a walkthrough with no stages at all, and a step pointed at one that
+ * has since been deleted or renamed. */
+export function StageNotice({ blocked, src, stageId }: { blocked: Blocked; src: string; stageId?: string | null }) {
   const text =
-    blocked === "no-demo" ? (
-      <>
-        This walkthrough doesn't point at a demo yet. Set its <strong>demo path</strong> to something served from this site, such as{" "}
-        <code>/projects/&lt;id&gt;/demo/index.html</code>.
-      </>
+    blocked === "no-stage" ? (
+      stageId ? (
+        <>
+          This step runs in <strong>{stageId}</strong>, which this walkthrough no longer has. Point it at one of its stages, or add that
+          one back.
+        </>
+      ) : (
+        <>This walkthrough has no stages yet. Add one — an app served from this site, a Figma embed, or a mock-up image.</>
+      )
+    ) : blocked === "no-src" ? (
+      <>This stage has no address yet.</>
     ) : blocked === "foreign" ? (
       <>
-        <strong>{src}</strong> is on another origin, so it can't be driven from here — play this walkthrough on the site that hosts the
-        demo.
+        <strong>{src}</strong> is on another origin, so it can't be driven from here. Play this walkthrough on the site that hosts the
+        demo, or make this stage an <strong>embed</strong>, which is shown rather than driven.
       </>
     ) : (
-      <>The demo needs a wider window than this one.</>
+      <>This stage needs a wider window than this one.</>
     );
   return (
     <div style={{ flex: 1, display: "grid", placeItems: "center", padding: 32, color: "#6f6a66", fontSize: 14, textAlign: "center" }}>
-      <p style={{ maxWidth: 420, lineHeight: 1.6 }}>{text}</p>
+      <p style={{ maxWidth: 440, lineHeight: 1.6 }}>{text}</p>
     </div>
   );
 }
 
 // ─── Callouts ──────────────────────────────────────────────────────
-// Labels anchored to elements in the demo. The anchor moves with the demo's
-// scale, but the bubble itself is drawn at the stage's own scale: a demo shown
-// at 0.4 would otherwise have callouts no one could read.
+// Labels anchored to something on the stage. The anchor comes from the caller
+// — a measured mark, or an Area resolved against the bounds — but the bubble
+// is always drawn at the stage's own scale: a demo shown at 0.4 would
+// otherwise have callouts no one could read.
 
 const BUBBLE_W = 236;
 const GAP = 16;
@@ -259,25 +398,25 @@ function sideFor(box: Box, bounds: { w: number; h: number }, wanted?: Side): Sid
   return (["right", "left", "bottom", "top"] as Side[]).find(fits) ?? wanted ?? "right";
 }
 
-export function Callouts({ items, rects, scale, bounds }: {
+export function Callouts({ items, boxFor, bounds }: {
   items: Callout[];
-  rects: MarkRects;
-  scale: number;
+  /** Where this callout points, in stage pixels, or null if it has nothing to
+   * point at — an unmeasured mark, or an area on a stage with no size yet. */
+  boxFor: (callout: Callout) => Box | null;
   bounds: { w: number; h: number };
 }) {
   const placed = items
     .map((callout, i) => {
-      const rect = rects[callout.mark];
-      const box = rect && toBox([rect], scale, 0);
+      const box = boxFor(callout);
       if (!box) return null;
-      // An anchor scrolled out of the demo has nothing to point at.
+      // An anchor scrolled out of the stage has nothing to point at.
       const cx = box.x + box.w / 2;
       const cy = box.y + box.h / 2;
       if (cx < 0 || cy < 0 || cx > bounds.w || cy > bounds.h) return null;
 
       const side = sideFor(box, bounds, callout.placement);
-      const dx = (callout.offset?.x ?? 0) * scale;
-      const dy = (callout.offset?.y ?? 0) * scale;
+      const dx = callout.offset?.x ?? 0;
+      const dy = callout.offset?.y ?? 0;
       const edge =
         side === "right" ? { x: box.x + box.w, y: cy }
         : side === "left" ? { x: box.x, y: cy }
@@ -307,7 +446,7 @@ export function Callouts({ items, rects, scale, bounds }: {
           ? { x: clamp(x, half + PAD, bounds.w - half - PAD), y }
           : { x, y: clamp(y, 44 + PAD, bounds.h - 44 - PAD) };
 
-      return { key: `${callout.mark}-${i}`, callout, edge, anchor: placedAt, shift };
+      return { key: `${callout.mark ?? "area"}-${i}`, callout, edge, anchor: placedAt, shift };
     })
     .filter((p): p is NonNullable<typeof p> => !!p);
 

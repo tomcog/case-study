@@ -104,7 +104,8 @@
       ]
     }
   ],
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "title": "Test Project",
-  "draft": true
+  "draft": true,
+  "kind": "case-study"
 }

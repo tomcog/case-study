@@ -30,7 +30,7 @@
         {
           "id": "o4",
           "label": "Timeline",
-          "body": "6 months \u00b7 2024"
+          "body": "6 months · 2024"
         },
         {
           "id": "o5",
@@ -49,7 +49,7 @@
       "accent": "#E51A38",
       "eyebrow": "The problem",
       "title": "Nobody had ever ordered a test like this before.",
-      "body": "There was no precedent, no workflow, and no requirements \u2014 just a novel blood test and a thousand open questions about how it would actually reach a patient."
+      "body": "There was no precedent, no workflow, and no requirements — just a novel blood test and a thousand open questions about how it would actually reach a patient."
     },
     {
       "id": "s3",
@@ -89,12 +89,12 @@
       "metrics": [
         {
           "id": "m1",
-          "value": "\u221263%",
+          "value": "−63%",
           "label": "Order entry errors"
         },
         {
           "id": "m2",
-          "value": "8\u21922",
+          "value": "8→2",
           "label": "Steps to place an order"
         },
         {
@@ -112,5 +112,6 @@
     "logoColor": "#1838d8",
     "imageOverlay": true
   },
-  "schemaVersion": 1
+  "schemaVersion": 3,
+  "kind": "case-study"
 }
