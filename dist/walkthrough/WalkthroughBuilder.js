@@ -47,11 +47,10 @@ const newStep = () => ({
     advance: { on: "manual" },
 });
 const appName = (apps, id) => !id ? "No app" : (apps.find((a) => a.id === id)?.label ?? id);
-export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp, onPatchApp, onDeleteApp, projectName, onClose }) {
+export function WalkthroughBuilder({ content, setContent, apps = [], projectName, onClose }) {
     const [selected, setSelected] = useState(0);
     const [playing, setPlaying] = useState(false);
     const [showThumb, setShowThumb] = useState(false);
-    const [showApps, setShowApps] = useState(false);
     const [picking, setPicking] = useState(null);
     const [drawing, setDrawing] = useState(null);
     const [hover, setHover] = useState(null);
@@ -63,6 +62,10 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
     const spotMarks = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
     // The app the selected step runs, and what it displays over it.
     const app = useMemo(() => apps.find((a) => a.id === step?.app), [apps, step?.app]);
+    // What the picker offers: the pool minus the hidden ones, plus whichever app
+    // this step already runs. Hiding retires an app from new use without
+    // rewriting the steps that found it first.
+    const offered = useMemo(() => apps.filter((a) => !a.hidden || a.id === step?.app), [apps, step?.app]);
     const shown = contentOf(step);
     const demo = useApp(app?.src, markIds, app);
     const { driver } = demo;
@@ -83,8 +86,6 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
     // ── The pool ──
     // Ingesting and renaming reach the filesystem, so they are the host's to do;
     // the panel only collects what they need and reports what went wrong.
-    const [appError, setAppError] = useState(null);
-    const report = (p) => void p.then(() => setAppError(null), (err) => setAppError(err.message));
     // ── Steps ──
     const patchCallout = (at, patch) => update({ callouts: (step.callouts ?? []).map((c, i) => (i === at ? { ...c, ...patch } : c)) });
     /** Edit the slide this step displays, if it displays one. */
@@ -257,7 +258,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
     if (!step) {
         return (_jsx("div", { style: shell, children: _jsxs("div", { style: { margin: "auto", textAlign: "center", color: "#5a554e" }, children: [_jsx("p", { style: { marginBottom: 14 }, children: "This walkthrough has no steps yet." }), _jsx(Button, { variant: "primary", icon: _jsx(Plus, { size: 16 }), onClick: addStep, style: { margin: "0 auto" }, children: "Add the first step" })] }) }));
     }
-    return (_jsxs("div", { style: shell, children: [_jsxs("div", { style: toolbar, children: [_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 15 }, children: [_jsx(LayoutGrid, { size: 18, style: { color: ACCENT } }), " Walkthrough Builder", projectName && (_jsxs(_Fragment, { children: [_jsx("span", { style: { color: "#cfcbc4", fontWeight: 400 }, children: "/" }), _jsx("span", { style: { color: "#5a554e", fontWeight: 600 }, children: projectName })] }))] }), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, position: "relative" }, children: [onIngestApp && (_jsxs(Button, { variant: "tertiary", icon: _jsx(Layers, { size: 16 }), onClick: () => setShowApps((v) => !v), title: "The apps any walkthrough can run", children: ["Apps ", _jsx("span", { style: { opacity: 0.6, fontWeight: 400 }, children: apps.length })] })), _jsx(Button, { variant: "tertiary", icon: _jsx(ImageIcon, { size: 16 }), onClick: () => setShowThumb((v) => !v), title: "Projects page preview card", children: "Project settings" }), _jsx(Button, { variant: "primary", icon: _jsx(Play, { size: 16 }), onClick: () => setPlaying(true), children: "Preview" }), onClose && _jsx(Button, { variant: "secondary", onClick: onClose, children: "Done" }), showApps && onIngestApp && (_jsx(AppsPanel, { apps: apps, steps: steps, error: appError, onIngest: (path, label) => report(onIngestApp(path, label)), onPatch: onPatchApp && ((id, patch) => report(onPatchApp(id, patch))), onDelete: onDeleteApp && ((id) => report(onDeleteApp(id))), onClose: () => setShowApps(false) })), showThumb && (_jsx(PreviewCardSettings, { preview: content.preview ?? {}, onChange: (patch) => setContent((prev) => ({ ...prev, preview: { ...prev.preview, ...patch } })), onClose: () => setShowThumb(false) }))] })] }), _jsxs("div", { style: { flex: 1, display: "flex", minHeight: 0 }, children: [_jsxs("div", { style: rail, children: [_jsx(Reorder.Group, { axis: "y", values: steps, onReorder: (next) => {
+    return (_jsxs("div", { style: shell, children: [_jsxs("div", { style: toolbar, children: [_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 15 }, children: [_jsx(LayoutGrid, { size: 18, style: { color: ACCENT } }), " Walkthrough Builder", projectName && (_jsxs(_Fragment, { children: [_jsx("span", { style: { color: "#cfcbc4", fontWeight: 400 }, children: "/" }), _jsx("span", { style: { color: "#5a554e", fontWeight: 600 }, children: projectName })] }))] }), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, position: "relative" }, children: [_jsx(Button, { variant: "tertiary", icon: _jsx(ImageIcon, { size: 16 }), onClick: () => setShowThumb((v) => !v), title: "Projects page preview card", children: "Project settings" }), _jsx(Button, { variant: "primary", icon: _jsx(Play, { size: 16 }), onClick: () => setPlaying(true), children: "Preview" }), onClose && _jsx(Button, { variant: "secondary", onClick: onClose, children: "Done" }), showThumb && (_jsx(PreviewCardSettings, { preview: content.preview ?? {}, onChange: (patch) => setContent((prev) => ({ ...prev, preview: { ...prev.preview, ...patch } })), onClose: () => setShowThumb(false) }))] })] }), _jsxs("div", { style: { flex: 1, display: "flex", minHeight: 0 }, children: [_jsxs("div", { style: rail, children: [_jsx(Reorder.Group, { axis: "y", values: steps, onReorder: (next) => {
                                     const id = steps[index]?.id;
                                     setContent((prev) => ({ ...prev, steps: next }));
                                     const ni = next.findIndex((s) => s.id === id);
@@ -273,7 +274,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
                                 }) }), _jsx(Button, { variant: "ghost", size: "sm", icon: _jsx(Plus, { size: 16 }), onClick: addStep, style: { ...fill, marginTop: 4 }, children: "Add step" })] }), _jsx("div", { style: { flex: 1, minWidth: 0, position: "relative", overflow: "hidden", display: "flex", background: demo.live || framed || isSlide ? "#0f1115" : "#e9e7e3" }, children: demo.live || framed || isSlide ? (_jsxs("div", { ref: demo.stageRef, style: { flex: 1, position: "relative", overflow: "hidden" }, children: [demo.live && app && _jsx("iframe", { ref: demo.frameRef, title: app.label, style: demo.frameStyle }, app.src), shown.kind === "slide" && (_jsx("div", { style: { position: "absolute", inset: 0, background: "#f4f3f1" }, children: _jsx(SlideView, { screen: shown.screen, reduced: true, logoSrc: content.preview?.logo, onAnnotationMove: (id, x, y) => patchSlide({ items: (shown.screen.items ?? []).map((it) => (it.id === id ? { ...it, x, y } : it)) }) }) })), shown.kind === "image" && _jsx(StageStill, { image: shown }), shown.kind === "embed" && (_jsx("iframe", { src: shown.url, title: "Embedded page", allowFullScreen: true, style: { position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 } }, shown.url)), !overlaid && _jsx(Spotlight, { box: box, shape: step.spotlight?.shape, dim: step.spotlight?.dim, lock: false }), !overlaid && step.callouts?.length ? _jsx(Callouts, { items: step.callouts, boxFor: calloutBox, bounds: demo.bounds }) : null, picking && _jsx(HoverOutline, { box: hoverBox, ok: !!hover?.mark }), drawing && (_jsx(AreaDraw, { bounds: demo.bounds, onDone: (area) => {
                                         applyArea(drawing, area);
                                         setDrawing(null);
-                                    }, onCancel: () => setDrawing(null) })), (picking || drawing) && (_jsxs("div", { style: pickBanner, children: [picking ? _jsx(Crosshair, { size: 15 }) : _jsx(Square, { size: 15 }), picking ? "Click the element to mark" : "Drag the area to point at", _jsx("button", { onClick: () => (picking ? setPicking(null) : setDrawing(null)), style: pickCancel, title: "Cancel (Esc)", children: _jsx(X, { size: 14 }) })] }))] })) : (_jsx(StageNotice, { blocked: demo.blocked, src: app?.src })) }), _jsxs("div", { style: inspector, children: [_jsxs(Field, { label: "App", collapsible: true, children: [_jsxs("select", { value: step.app ?? "", onChange: (e) => update({ app: e.target.value || undefined }), style: { ...inputStyle, cursor: "pointer" }, children: [_jsx("option", { value: "", children: "None \u2014 no app running" }), apps.map((a) => (_jsx("option", { value: a.id, children: a.label }, a.id)))] }), !apps.length && onIngestApp && (_jsxs("p", { style: hint, children: ["No apps yet \u2014 ", _jsx("button", { onClick: () => setShowApps(true), style: linkBtn, children: "ingest one" }), " and every walkthrough can run it."] })), !!step.app && (_jsx("p", { style: hint, children: boots
+                                    }, onCancel: () => setDrawing(null) })), (picking || drawing) && (_jsxs("div", { style: pickBanner, children: [picking ? _jsx(Crosshair, { size: 15 }) : _jsx(Square, { size: 15 }), picking ? "Click the element to mark" : "Drag the area to point at", _jsx("button", { onClick: () => (picking ? setPicking(null) : setDrawing(null)), style: pickCancel, title: "Cancel (Esc)", children: _jsx(X, { size: 14 }) })] }))] })) : (_jsx(StageNotice, { blocked: demo.blocked, src: app?.src })) }), _jsxs("div", { style: inspector, children: [_jsxs(Field, { label: "App", collapsible: true, children: [_jsxs("select", { value: step.app ?? "", onChange: (e) => update({ app: e.target.value || undefined }), style: { ...inputStyle, cursor: "pointer" }, children: [_jsx("option", { value: "", children: "None \u2014 no app running" }), offered.map((a) => (_jsxs("option", { value: a.id, children: [a.label, a.hidden ? " (hidden)" : ""] }, a.id)))] }), !apps.length && (_jsx("p", { style: hint, children: "No apps in the pool yet \u2014 ingest one on the Apps screen and every project can run it." })), !!step.app && (_jsx("p", { style: hint, children: boots
                                             ? `Boots ${appName(apps, step.app)}. The steps after it keep it running, so whatever the reader does carries forward.`
                                             : `${appName(apps, step.app)} is already running from the step before, and keeps whatever the reader did.` })), !step.app && _jsx("p", { style: hint, children: "Nothing runs behind this step. It can still display a URL or an image." }), boots && (_jsxs(_Fragment, { children: [_jsx("label", { style: { ...hint, display: "block", marginTop: 12 }, children: "Starting screen" }), _jsxs("div", { style: { display: "flex", gap: 6, marginTop: 4 }, children: [_jsx("input", { value: step.start ?? "", onChange: (e) => update({ start: e.target.value || undefined }), placeholder: "#/orders", style: inputStyle }), _jsx(Button, { variant: "ghost", size: "sm", onClick: () => driver && update({ start: driver.currentPath() || undefined }), disabled: !driver, style: nowrap, title: "Use the screen the app is showing", children: "Use current" })] }), misroute && (_jsx("div", { style: warn, children: _jsxs("span", { children: ["That isn't a screen \u2014 it's an address. A screen is a route ", _jsx("strong", { children: "inside" }), " ", appName(apps, step.app), ", like ", _jsx("code", { children: "#/orders" }), ". To show something else, change the app above or this step's Display."] }) })), _jsx("p", { style: hint, children: "Where the app opens. Navigate it on the left and press Use current rather than typing one." })] }))] }), _jsxs(Field, { label: "Display", collapsible: true, children: [_jsx(SegmentedControl, { size: "md", "aria-label": "What this step displays", style: track, children: CONTENT_KINDS.map((k) => (_jsx(Segment, { selected: shown.kind === k.value, onClick: () => update({
                                                 content: k.value === "app" ? undefined : blankContent(k.value, shown),
@@ -315,19 +316,6 @@ function blankAction(kind, from) {
     if (kind === "click")
         return { do: "click", mark };
     return { do: "type", mark, text: from.do === "type" ? from.text : "" };
-}
-/** The pool every walkthrough draws from. Ingesting copies someone's built
- * output in and never looks at the original again, so a demo can't break
- * because the app it runs moved on. */
-function AppsPanel({ apps, steps, error, onIngest, onPatch, onDelete, onClose }) {
-    const [path, setPath] = useState("");
-    const [label, setLabel] = useState("");
-    const used = (id) => steps.filter((s) => s.app === id).length;
-    return (_jsxs(_Fragment, { children: [_jsx("div", { onClick: onClose, style: { position: "fixed", inset: 0, zIndex: 90 } }), _jsxs("div", { style: stagesPanel, children: [_jsx("div", { style: { fontSize: 13, fontWeight: 600, marginBottom: 4 }, children: "Apps" }), _jsx("div", { style: { fontSize: 11, color: "#8c8c8c", marginBottom: 14, lineHeight: 1.5 }, children: "Every walkthrough can run any of these. Each is a copy of a built output, frozen at the moment it was ingested." }), apps.map((app) => (_jsxs("div", { style: { border: "1px solid #e3e0db", borderRadius: 9, padding: 11, marginBottom: 10 }, children: [_jsxs("div", { style: { display: "flex", gap: 6, alignItems: "center" }, children: [_jsx("input", { defaultValue: app.label, onBlur: (e) => onPatch && e.target.value.trim() && e.target.value !== app.label && onPatch(app.id, { label: e.target.value.trim() }), disabled: !onPatch, style: inputStyle }), onDelete && (_jsx(ButtonRound, { size: "sm", variant: "tertiary", tone: "danger", icon: _jsx(X, { size: 13 }), onClick: () => onDelete(app.id), title: used(app.id) ? `${used(app.id)} steps in this walkthrough run it` : "Remove this app", "aria-label": "Remove this app" }))] }), _jsxs("div", { style: { display: "flex", gap: 6, marginTop: 6 }, children: [_jsxs("label", { style: { ...hint, flex: 1 }, children: ["Width", _jsx("input", { type: "number", defaultValue: app.width ?? "", onBlur: (e) => onPatch && onPatch(app.id, { width: e.target.value ? Number(e.target.value) : undefined }), disabled: !onPatch, style: inputStyle })] }), _jsxs("label", { style: { ...hint, flex: 1 }, children: ["Min width", _jsx("input", { type: "number", defaultValue: app.minWidth ?? "", onBlur: (e) => onPatch && onPatch(app.id, { minWidth: e.target.value ? Number(e.target.value) : undefined }), disabled: !onPatch, style: inputStyle })] })] }), _jsxs("p", { style: { ...hint, display: "flex", justifyContent: "space-between", gap: 8 }, children: [_jsx("code", { style: { fontSize: 10.5, opacity: 0.75 }, children: app.id }), _jsxs("span", { children: [used(app.id), " ", used(app.id) === 1 ? "step here" : "steps here"] })] })] }, app.id))), _jsxs("div", { style: { borderTop: "1px solid #e3e0db", marginTop: 14, paddingTop: 14 }, children: [_jsx("div", { style: { fontSize: 12, fontWeight: 600, marginBottom: 6 }, children: "Ingest an app" }), _jsx("input", { value: label, onChange: (e) => setLabel(e.target.value), placeholder: "Provider Portal", style: inputStyle }), _jsx("input", { value: path, onChange: (e) => setPath(e.target.value), placeholder: "/Users/you/Sites/provider-portal/dist", style: { ...inputStyle, marginTop: 6 } }), _jsxs("p", { style: hint, children: ["The folder its build wrote \u2014 the one with ", _jsx("code", { children: "index.html" }), " in it, not the source. It must be built with", _jsx("code", { children: " base: \"./\"" }), " and use hash routes."] }), error && _jsx("div", { style: warn, children: error }), _jsx(Button, { variant: "ghost", size: "sm", icon: _jsx(Plus, { size: 15 }), onClick: () => {
-                                    onIngest(path.trim(), label.trim());
-                                    setPath("");
-                                    setLabel("");
-                                }, disabled: !path.trim(), style: { ...fill, marginTop: 8 }, children: "Ingest" })] })] })] }));
 }
 /** Where a spotlight or a callout points: a mark on a driveable stage, an area
  * on one that can only be shown. The same field, because it is the same idea —
@@ -391,10 +379,6 @@ const inspector = {
  * panel sideways; the thumb is positioned within the track, so it travels with
  * it. */
 const track = { maxWidth: "100%", overflowX: "auto" };
-const stagesPanel = {
-    position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 91, width: 360, maxHeight: "80vh", overflowY: "auto",
-    background: "#fff", border: "1px solid #e3e0db", borderRadius: 10, boxShadow: "0 18px 44px rgba(0,0,0,0.16)", padding: 16, textAlign: "left",
-};
 /** The band that opens each run of steps sharing a stage. Derived from the
  * steps, so dragging one into another run simply moves the band. */
 const runBand = {
@@ -402,10 +386,6 @@ const runBand = {
     fontSize: 9.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#8a857d",
 };
 const hint = { fontSize: 11, color: "#8a857d", margin: "7px 0 0", lineHeight: 1.5 };
-const linkBtn = {
-    appearance: "none", border: 0, background: "none", padding: 0, font: "inherit", color: ACCENT,
-    cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2,
-};
 const warn = {
     display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, lineHeight: 1.5,
     background: "#fff8e6", border: "1px solid #f0dca8", color: "#6b5516", borderRadius: 8, padding: 10, marginTop: 8,

@@ -1,24 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, Globe, Layers, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { Button, ButtonRound, Card, InputText, Tag } from "@tomcoggia/ui";
 import {
   CaseStudyProvider, ProjectBuilder, ProjectPlayer, SlideView,
   type ProjectContent,
 } from "../src/index.js";
 import {
-  beaconProject, canEdit, createProject, deleteApp, deleteProject, duplicateProject, getProject, ingestApp,
-  listApps, listProjects, patchApp, projectAssets, publishProject, renameProject, saveProject, type ProjectRow,
+  appsUsage, beaconProject, canEdit, createProject, deleteApp, deleteProject, duplicateProject, getProject, ingestApp,
+  listApps, listProjects, patchApp, projectAssets, publishProject, renameProject, saveProject,
+  type AppUse, type ProjectRow,
 } from "./store";
 import type { IngestedApp } from "../src/index.js";
 
 // ─── ProjectBuilder ────────────────────────────────────────────────
 // Create, manage and edit the projects in projects/. Hash routes:
 //   #/             the project list
+//   #/apps         the shared pool of ingested apps (dev only)
 //   #/<id>         plays a project
 //   #/<id>/edit    edits it (dev only)
 //
 // Both kinds of project play at #/<id>: a case study as a deck of screens, a
 // walkthrough as stepped copy beside its demo.
+//
+// The pool is managed here rather than inside a project, because every write
+// to it — ingesting, renaming, resizing, hiding, deleting — reaches every
+// project at once. A project only ever chooses from it, step by step.
 
 const go = (to: string) => (window.location.hash = to);
 
@@ -35,6 +41,8 @@ function useHash() {
 export function App() {
   const [id, mode] = useHash().replace(/^#\/?/, "").split("/").filter(Boolean);
   if (!id) return <ProjectList />;
+  // Reserved: a project called "apps" would be reached at #/apps-2.
+  if (id === "apps" && canEdit) return <AppsScreen />;
   if (mode === "edit" && canEdit) return <ProjectEditor key={id} id={id} />;
   return <PlayProject key={id} id={id} />;
 }
@@ -101,10 +109,17 @@ function ProjectList() {
         <h1 className="wordmark">
           <LayoutGrid size={20} /> ProjectBuilder
         </h1>
-        {canEdit && !creating && (
-          <Button variant="primary" icon={<Plus size={16} />} onClick={() => setCreating(true)}>
-            New project
-          </Button>
+        {canEdit && (
+          <div className="list__actions">
+            <Button asChild variant="tertiary" icon={<Layers size={16} />}>
+              <a href="#/apps" title="The apps every project's steps can run">Apps</a>
+            </Button>
+            {!creating && (
+              <Button variant="primary" icon={<Plus size={16} />} onClick={() => setCreating(true)}>
+                New project
+              </Button>
+            )}
+          </div>
         )}
       </header>
 
@@ -171,7 +186,7 @@ function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string) => v
 
 const unit = ({ count }: ProjectRow) => (count === 1 ? "step" : "steps");
 
-// Mirrors freeId() in projects-plugin.ts (the server adds a suffix if the id is taken).
+// Mirrors freeId() in projects-plugin.ts (the server adds a suffix if the id is taken or reserved).
 const slugPreview = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "project";
 
 function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
@@ -283,7 +298,7 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (title: str
 }
 
 // Asks before deleting: the first click arms it ("Delete?"), a second click within 3 seconds deletes.
-function DeleteButton({ onDelete }: { onDelete: () => void }) {
+function DeleteButton({ onDelete, title = "Delete the project and its images" }: { onDelete: () => void; title?: string }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
     if (!armed) return;
@@ -297,25 +312,249 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
       variant={armed ? "primary" : "tertiary"}
       icon={<Trash2 size={14} />}
       onClick={() => (armed ? onDelete() : setArmed(true))}
-      title={armed ? "Click again to delete" : "Delete the project and its images"}
+      title={armed ? `Click again to delete. ${title}` : title}
       aria-label={armed ? "Confirm delete" : "Delete"}
     />
   );
 }
 
-function ago(ms: number) {
+/** "3 days ago", or "just now" under a minute. */
+function since(ms: number) {
   const s = Math.round((Date.now() - ms) / 1000);
-  if (s < 60) return "Edited just now";
+  if (s < 60) return "just now";
   const units: [number, string][] = [[60, "minute"], [24, "hour"], [30, "day"], [12, "month"], [Infinity, "year"]];
   let n = s / 60;
   for (const [size, unit] of units) {
     if (n < size) {
       const whole = Math.floor(n);
-      return `Edited ${whole} ${unit}${whole === 1 ? "" : "s"} ago`;
+      return `${whole} ${unit}${whole === 1 ? "" : "s"} ago`;
     }
     n /= size;
   }
   return "";
+}
+
+function ago(ms: number) {
+  const when = since(ms);
+  return when ? `Edited ${when}` : "";
+}
+
+// ─── The shared pool ───────────────────────────────────────────────
+// Managing the pool lives here, away from any one project, because every
+// write to it reaches all of them at once: a rename changes the label every
+// step's picker shows, a resize changes the viewport every run gets, and a
+// delete leaves every step that pointed at it running nothing. A project only
+// ever chooses from what the pool holds, which is what its step picker is for.
+
+function AppsScreen() {
+  const [apps, setApps] = useState<IngestedApp[] | null>(null);
+  const [usage, setUsage] = useState<Record<string, AppUse[]>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(
+    () =>
+      Promise.all([listApps(), appsUsage()])
+        .then(([pool, used]) => {
+          setApps(pool);
+          setUsage(used);
+        })
+        .catch(() => setApps([])),
+    [],
+  );
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Runs a change, then reloads the pool and its usage; a failure shows in the toast.
+  async function act(change: () => Promise<unknown>) {
+    try {
+      await change();
+      setError(null);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    await refresh();
+  }
+
+  return (
+    <div className="list">
+      <header className="list__header">
+        <h1 className="wordmark">
+          <a href="#/" title="All projects"><LayoutGrid size={20} /> ProjectBuilder</a>
+          <span className="wordmark__sep">/</span>
+          <span className="wordmark__here">Apps</span>
+        </h1>
+      </header>
+
+      <p className="apps__intro">
+        The pool every project draws from. Each app is a copy of a built output, frozen at the moment it was ingested,
+        so a demo can&rsquo;t break because the app it runs moved on. Everything here is shared: renaming, resizing and
+        hiding reach every project at once, and deleting leaves every step that ran it running nothing.
+      </p>
+
+      <IngestForm onIngest={(path, label) => act(() => ingestApp(path, label))} />
+
+      {apps?.length === 0 && <p className="list__empty">No apps yet. Ingest a built folder above and every project can run it.</p>}
+
+      <div className="apps">
+        {apps?.map((app) => (
+          <AppCard
+            key={app.id}
+            app={app}
+            used={usage[app.id] ?? []}
+            onPatch={(patch) => act(() => patchApp(app.id, patch))}
+            onDelete={() => act(() => deleteApp(app.id))}
+          />
+        ))}
+      </div>
+
+      {error && (
+        <div className="toast" role="alert">
+          {error}
+          <button onClick={() => setError(null)} aria-label="Dismiss">×</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IngestForm({ onIngest }: { onIngest: (path: string, label: string) => void }) {
+  const [path, setPath] = useState("");
+  const [label, setLabel] = useState("");
+  return (
+    <form
+      className="new"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (path.trim()) {
+          onIngest(path.trim(), label.trim());
+          setPath("");
+          setLabel("");
+        }
+      }}
+    >
+      <div className="new__row">
+        <InputText
+          id="ingest-label"
+          className="new__input"
+          label="App name"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="e.g. Provider Portal"
+        />
+        <InputText
+          id="ingest-path"
+          className="new__input"
+          label="Built folder on this machine"
+          value={path}
+          onChange={(e) => setPath(e.target.value)}
+          placeholder="/Users/you/Sites/provider-portal/dist"
+        />
+        <Button variant="primary" type="submit" icon={<Plus size={16} />} disabled={!path.trim()}>Ingest</Button>
+      </div>
+      <p className="new__hint">
+        The folder its build wrote &mdash; the one with <code>index.html</code> in it, not the source. It has to be built
+        with <code>base: "./"</code>, use hash routes, and put <code>data-walkthrough</code> on anything a step points at.
+      </p>
+    </form>
+  );
+}
+
+function AppCard({ app, used, onPatch, onDelete }: {
+  app: IngestedApp;
+  used: AppUse[];
+  onPatch: (patch: Partial<IngestedApp>) => void;
+  onDelete: () => void;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const steps = used.reduce((n, use) => n + use.steps.length, 0);
+  return (
+    <Card variant="flat" className="app">
+      <div className="tile__title-row">
+        {renaming ? (
+          <RenameInput
+            initial={app.label}
+            onDone={(label) => {
+              setRenaming(false);
+              if (label && label !== app.label) onPatch({ label });
+            }}
+          />
+        ) : (
+          <button className="tile__title tile__title--editable" onClick={() => setRenaming(true)} title="Rename">
+            {app.label}
+          </button>
+        )}
+        {app.hidden && <Tag title="Left out of every step's picker; steps already running it still run it">Hidden</Tag>}
+      </div>
+
+      <p className="tile__meta">
+        <code>{app.id}</code>
+        {app.ingestedAt ? ` · Ingested ${since(app.ingestedAt)}` : ""}
+      </p>
+
+      <div className="app__sizes">
+        <InputText
+          type="number"
+          size="md"
+          label="Width"
+          defaultValue={app.width ?? ""}
+          onBlur={(e) => onPatch({ width: e.target.value ? Number(e.target.value) : undefined })}
+          title="The viewport to give it, in px; the frame scales to fit"
+        />
+        <InputText
+          type="number"
+          size="md"
+          label="Min width"
+          defaultValue={app.minWidth ?? ""}
+          onBlur={(e) => onPatch({ minWidth: e.target.value ? Number(e.target.value) : undefined })}
+          title="Below this the player drops the frame and shows the copy alone"
+        />
+      </div>
+
+      <Usage used={used} steps={steps} />
+
+      <div className="tile__actions">
+        <Button
+          size="sm"
+          variant="tertiary"
+          icon={app.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+          onClick={() => onPatch({ hidden: !app.hidden })}
+          title={app.hidden
+            ? "Offer it again in every step's picker"
+            : "Keep it out of every step's picker. Steps already running it carry on"}
+        >
+          {app.hidden ? "Show" : "Hide"}
+        </Button>
+        <DeleteButton
+          onDelete={onDelete}
+          title={steps
+            ? `${steps} ${steps === 1 ? "step" : "steps"} run it — they'd be left running nothing`
+            : "Delete the app and its files"}
+        />
+      </div>
+    </Card>
+  );
+}
+
+/** What a deletion would cost, counted across every project rather than the
+ * one that happens to be open — the pool belongs to all of them. */
+function Usage({ used, steps }: { used: AppUse[]; steps: number }) {
+  if (!used.length) return <p className="app__usage app__usage--none">No project runs it.</p>;
+  return (
+    <div className="app__usage">
+      <p>
+        {steps} {steps === 1 ? "step" : "steps"} across {used.length} {used.length === 1 ? "project" : "projects"}
+      </p>
+      <ul>
+        {used.map((use) => (
+          <li key={use.id}>
+            <a href={`#/${use.id}/edit`}>{use.title}</a>
+            <span>{use.steps.length === 1 ? "step" : "steps"} {use.steps.join(", ")}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 // ─── Play ──────────────────────────────────────────────────────────
@@ -352,11 +591,9 @@ function ProjectEditor({ id }: { id: string }) {
 // A pending save is sent on the way out if the tab closes first.
 function Editor({ id, initial }: { id: string; initial: ProjectContent }) {
   const [content, setContent] = useState(initial);
-  const { apps, refresh: refreshApps } = useApps();
-  // Ingesting reaches the filesystem, so the builder hands it back here. Each
-  // one reloads the pool, which is what puts a new app in the step's dropdown.
-  const after = <A extends unknown[]>(run: (...a: A) => Promise<unknown>) =>
-    (...args: A) => run(...args).then(refreshApps);
+  // Read-only here: the pool is shared, so it is managed at #/apps and a
+  // project's steps only choose from what it holds.
+  const { apps } = useApps();
   const [error, setError] = useState<string | null>(null);
   const pending = useRef<ProjectContent | null>(null);
   const assets = useMemo(() => projectAssets(id), [id]);
@@ -392,9 +629,6 @@ function Editor({ id, initial }: { id: string; initial: ProjectContent }) {
         content={content}
         setContent={setContent}
         apps={apps}
-        onIngestApp={after(ingestApp)}
-        onPatchApp={after(patchApp)}
-        onDeleteApp={after(deleteApp)}
         projectName={content.title || id}
         onClose={() => go("#/")}
       />

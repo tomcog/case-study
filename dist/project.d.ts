@@ -15,6 +15,10 @@ export interface IngestedApp {
      * belong to the app rather than to each step that runs it. */
     width?: number;
     minWidth?: number;
+    /** Kept out of the pickers, in every project, without being removed. A step
+     * already running it keeps running it — hiding is how an app is retired
+     * from new use, and deleting is the only thing that breaks a project. */
+    hidden?: boolean;
     ingestedAt?: number;
 }
 /** Bring any saved project up to the current shape. Never throws: anything

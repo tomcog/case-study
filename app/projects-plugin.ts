@@ -27,8 +27,9 @@ import { basename, extname, join, resolve } from "node:path";
 //
 //   GET  /apps/index.json                           one row per ingested app
 //   GET  /apps/<id>/…                               an app's files, straight from disk
+//   GET  /__apps/usage                              which projects run each app, drafts included
 //   POST /__apps/ingest   { path, label }           → { id }  copies a built folder in
-//   POST /__apps/rename   { id, label }             → renames it (the id never changes)
+//   POST /__apps/rename   { id, label|width|minWidth|hidden } → patches app.json (the id never changes)
 //   POST /__apps/delete   { id }                    → removes the folder
 //
 // A build copies projects/ and apps/ into the output, each with a static
@@ -79,6 +80,7 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
           src: `/apps/${id}/${meta.entry || "index.html"}`,
           width: meta.width,
           minWidth: meta.minWidth,
+          hidden: meta.hidden === true ? true : undefined,
           ingestedAt: meta.ingestedAt ?? statSync(appFile(id)).mtimeMs,
         };
       })
@@ -112,7 +114,11 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
     if (path === "/__apps/rename") {
       const meta = JSON.parse(readFileSync(appFile(input.id), "utf8"));
       const patch: Record<string, unknown> = {};
-      for (const key of ["label", "width", "minWidth"]) if (key in input) patch[key] = input[key];
+      for (const key of ["label", "width", "minWidth", "hidden"]) if (key in input) patch[key] = input[key];
+      // A cleared field is an absent one: undefined overrides what app.json
+      // holds and JSON.stringify drops it, so showing an app again leaves no
+      // "hidden": false behind.
+      if (patch.hidden === false) patch.hidden = undefined;
       writeFileSync(appFile(input.id), `${JSON.stringify({ ...meta, ...patch }, null, 2)}\n`);
       return [200, { ok: true }];
     }
@@ -133,6 +139,25 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
   };
 
   const isDraft = (id: string) => read(id).draft === true;
+
+  /** Which projects run each app, drafts included. The pool is shared, so the
+   * only honest count of what a deletion would break is taken across every
+   * project rather than the one that happens to be open. */
+  function appUsage() {
+    const out: Record<string, { id: string; title: string; steps: number[] }[]> = {};
+    for (const id of ids()) {
+      const data = read(id);
+      const steps: any[] = Array.isArray(data.steps) ? data.steps : [];
+      const byApp = new Map<string, number[]>();
+      steps.forEach((step, i) => {
+        if (!step?.app) return;
+        if (!byApp.has(step.app)) byApp.set(step.app, []);
+        byApp.get(step.app)!.push(i + 1);
+      });
+      for (const [app, at] of byApp) (out[app] ??= []).push({ id, title: data.title || id, steps: at });
+    }
+    return out;
+  }
 
   // What the project list needs, without loading every project in full. The
   // published index leaves drafts out.
@@ -162,10 +187,14 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
   }
 
   // A new id from a title: "SimpleScreen CRC" → "simplescreen-crc", suffixed if taken.
+  // "apps" is the builder's own route for the shared pool, so a project can't
+  // have it as an id — it would be unreachable at #/apps.
+  const RESERVED = new Set(["apps"]);
+
   function freeId(title: string) {
     const base = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "project";
     let id = base;
-    for (let i = 2; existsSync(join(dir, id)); i++) id = `${base}-${i}`;
+    for (let i = 2; existsSync(join(dir, id)) || RESERVED.has(id); i++) id = `${base}-${i}`;
     return id;
   }
 
@@ -274,6 +303,7 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
           if (!ID.test(id) || !existsSync(imagesDir(id))) return reply(200, []);
           return reply(200, readdirSync(imagesDir(id)).filter((name) => IMAGE.test(name)));
         }
+        if (req.method === "GET" && path === "/__apps/usage") return reply(200, appUsage());
         if (req.method !== "POST") return next();
 
         let body = "";

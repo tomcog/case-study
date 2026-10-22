@@ -48,6 +48,20 @@ export async function listApps(): Promise<IngestedApp[]> {
   return res.ok ? res.json() : [];
 }
 
+/** Which projects run each app, keyed by app id. Drafts count: the pool is
+ * shared, so what a deletion would break is a question about every project. */
+export interface AppUse {
+  id: string;
+  title: string;
+  /** 1-based step numbers, so the answer is readable without opening it. */
+  steps: number[];
+}
+
+export async function appsUsage(): Promise<Record<string, AppUse[]>> {
+  const res = await fetch("/__apps/usage", { cache: "no-store" });
+  return res.ok ? res.json() : {};
+}
+
 async function postApp<T = { ok: true }>(action: string, body: unknown): Promise<T> {
   const res = await fetch(`/__apps/${action}`, {
     method: "POST",

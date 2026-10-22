@@ -67,17 +67,15 @@ type Slot =
   | { field: "callout"; at: number }
   | { field: "action"; at: number };
 
-export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp, onPatchApp, onDeleteApp, projectName, onClose }: {
+export function WalkthroughBuilder({ content, setContent, apps = [], projectName, onClose }: {
   content: WalkthroughContent;
   setContent: (u: (prev: WalkthroughContent) => WalkthroughContent) => void;
-  /** The shared pool of ingested apps a step can run. */
+  /** The shared pool of ingested apps a step can run. The builder only picks
+   * from it: the pool is shared by every project, so ingesting, renaming,
+   * resizing, hiding and deleting belong to whoever owns it, not to one
+   * project's editor. Hidden apps aren't offered, but a step already running
+   * one keeps running it and still says so. */
   apps?: IngestedApp[];
-  /** Managing the pool means touching the host's filesystem, so the host does
-   * it. Given these, the builder shows the Apps panel; without them it only
-   * picks from what it was handed. */
-  onIngestApp?: (path: string, label: string) => Promise<unknown>;
-  onPatchApp?: (id: string, patch: Partial<IngestedApp>) => Promise<unknown>;
-  onDeleteApp?: (id: string) => Promise<unknown>;
   projectName?: string;
   /** Adds a "Done" button to the toolbar (e.g. back to a project list). */
   onClose?: () => void;
@@ -85,7 +83,6 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
   const [selected, setSelected] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [showThumb, setShowThumb] = useState(false);
-  const [showApps, setShowApps] = useState(false);
   const [picking, setPicking] = useState<Slot | null>(null);
   const [drawing, setDrawing] = useState<Slot | null>(null);
   const [hover, setHover] = useState<PickHit | null>(null);
@@ -99,6 +96,10 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
   const spotMarks = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
   // The app the selected step runs, and what it displays over it.
   const app = useMemo(() => apps.find((a) => a.id === step?.app), [apps, step?.app]);
+  // What the picker offers: the pool minus the hidden ones, plus whichever app
+  // this step already runs. Hiding retires an app from new use without
+  // rewriting the steps that found it first.
+  const offered = useMemo(() => apps.filter((a) => !a.hidden || a.id === step?.app), [apps, step?.app]);
   const shown = contentOf(step);
   const demo = useApp(app?.src, markIds, app);
   const { driver } = demo;
@@ -123,8 +124,6 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
   // ── The pool ──
   // Ingesting and renaming reach the filesystem, so they are the host's to do;
   // the panel only collects what they need and reports what went wrong.
-  const [appError, setAppError] = useState<string | null>(null);
-  const report = (p: Promise<unknown>) => void p.then(() => setAppError(null), (err: Error) => setAppError(err.message));
 
   // ── Steps ──
   const patchCallout = (at: number, patch: Partial<Callout>) =>
@@ -326,11 +325,6 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
-          {onIngestApp && (
-            <Button variant="tertiary" icon={<Layers size={16} />} onClick={() => setShowApps((v) => !v)} title="The apps any walkthrough can run">
-              Apps <span style={{ opacity: 0.6, fontWeight: 400 }}>{apps.length}</span>
-            </Button>
-          )}
           <Button variant="tertiary" icon={<ImageIcon size={16} />} onClick={() => setShowThumb((v) => !v)} title="Projects page preview card">
             Project settings
           </Button>
@@ -338,17 +332,6 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
             Preview
           </Button>
           {onClose && <Button variant="secondary" onClick={onClose}>Done</Button>}
-          {showApps && onIngestApp && (
-            <AppsPanel
-              apps={apps}
-              steps={steps}
-              error={appError}
-              onIngest={(path, label) => report(onIngestApp(path, label))}
-              onPatch={onPatchApp && ((id, patch) => report(onPatchApp(id, patch)))}
-              onDelete={onDeleteApp && ((id) => report(onDeleteApp(id)))}
-              onClose={() => setShowApps(false)}
-            />
-          )}
           {showThumb && (
             <PreviewCardSettings
               preview={content.preview ?? {}}
@@ -484,14 +467,13 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
               style={{ ...inputStyle, cursor: "pointer" }}
             >
               <option value="">None — no app running</option>
-              {apps.map((a) => (
-                <option key={a.id} value={a.id}>{a.label}</option>
+              {offered.map((a) => (
+                <option key={a.id} value={a.id}>{a.label}{a.hidden ? " (hidden)" : ""}</option>
               ))}
             </select>
-            {!apps.length && onIngestApp && (
+            {!apps.length && (
               <p style={hint}>
-                No apps yet — <button onClick={() => setShowApps(true)} style={linkBtn}>ingest one</button> and every walkthrough can
-                run it.
+                No apps in the pool yet — ingest one on the Apps screen and every project can run it.
               </p>
             )}
             {!!step.app && (
@@ -965,115 +947,6 @@ function blankAction(kind: StepAction["do"], from: StepAction): StepAction {
   return { do: "type", mark, text: from.do === "type" ? from.text : "" };
 }
 
-/** The pool every walkthrough draws from. Ingesting copies someone's built
- * output in and never looks at the original again, so a demo can't break
- * because the app it runs moved on. */
-function AppsPanel({ apps, steps, error, onIngest, onPatch, onDelete, onClose }: {
-  apps: IngestedApp[];
-  steps: WalkthroughStep[];
-  error: string | null;
-  onIngest: (path: string, label: string) => void;
-  onPatch?: (id: string, patch: Partial<IngestedApp>) => void;
-  onDelete?: (id: string) => void;
-  onClose: () => void;
-}) {
-  const [path, setPath] = useState("");
-  const [label, setLabel] = useState("");
-  const used = (id: string) => steps.filter((s) => s.app === id).length;
-
-  return (
-    <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 90 }} />
-      <div style={stagesPanel}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Apps</div>
-        <div style={{ fontSize: 11, color: "#8c8c8c", marginBottom: 14, lineHeight: 1.5 }}>
-          Every walkthrough can run any of these. Each is a copy of a built output, frozen at the moment it was ingested.
-        </div>
-
-        {apps.map((app) => (
-          <div key={app.id} style={{ border: "1px solid #e3e0db", borderRadius: 9, padding: 11, marginBottom: 10 }}>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <input
-                defaultValue={app.label}
-                onBlur={(e) => onPatch && e.target.value.trim() && e.target.value !== app.label && onPatch(app.id, { label: e.target.value.trim() })}
-                disabled={!onPatch}
-                style={inputStyle}
-              />
-              {onDelete && (
-                <ButtonRound
-                  size="sm"
-                  variant="tertiary"
-                  tone="danger"
-                  icon={<X size={13} />}
-                  onClick={() => onDelete(app.id)}
-                  title={used(app.id) ? `${used(app.id)} steps in this walkthrough run it` : "Remove this app"}
-                  aria-label="Remove this app"
-                />
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-              <label style={{ ...hint, flex: 1 }}>
-                Width
-                <input
-                  type="number"
-                  defaultValue={app.width ?? ""}
-                  onBlur={(e) => onPatch && onPatch(app.id, { width: e.target.value ? Number(e.target.value) : undefined })}
-                  disabled={!onPatch}
-                  style={inputStyle}
-                />
-              </label>
-              <label style={{ ...hint, flex: 1 }}>
-                Min width
-                <input
-                  type="number"
-                  defaultValue={app.minWidth ?? ""}
-                  onBlur={(e) => onPatch && onPatch(app.id, { minWidth: e.target.value ? Number(e.target.value) : undefined })}
-                  disabled={!onPatch}
-                  style={inputStyle}
-                />
-              </label>
-            </div>
-            <p style={{ ...hint, display: "flex", justifyContent: "space-between", gap: 8 }}>
-              <code style={{ fontSize: 10.5, opacity: 0.75 }}>{app.id}</code>
-              <span>{used(app.id)} {used(app.id) === 1 ? "step here" : "steps here"}</span>
-            </p>
-          </div>
-        ))}
-
-        <div style={{ borderTop: "1px solid #e3e0db", marginTop: 14, paddingTop: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Ingest an app</div>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Provider Portal" style={inputStyle} />
-          <input
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            placeholder="/Users/you/Sites/provider-portal/dist"
-            style={{ ...inputStyle, marginTop: 6 }}
-          />
-          <p style={hint}>
-            The folder its build wrote — the one with <code>index.html</code> in it, not the source. It must be built with
-            <code> base: "./"</code> and use hash routes.
-          </p>
-          {error && <div style={warn}>{error}</div>}
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<Plus size={15} />}
-            onClick={() => {
-              onIngest(path.trim(), label.trim());
-              setPath("");
-              setLabel("");
-            }}
-            disabled={!path.trim()}
-            style={{ ...fill, marginTop: 8 }}
-          >
-            Ingest
-          </Button>
-        </div>
-      </div>
-    </>
-  );
-}
-
 /** Where a spotlight or a callout points: a mark on a driveable stage, an area
  * on one that can only be shown. The same field, because it is the same idea —
  * only the way of naming the spot differs. */
@@ -1214,11 +1087,6 @@ const inspector: React.CSSProperties = {
  * it. */
 const track: React.CSSProperties = { maxWidth: "100%", overflowX: "auto" };
 
-const stagesPanel: React.CSSProperties = {
-  position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 91, width: 360, maxHeight: "80vh", overflowY: "auto",
-  background: "#fff", border: "1px solid #e3e0db", borderRadius: 10, boxShadow: "0 18px 44px rgba(0,0,0,0.16)", padding: 16, textAlign: "left",
-};
-
 /** The band that opens each run of steps sharing a stage. Derived from the
  * steps, so dragging one into another run simply moves the band. */
 const runBand: React.CSSProperties = {
@@ -1227,11 +1095,6 @@ const runBand: React.CSSProperties = {
 };
 
 const hint: React.CSSProperties = { fontSize: 11, color: "#8a857d", margin: "7px 0 0", lineHeight: 1.5 };
-
-const linkBtn: React.CSSProperties = {
-  appearance: "none", border: 0, background: "none", padding: 0, font: "inherit", color: ACCENT,
-  cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2,
-};
 
 const warn: React.CSSProperties = {
   display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, lineHeight: 1.5,
