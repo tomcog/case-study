@@ -3,7 +3,7 @@
 export { ProjectPreviewCard as CaseStudyCard } from "./ui/ProjectPreviewCard.js";
 export { CaseStudyProvider, useCaseStudyConfig } from "./config.js";
 export { Stage, ScreenView, bleedBg, backdropFor, STAGE_W, STAGE_H } from "./core.js";
-export { SlideFields, newScreen } from "./slide.js";
+export { SlideFields, SlideView, newScreen } from "./slide.js";
 export { migrate, withAssetBase, loadProject, previewCard, projectSource, SCHEMA_VERSION } from "./project.js";
 export { DEFAULT_ACCENT, DEFAULT_INK } from "./theme.js";
 // Building blocks the host app may reuse in its own screens (e.g. a project index editor).

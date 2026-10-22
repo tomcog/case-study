@@ -1,13 +1,13 @@
 // ─── Slides ────────────────────────────────────────────────────────
 // A slide is a screen composed on the fixed 1280×720 canvas: the ten layouts
 // and the fields each of them uses. This file is only the slide itself — what
-// a new one starts as, and the one set of controls every step that displays
-// one is edited with, so two of them can't drift apart.
+// a new one starts as, the one way of putting it on screen, and the one set
+// of controls it is edited with, so no two of them can drift apart.
 
 import { RED, DEFAULT_ACCENT } from "./theme.js";
 import {
   ACCENT, THEMES, DEFAULT_OVERVIEW_ITEMS, DEFAULT_GALLERY, DEFAULT_ANNOTATIONS, DEFAULT_STAT,
-  screenTheme,
+  screenTheme, bleedBg, backdropFor, Stage, ScreenView,
 } from "./core.js";
 import type { ScreenLayout, Theme, Screen } from "./core.js";
 import {
@@ -54,6 +54,32 @@ export function newScreen(): Screen {
   };
 }
 
+
+/** A slide on screen: the stage scaled to its parent, the bleed and backdrop
+ * that fill the letterbox margins, and the screen drawn on the canvas. Every
+ * place a slide appears goes through here — the player, the builder's canvas
+ * and the project list's thumbnail — so a slide can't look like three
+ * slightly different things depending on who drew it.
+ *
+ * `play` runs the entrance; a builder leaves it off, because the slide is
+ * being edited rather than arrived at. `reduced` picks the reduced-motion
+ * variants. */
+export function SlideView({ screen, play = false, reduced = false, logoSrc, onAnnotationMove }: {
+  screen: Screen;
+  play?: boolean;
+  reduced?: boolean;
+  logoSrc?: string;
+  /** Dragging a showcase annotation to a new spot on its image. Only the
+   * annotated layout has any, and ScreenView hands it to that layout alone,
+   * so a caller doesn't have to know which one that is. */
+  onAnnotationMove?: (id: string, x: number, y: number) => void;
+}) {
+  return (
+    <Stage key={screen.id} background={bleedBg(screen)} backdrop={backdropFor(screen)}>
+      <ScreenView screen={screen} play={play} reduced={reduced} logoSrc={logoSrc} onAnnotationMove={onAnnotationMove} />
+    </Stage>
+  );
+}
 
 /** Everything about one slide: its layout and the fields that layout uses.
  * Lifted out of the builder so a step displaying a slide edits it with exactly

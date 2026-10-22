@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
-import { Stage, ScreenView, bleedBg, backdropFor } from "../core.js";
+import { SlideView } from "../slide.js";
 import { Callouts, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
 import type { Box } from "./stage.js";
 import type { Driver } from "./driver.js";
@@ -86,6 +86,10 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
   const { driver, measure } = demo;
 
   const next = useCallback(() => setI((n) => n + 1), []);
+  const back = useCallback(() => setI((n) => Math.max(0, n - 1)), []);
+  // Read by the key handler, which is bound once; `manual` is recomputed every
+  // render, so it has to be reachable rather than captured.
+  const canGoOn = useRef(false);
 
   useEffect(() => {
     if (!step) return;
@@ -124,16 +128,17 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
   }, [driver, i, step, markKey]);
 
   useEffect(() => {
+    // The same keys do the same thing on every step. Forward is offered only
+    // where the panel would offer it: a step waiting on the reader has no Next
+    // button, so the arrow doesn't quietly skip it either.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onExit?.();
-      if (e.key === "ArrowLeft") setI((n) => Math.max(0, n - 1));
-      // A slide carries its own copy and has no panel, so it takes the deck's
-      // way forward as well as the panel's.
-      if (e.key === "ArrowRight" && contentOf(steps[i]).kind === "slide") setI((n) => n + 1);
+      if (e.key === "ArrowLeft") back();
+      if (e.key === "ArrowRight" && canGoOn.current) next();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onExit, steps, i]);
+  }, [onExit, back, next]);
 
   // A spotlight is anchored either way: to measured marks on a driveable
   // stage, or to a rectangle on one that can only be shown.
@@ -161,6 +166,7 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
   // one can only be left by its button, whatever it was authored to wait for.
   const watching = !!driver && shown.kind === "app";
   const manual = !watching || step?.advance.on === "manual";
+  canGoOn.current = !step || manual;
   const manualLabel = step?.advance.on === "manual" ? (step.advance.label ?? "Next") : "Next";
 
   return (
@@ -271,7 +277,7 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
 
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14 }}>
             {i > 0 && (
-              <button type="button" onClick={() => setI((n) => Math.max(0, n - 1))} style={ghost}>
+              <button type="button" onClick={back} style={ghost}>
                 Back
               </button>
             )}
@@ -331,19 +337,29 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
             onClick={next}
             style={{ position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }}
           >
-            <Stage key={slide.id} background={bleedBg(slide)} backdrop={backdropFor(slide)}>
-              <ScreenView screen={slide} play reduced={!!reduced} logoSrc={content.preview?.logo} />
-            </Stage>
+            <SlideView screen={slide} play reduced={!!reduced} logoSrc={content.preview?.logo} />
 
-            {/* The panel's chrome, kept where the panel would have been. */}
+            {/* The same controls the panel carries, in the same order and at
+                the same edge of the screen: Back on the left, Exit on the
+                right, the count between them. A slide has no panel to hold
+                them, not a different way of being navigated. */}
             <div style={slideChrome} onClick={(e) => e.stopPropagation()}>
+              {i > 0 ? (
+                <button type="button" onClick={back} style={ghost}>
+                  Back
+                </button>
+              ) : (
+                <span />
+              )}
               <span style={{ fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }}>
                 {i + 1} of {steps.length}
               </span>
-              {onExit && (
+              {onExit ? (
                 <button type="button" onClick={onExit} style={ghost}>
                   Exit
                 </button>
+              ) : (
+                <span />
               )}
             </div>
           </motion.div>
@@ -379,17 +395,15 @@ const ghost: React.CSSProperties = {
   textUnderlineOffset: 3,
 };
 
+// Where the panel keeps Back and Exit: the bottom edge, one on each side.
 const slideChrome: React.CSSProperties = {
   position: "absolute",
-  top: 20,
-  right: 24,
+  left: 28,
+  right: 28,
+  bottom: 22,
   display: "flex",
   alignItems: "center",
+  justifyContent: "space-between",
   gap: 16,
-  padding: "6px 12px",
-  borderRadius: 999,
-  background: "rgba(255,255,255,0.86)",
-  backdropFilter: "blur(6px)",
-  boxShadow: "0 6px 20px -8px rgba(0,0,0,0.3)",
   cursor: "default",
 };

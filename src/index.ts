@@ -7,7 +7,7 @@ export type { CaseStudyConfig, CaseStudyAssets, ImageCaption } from "./config.js
 
 export { Stage, ScreenView, bleedBg, backdropFor, STAGE_W, STAGE_H } from "./core.js";
 export type { Screen, ScreenLayout, Theme, Metric, OverviewItem, GalleryImage, ProjectPreview } from "./core.js";
-export { SlideFields, newScreen } from "./slide.js";
+export { SlideFields, SlideView, newScreen } from "./slide.js";
 
 export { migrate, withAssetBase, loadProject, previewCard, projectSource, SCHEMA_VERSION } from "./project.js";
 export type { ProjectSummary, ProjectSource, ProjectContent, IngestedApp } from "./project.js";

@@ -18,9 +18,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Reorder } from "motion/react";
 import { ChevronDown, ChevronUp, Copy, Crosshair, Image as ImageIcon, LayoutGrid, Layers, Play, Plus, Square, Trash2, X } from "lucide-react";
-import { ACCENT, Stage, ScreenView, bleedBg, backdropFor } from "../core.js";
+import { ACCENT } from "../core.js";
 import type { Screen } from "../core.js";
-import { SlideFields, newScreen } from "../slide.js";
+import { SlideFields, SlideView, newScreen } from "../slide.js";
 import { Field, ImageField, PreviewCardSettings, inputStyle } from "../editors.js";
 import { Button, ButtonRound, Segment, SegmentedControl } from "@tomcoggia/ui";
 import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
@@ -426,17 +426,14 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
 
               {shown.kind === "slide" && (
                 <div style={{ position: "absolute", inset: 0, background: "#f4f3f1" }}>
-                  <Stage key={shown.screen.id} background={bleedBg(shown.screen)} backdrop={backdropFor(shown.screen)}>
-                    <ScreenView
-                      screen={shown.screen}
-                      play={false}
-                      reduced
-                      logoSrc={content.preview?.logo}
-                      onAnnotationMove={shown.screen.layout === "showcase"
-                        ? (id, x, y) => patchSlide({ items: (shown.screen.items ?? []).map((it) => (it.id === id ? { ...it, x, y } : it)) })
-                        : undefined}
-                    />
-                  </Stage>
+                  {/* No entrance here: the slide is being edited, not arrived at. */}
+                  <SlideView
+                    screen={shown.screen}
+                    reduced
+                    logoSrc={content.preview?.logo}
+                    onAnnotationMove={(id, x, y) =>
+                      patchSlide({ items: (shown.screen.items ?? []).map((it) => (it.id === id ? { ...it, x, y } : it)) })}
+                  />
                 </div>
               )}
               {shown.kind === "image" && <StageStill image={shown} />}

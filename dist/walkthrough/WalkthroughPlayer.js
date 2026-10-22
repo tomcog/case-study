@@ -7,11 +7,11 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 // nothing, so it is shown, its overlays are positioned by Area, and the reader
 // moves on with the panel's button. The stage itself (frame, scaling, overlay)
 // is shared with the builder — see stage.tsx.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
-import { Stage, ScreenView, bleedBg, backdropFor } from "../core.js";
+import { SlideView } from "../slide.js";
 import { Callouts, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
 import { bootsApp, contentOf, stepMarks } from "./types.js";
 const PANEL_W = 400;
@@ -68,6 +68,10 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
     const demo = useApp(app?.src, markIds, app);
     const { driver, measure } = demo;
     const next = useCallback(() => setI((n) => n + 1), []);
+    const back = useCallback(() => setI((n) => Math.max(0, n - 1)), []);
+    // Read by the key handler, which is bound once; `manual` is recomputed every
+    // render, so it has to be reachable rather than captured.
+    const canGoOn = useRef(false);
     useEffect(() => {
         if (!step)
             return;
@@ -106,19 +110,20 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [driver, i, step, markKey]);
     useEffect(() => {
+        // The same keys do the same thing on every step. Forward is offered only
+        // where the panel would offer it: a step waiting on the reader has no Next
+        // button, so the arrow doesn't quietly skip it either.
         const onKey = (e) => {
             if (e.key === "Escape")
                 onExit?.();
             if (e.key === "ArrowLeft")
-                setI((n) => Math.max(0, n - 1));
-            // A slide carries its own copy and has no panel, so it takes the deck's
-            // way forward as well as the panel's.
-            if (e.key === "ArrowRight" && contentOf(steps[i]).kind === "slide")
-                setI((n) => n + 1);
+                back();
+            if (e.key === "ArrowRight" && canGoOn.current)
+                next();
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [onExit, steps, i]);
+    }, [onExit, back, next]);
     // A spotlight is anchored either way: to measured marks on a driveable
     // stage, or to a rectangle on one that can only be shown.
     const box = useMemo(() => {
@@ -145,6 +150,7 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
     // one can only be left by its button, whatever it was authored to wait for.
     const watching = !!driver && shown.kind === "app";
     const manual = !watching || step?.advance.on === "manual";
+    canGoOn.current = !step || manual;
     const manualLabel = step?.advance.on === "manual" ? (step.advance.label ?? "Next") : "Next";
     return (_jsxs("div", { style: {
             position: "fixed",
@@ -163,7 +169,7 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
                     flexDirection: "column",
                     padding: "26px 28px 22px",
                     overflowY: "auto",
-                }, children: [_jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }, children: [_jsx("span", { style: { fontSize: 13, fontWeight: 600, color: INK, letterSpacing: "-0.01em" }, children: content.title }), _jsx("span", { style: { fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }, children: finished ? `${steps.length} of ${steps.length}` : `${i + 1} of ${steps.length}` })] }), _jsx("div", { style: { height: 3, background: LINE, borderRadius: 2, margin: "14px 0 26px", overflow: "hidden" }, children: _jsx(motion.div, { initial: { width: 0 }, animate: { width: `${((finished ? steps.length : i) / Math.max(1, steps.length)) * 100}%` }, transition: reduced ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 30 }, style: { height: "100%", background: RED } }) }), _jsx("div", { style: { flex: 1, minHeight: 0 }, children: _jsx(AnimatePresence, { mode: "wait", initial: false, children: _jsx(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: reduced ? { opacity: 0 } : { opacity: 0, y: -8 }, transition: { duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }, children: step ? (_jsxs(_Fragment, { children: [step.eyebrow && (_jsx("div", { style: { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: RED, marginBottom: 10 }, children: step.eyebrow })), step.title && (_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: step.title })), step.body && (_jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: renderStyledText(step.body) })), step.imageUrl && (_jsx("img", { src: step.imageUrl, alt: "", style: { display: "block", width: "100%", borderRadius: 10, marginTop: 18, border: `1px solid ${LINE}` } }))] })) : (_jsxs(_Fragment, { children: [_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: "That's the walkthrough." }), _jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: "The product stays where you left it \u2014 keep clicking around, or start again from the top." })] })) }, step?.id ?? "__done") }) }), _jsxs("div", { style: { paddingTop: 22 }, children: [step && manual && (_jsx("button", { type: "button", onClick: next, style: primary, children: manualLabel })), step && !manual && (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: MUTED, minHeight: 38 }, children: [_jsx(motion.span, { animate: reduced ? {} : { opacity: [1, 0.25, 1] }, transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" }, style: { width: 7, height: 7, borderRadius: "50%", background: RED, flex: "none" } }), "Your turn \u2014 do it in the app"] })), !step && (_jsx("button", { type: "button", onClick: restart, style: primary, children: "Start again" })), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 14, marginTop: 14 }, children: [i > 0 && (_jsx("button", { type: "button", onClick: () => setI((n) => Math.max(0, n - 1)), style: ghost, children: "Back" })), step && !manual && nudge && (_jsx("button", { type: "button", onClick: next, style: ghost, children: "Skip this step" })), onExit && (_jsx("button", { type: "button", onClick: onExit, style: { ...ghost, marginLeft: "auto" }, children: "Exit" }))] })] })] }), (demo.live || shown.kind !== "app") && !narrow && (_jsxs("div", { ref: demo.stageRef, style: { flex: 1, position: "relative", overflow: "hidden", background: "#0f1115" }, children: [demo.live && app && _jsx("iframe", { ref: demo.frameRef, title: app.label, style: demo.frameStyle }, app.src), shown.kind === "image" && _jsx(StageStill, { image: shown }), shown.kind === "embed" && (_jsx("iframe", { src: shown.url, title: content.title ?? "Embedded page", allowFullScreen: true, style: { position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 } }, shown.url)), _jsx(Spotlight, { box: box, shape: step?.spotlight?.shape, dim: step?.spotlight?.dim, lock: step?.spotlight?.lock }), step?.callouts?.length ? _jsx(Callouts, { items: step.callouts, boxFor: calloutBox, bounds: demo.bounds }) : null] })), shown.kind === "app" && !demo.live && !narrow && _jsx(StageNotice, { blocked: demo.blocked, src: app?.src }), _jsx(AnimatePresence, { initial: false, children: slide && (_jsxs(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, scale: 1.01 }, animate: { opacity: 1, scale: 1 }, exit: reduced ? { opacity: 0 } : { opacity: 0, scale: 0.995 }, transition: { duration: reduced ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }, onClick: next, style: { position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }, children: [_jsx(Stage, { background: bleedBg(slide), backdrop: backdropFor(slide), children: _jsx(ScreenView, { screen: slide, play: true, reduced: !!reduced, logoSrc: content.preview?.logo }) }, slide.id), _jsxs("div", { style: slideChrome, onClick: (e) => e.stopPropagation(), children: [_jsxs("span", { style: { fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }, children: [i + 1, " of ", steps.length] }), onExit && (_jsx("button", { type: "button", onClick: onExit, style: ghost, children: "Exit" }))] })] }, "slide")) })] }));
+                }, children: [_jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }, children: [_jsx("span", { style: { fontSize: 13, fontWeight: 600, color: INK, letterSpacing: "-0.01em" }, children: content.title }), _jsx("span", { style: { fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }, children: finished ? `${steps.length} of ${steps.length}` : `${i + 1} of ${steps.length}` })] }), _jsx("div", { style: { height: 3, background: LINE, borderRadius: 2, margin: "14px 0 26px", overflow: "hidden" }, children: _jsx(motion.div, { initial: { width: 0 }, animate: { width: `${((finished ? steps.length : i) / Math.max(1, steps.length)) * 100}%` }, transition: reduced ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 30 }, style: { height: "100%", background: RED } }) }), _jsx("div", { style: { flex: 1, minHeight: 0 }, children: _jsx(AnimatePresence, { mode: "wait", initial: false, children: _jsx(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: reduced ? { opacity: 0 } : { opacity: 0, y: -8 }, transition: { duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }, children: step ? (_jsxs(_Fragment, { children: [step.eyebrow && (_jsx("div", { style: { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: RED, marginBottom: 10 }, children: step.eyebrow })), step.title && (_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: step.title })), step.body && (_jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: renderStyledText(step.body) })), step.imageUrl && (_jsx("img", { src: step.imageUrl, alt: "", style: { display: "block", width: "100%", borderRadius: 10, marginTop: 18, border: `1px solid ${LINE}` } }))] })) : (_jsxs(_Fragment, { children: [_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: "That's the walkthrough." }), _jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: "The product stays where you left it \u2014 keep clicking around, or start again from the top." })] })) }, step?.id ?? "__done") }) }), _jsxs("div", { style: { paddingTop: 22 }, children: [step && manual && (_jsx("button", { type: "button", onClick: next, style: primary, children: manualLabel })), step && !manual && (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: MUTED, minHeight: 38 }, children: [_jsx(motion.span, { animate: reduced ? {} : { opacity: [1, 0.25, 1] }, transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" }, style: { width: 7, height: 7, borderRadius: "50%", background: RED, flex: "none" } }), "Your turn \u2014 do it in the app"] })), !step && (_jsx("button", { type: "button", onClick: restart, style: primary, children: "Start again" })), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 14, marginTop: 14 }, children: [i > 0 && (_jsx("button", { type: "button", onClick: back, style: ghost, children: "Back" })), step && !manual && nudge && (_jsx("button", { type: "button", onClick: next, style: ghost, children: "Skip this step" })), onExit && (_jsx("button", { type: "button", onClick: onExit, style: { ...ghost, marginLeft: "auto" }, children: "Exit" }))] })] })] }), (demo.live || shown.kind !== "app") && !narrow && (_jsxs("div", { ref: demo.stageRef, style: { flex: 1, position: "relative", overflow: "hidden", background: "#0f1115" }, children: [demo.live && app && _jsx("iframe", { ref: demo.frameRef, title: app.label, style: demo.frameStyle }, app.src), shown.kind === "image" && _jsx(StageStill, { image: shown }), shown.kind === "embed" && (_jsx("iframe", { src: shown.url, title: content.title ?? "Embedded page", allowFullScreen: true, style: { position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 } }, shown.url)), _jsx(Spotlight, { box: box, shape: step?.spotlight?.shape, dim: step?.spotlight?.dim, lock: step?.spotlight?.lock }), step?.callouts?.length ? _jsx(Callouts, { items: step.callouts, boxFor: calloutBox, bounds: demo.bounds }) : null] })), shown.kind === "app" && !demo.live && !narrow && _jsx(StageNotice, { blocked: demo.blocked, src: app?.src }), _jsx(AnimatePresence, { initial: false, children: slide && (_jsxs(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, scale: 1.01 }, animate: { opacity: 1, scale: 1 }, exit: reduced ? { opacity: 0 } : { opacity: 0, scale: 0.995 }, transition: { duration: reduced ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }, onClick: next, style: { position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }, children: [_jsx(SlideView, { screen: slide, play: true, reduced: !!reduced, logoSrc: content.preview?.logo }), _jsxs("div", { style: slideChrome, onClick: (e) => e.stopPropagation(), children: [i > 0 ? (_jsx("button", { type: "button", onClick: back, style: ghost, children: "Back" })) : (_jsx("span", {})), _jsxs("span", { style: { fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }, children: [i + 1, " of ", steps.length] }), onExit ? (_jsx("button", { type: "button", onClick: onExit, style: ghost, children: "Exit" })) : (_jsx("span", {}))] })] }, "slide")) })] }));
 }
 const primary = {
     appearance: "none",
@@ -189,18 +195,16 @@ const ghost = {
     textDecoration: "underline",
     textUnderlineOffset: 3,
 };
+// Where the panel keeps Back and Exit: the bottom edge, one on each side.
 const slideChrome = {
     position: "absolute",
-    top: 20,
-    right: 24,
+    left: 28,
+    right: 28,
+    bottom: 22,
     display: "flex",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: 16,
-    padding: "6px 12px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.86)",
-    backdropFilter: "blur(6px)",
-    boxShadow: "0 6px 20px -8px rgba(0,0,0,0.3)",
     cursor: "default",
 };
 //# sourceMappingURL=WalkthroughPlayer.js.map

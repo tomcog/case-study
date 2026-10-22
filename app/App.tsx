@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Copy, EyeOff, Globe, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { Button, ButtonRound, Card, InputText, Tag } from "@tomcoggia/ui";
 import {
-  CaseStudyProvider, ProjectBuilder, ProjectPlayer, Stage, ScreenView, bleedBg, backdropFor,
+  CaseStudyProvider, ProjectBuilder, ProjectPlayer, SlideView,
   type ProjectContent,
 } from "../src/index.js";
 import {
@@ -251,11 +251,7 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
 /** The first screen, drawn at stage size and scaled into the tile. */
 function Thumb({ row }: { row: ProjectRow }) {
   if (row.cover) {
-    return (
-      <Stage background={bleedBg(row.cover)} backdrop={backdropFor(row.cover)}>
-        <ScreenView screen={row.cover} play reduced />
-      </Stage>
-    );
+    return <SlideView screen={row.cover} play reduced />;
   }
   if (row.preview?.image) return <img className="tile__cover" src={row.preview.image} alt="" />;
   return <div className="tile__empty">No preview image</div>;
