@@ -50,6 +50,7 @@ export declare function loadProject(url: string, opts?: {
 export declare function previewCard(project: ProjectContent): {
     image: string | undefined;
     imageOverlay: boolean | undefined;
+    imageMono: boolean | undefined;
     eyebrow: string | undefined;
     title: string | undefined;
     body: string | undefined;

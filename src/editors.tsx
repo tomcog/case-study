@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Plus, Trash2, ChevronDown, FolderOpen, Image as ImageIcon, Layers } from "lucide-react";
+import { Plus, Trash2, ChevronDown, FolderOpen, Image as ImageIcon, Contrast, Layers } from "lucide-react";
 import { Button, ButtonRound } from "@tomcoggia/ui";
 import { RED as ACCENT, DEFAULT_ACCENT } from "./theme.js";
 import { useCaseStudyConfig } from "./config.js";
@@ -26,11 +26,22 @@ export function MetricsEditor({ metrics, onChange }: { metrics: Metric[]; onChan
   );
 }
 
-export function ImageField({ value, onChange, overlay, onOverlayChange, label = "Image" }: {
+/** One of the effect toggles pinned over an image thumbnail: lit when the
+ * effect is on. They sit in a row from the left, so each one only has to say
+ * where it starts. */
+const effectToggle = (on: boolean): React.CSSProperties => ({
+  position: "absolute", top: 6, width: 26, height: 26, borderRadius: 999, border: "none",
+  background: on ? ACCENT : "rgba(20,18,16,0.7)", color: "#fff",
+  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+});
+
+export function ImageField({ value, onChange, overlay, onOverlayChange, mono, onMonoChange, label = "Image" }: {
   value: string;
   onChange: (v: string) => void;
   overlay?: boolean;
   onOverlayChange?: (v: boolean) => void;
+  mono?: boolean;
+  onMonoChange?: (v: boolean) => void;
   label?: string;
 }) {
   const { assets } = useCaseStudyConfig();
@@ -89,8 +100,14 @@ export function ImageField({ value, onChange, overlay, onOverlayChange, label = 
           <img src={value} alt="" style={{ display: "block", width: "100%", height: 120, objectFit: "contain" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
           {onOverlayChange && (
             <button onClick={() => onOverlayChange(!overlay)} title={overlay ? "Disable gradient overlay" : "Enable gradient overlay"}
-              style={{ position: "absolute", top: 6, left: 6, width: 26, height: 26, borderRadius: 999, border: "none", background: overlay ? ACCENT : "rgba(20,18,16,0.7)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              style={{ ...effectToggle(!!overlay), left: 6 }}>
               <Layers size={13} />
+            </button>
+          )}
+          {onMonoChange && (
+            <button onClick={() => onMonoChange(!mono)} title={mono ? "Disable black and white" : "Black and white, dimmed"}
+              style={{ ...effectToggle(!!mono), left: onOverlayChange ? 38 : 6 }}>
+              <Contrast size={13} />
             </button>
           )}
           <button onClick={() => onChange("")} title="Remove image"
@@ -276,7 +293,9 @@ export function PreviewCardSettings({ preview, onChange, onClose, isCaseStudy, o
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Projects page card</div>
         <div style={{ fontSize: 11, color: "#8c8c8c", marginBottom: 14 }}>The preview card shown on the Projects page. Clicking it opens this project.</div>
 
-        <ImageField label="Image" value={preview.image ?? ""} onChange={(v) => onChange({ image: v })} overlay={preview.imageOverlay === true} onOverlayChange={(v) => onChange({ imageOverlay: v })} />
+        <ImageField label="Image" value={preview.image ?? ""} onChange={(v) => onChange({ image: v })}
+          overlay={preview.imageOverlay === true} onOverlayChange={(v) => onChange({ imageOverlay: v })}
+          mono={preview.imageMono === true} onMonoChange={(v) => onChange({ imageMono: v || undefined })} />
 
         <Field label="Eyebrow">
           <input value={preview.eyebrow ?? ""} onChange={(e) => onChange({ eyebrow: e.target.value })} placeholder="e.g. Case Study" style={inputStyle} />
@@ -292,7 +311,7 @@ export function PreviewCardSettings({ preview, onChange, onClose, isCaseStudy, o
 
         <div style={{ fontSize: 11, fontWeight: 600, color: "#8c8c8c", margin: "12px 0 8px" }}>PREVIEW</div>
         <div style={{ background: "#f3f1ed", borderRadius: 8, padding: 12 }}>
-          <ProjectPreviewCard image={preview.image} imageOverlay={preview.imageOverlay} eyebrow={preview.eyebrow} title={preview.title} body={preview.body} logo={preview.cardLogo || preview.logo} />
+          <ProjectPreviewCard image={preview.image} imageOverlay={preview.imageOverlay} imageMono={preview.imageMono} eyebrow={preview.eyebrow} title={preview.title} body={preview.body} logo={preview.cardLogo || preview.logo} />
         </div>
       </div>
     </>

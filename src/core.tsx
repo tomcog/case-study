@@ -6,7 +6,7 @@ import { CaseStudyThumb } from "./ui/CaseStudyThumb.js";
 import { CaseStudyLink } from "./ui/CaseStudyLink.js";
 import { LogoMark } from "./ui/LogoMark.js";
 import { getVideoEmbedUrl, isVideoSrc } from "./video.js";
-import { RED, INK, DEFAULT_ACCENT } from "./theme.js";
+import { RED, INK, DEFAULT_ACCENT, OVERLAY_GRADIENT, MONO_FILTER } from "./theme.js";
 
 // ─── Data model ────────────────────────────────────────────────────
 // A Screen is one composed slide: a layout and one flat bag of optional
@@ -54,6 +54,7 @@ export interface Screen {
   imageUrl?: string;
   imageUrl2?: string;
   overlay?: boolean;   // Image-theme gradient toggle (Basic / Title Card / Intro)
+  mono?: boolean;      // Grayscale and 25% darker; independent of `overlay`
   videoUrl?: string;   // "video" layout: YouTube/Vimeo/mp4 to embed
   linkUrl?: string;    // optional outbound CTA (e.g. a Figma prototype) — opens in a new tab
   linkLabel?: string;  // CTA button label (defaults to "View prototype")
@@ -70,6 +71,7 @@ export interface Screen {
 export interface ProjectPreview {
   image?: string;
   imageOverlay?: boolean; // gradient overlay on the card image (default off)
+  imageMono?: boolean;    // grayscale + 25% darker on the card image (default off)
   eyebrow?: string;
   title?: string;
   body?: string;
@@ -184,14 +186,14 @@ export function Stage({ background, backdrop, children }: { background: string; 
 
 /** A bleed image filling the whole Stage container (past the 16:9 safe area), or
  * just its left/right half when `half` is set, with an optional top gradient. */
-export function BleedBackdrop({ url, overlay, half }: { url: string; overlay: boolean; half?: "left" | "right" }) {
+export function BleedBackdrop({ url, overlay, mono, half }: { url: string; overlay: boolean; mono?: boolean; half?: "left" | "right" }) {
   const pos: React.CSSProperties = half
     ? { top: 0, bottom: 0, width: "50%", left: half === "left" ? 0 : undefined, right: half === "right" ? 0 : undefined }
     : { inset: 0 };
   return (
     <div style={{ position: "absolute", ...pos, overflow: "hidden" }}>
-      <div style={{ position: "absolute", inset: 0, backgroundImage: `url("${url}")`, backgroundSize: "cover", backgroundPosition: "center" }} />
-      {overlay && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0))" }} />}
+      <div style={{ position: "absolute", inset: 0, backgroundImage: `url("${url}")`, backgroundSize: "cover", backgroundPosition: "center", filter: mono ? MONO_FILTER : undefined }} />
+      {overlay && <div style={{ position: "absolute", inset: 0, background: OVERLAY_GRADIENT }} />}
     </div>
   );
 }
@@ -202,11 +204,11 @@ export function BleedBackdrop({ url, overlay, half }: { url: string; overlay: bo
 export function backdropFor(screen: Screen): React.ReactNode {
   if (screen.layout === "basic2" && screen.basicImage === "bleed" && screen.imageUrl) {
     const textLeft = (screen.basicTextSide ?? "left") === "left";
-    return <BleedBackdrop url={screen.imageUrl} overlay={screen.overlay === true} half={textLeft ? "right" : "left"} />;
+    return <BleedBackdrop url={screen.imageUrl} overlay={screen.overlay === true} mono={screen.mono === true} half={textLeft ? "right" : "left"} />;
   }
   if (screen.basicTheme === "image" && screen.imageUrl &&
       (screen.layout === "basic1" || screen.layout === "cover" || screen.layout === "quote" || screen.layout === "overview")) {
-    return <BleedBackdrop url={screen.imageUrl} overlay={screen.overlay !== false} half={screen.layout === "overview" ? "left" : undefined} />;
+    return <BleedBackdrop url={screen.imageUrl} overlay={screen.overlay !== false} mono={screen.mono === true} half={screen.layout === "overview" ? "left" : undefined} />;
   }
   return undefined;
 }
@@ -721,8 +723,8 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
     const imageEl = imgMode === "off" || !screen.imageUrl || imgMode === "bleed" ? null
       : imgMode === "fill" ? (
         <LightboxTrigger onOpen={openLightbox} style={{ position: "absolute", left: imgColX, top: B_M, width: B_COL, height: B_IMG_H, borderRadius: B_RADIUS, overflow: "hidden", zIndex: 1 }}>
-          <img src={screen.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-          {screen.overlay === true && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0))" }} />}
+          <img src={screen.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: screen.mono === true ? MONO_FILTER : undefined }} />
+          {screen.overlay === true && <div style={{ position: "absolute", inset: 0, background: OVERLAY_GRADIENT }} />}
         </LightboxTrigger>
       ) : imgMode === "fit" ? (
         <LightboxTrigger onOpen={openLightbox} style={{ position: "absolute", left: imgColX, top: B_M, width: B_COL, zIndex: 1 }}>

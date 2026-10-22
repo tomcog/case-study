@@ -3,11 +3,13 @@ export declare function MetricsEditor({ metrics, onChange }: {
     metrics: Metric[];
     onChange: (m: Metric[]) => void;
 }): import("react").JSX.Element;
-export declare function ImageField({ value, onChange, overlay, onOverlayChange, label }: {
+export declare function ImageField({ value, onChange, overlay, onOverlayChange, mono, onMonoChange, label }: {
     value: string;
     onChange: (v: string) => void;
     overlay?: boolean;
     onOverlayChange?: (v: boolean) => void;
+    mono?: boolean;
+    onMonoChange?: (v: boolean) => void;
     label?: string;
 }): import("react").JSX.Element;
 export declare function OverviewEditor({ items, onChange, label }: {

@@ -174,7 +174,9 @@ export function SlideFields({ screen, update, logoSrc }: {
 
             {(screen.layout === "basic1" || screen.layout === "cover" || screen.layout === "overview" || screen.layout === "quote") && (screen.basicTheme ?? "light") === "image" && (
               <>
-                <ImageField label="Left image" value={screen.imageUrl ?? ""} onChange={(v) => update({ imageUrl: v })} overlay={screen.overlay !== false} onOverlayChange={(v) => update({ overlay: v })} />
+                <ImageField label="Left image" value={screen.imageUrl ?? ""} onChange={(v) => update({ imageUrl: v })}
+                  overlay={screen.overlay !== false} onOverlayChange={(v) => update({ overlay: v })}
+                  mono={screen.mono === true} onMonoChange={(v) => update({ mono: v || undefined })} />
                 <Field label="Text color">
                   <div style={{ display: "flex", gap: 6 }}>
                     {([["White", false], ["Black", true]] as const).map(([label, dark]) => {
@@ -207,7 +209,12 @@ export function SlideFields({ screen, update, logoSrc }: {
                 {(screen.basicImage ?? "off") !== "off" && (
                   <ImageField value={screen.imageUrl ?? ""} onChange={(v) => update({ imageUrl: v })}
                     {...(screen.basicImage === "fill" || screen.basicImage === "bleed"
-                      ? { overlay: screen.overlay === true, onOverlayChange: (v: boolean) => update({ overlay: v }) }
+                      ? {
+                          overlay: screen.overlay === true,
+                          onOverlayChange: (v: boolean) => update({ overlay: v }),
+                          mono: screen.mono === true,
+                          onMonoChange: (v: boolean) => update({ mono: v || undefined }),
+                        }
                       : {})} />
                 )}
               </>

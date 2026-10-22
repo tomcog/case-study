@@ -177,7 +177,7 @@ export async function loadProject(url, opts = {}) {
 export function previewCard(project) {
     const p = project.preview ?? {};
     return {
-        image: p.image, imageOverlay: p.imageOverlay, eyebrow: p.eyebrow, title: p.title, body: p.body,
+        image: p.image, imageOverlay: p.imageOverlay, imageMono: p.imageMono, eyebrow: p.eyebrow, title: p.title, body: p.body,
         logo: p.cardLogo || p.logo,
     };
 }

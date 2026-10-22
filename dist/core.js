@@ -7,7 +7,7 @@ import { CaseStudyThumb } from "./ui/CaseStudyThumb.js";
 import { CaseStudyLink } from "./ui/CaseStudyLink.js";
 import { LogoMark } from "./ui/LogoMark.js";
 import { getVideoEmbedUrl, isVideoSrc } from "./video.js";
-import { RED, INK } from "./theme.js";
+import { RED, INK, OVERLAY_GRADIENT, MONO_FILTER } from "./theme.js";
 export const ACCENT = RED;
 // Theme is the single source of truth for background + text color. Light is the
 // default for every template; the builder toggles between the two.
@@ -93,11 +93,11 @@ export function Stage({ background, backdrop, children }) {
 }
 /** A bleed image filling the whole Stage container (past the 16:9 safe area), or
  * just its left/right half when `half` is set, with an optional top gradient. */
-export function BleedBackdrop({ url, overlay, half }) {
+export function BleedBackdrop({ url, overlay, mono, half }) {
     const pos = half
         ? { top: 0, bottom: 0, width: "50%", left: half === "left" ? 0 : undefined, right: half === "right" ? 0 : undefined }
         : { inset: 0 };
-    return (_jsxs("div", { style: { position: "absolute", ...pos, overflow: "hidden" }, children: [_jsx("div", { style: { position: "absolute", inset: 0, backgroundImage: `url("${url}")`, backgroundSize: "cover", backgroundPosition: "center" } }), overlay && _jsx("div", { style: { position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0))" } })] }));
+    return (_jsxs("div", { style: { position: "absolute", ...pos, overflow: "hidden" }, children: [_jsx("div", { style: { position: "absolute", inset: 0, backgroundImage: `url("${url}")`, backgroundSize: "cover", backgroundPosition: "center", filter: mono ? MONO_FILTER : undefined } }), overlay && _jsx("div", { style: { position: "absolute", inset: 0, background: OVERLAY_GRADIENT } })] }));
 }
 /** Which background image (if any) escapes the 16:9 stage to bleed the whole
  * container: the Basic 2-column "bleed" image (its half) and every Image-theme
@@ -105,11 +105,11 @@ export function BleedBackdrop({ url, overlay, half }) {
 export function backdropFor(screen) {
     if (screen.layout === "basic2" && screen.basicImage === "bleed" && screen.imageUrl) {
         const textLeft = (screen.basicTextSide ?? "left") === "left";
-        return _jsx(BleedBackdrop, { url: screen.imageUrl, overlay: screen.overlay === true, half: textLeft ? "right" : "left" });
+        return _jsx(BleedBackdrop, { url: screen.imageUrl, overlay: screen.overlay === true, mono: screen.mono === true, half: textLeft ? "right" : "left" });
     }
     if (screen.basicTheme === "image" && screen.imageUrl &&
         (screen.layout === "basic1" || screen.layout === "cover" || screen.layout === "quote" || screen.layout === "overview")) {
-        return _jsx(BleedBackdrop, { url: screen.imageUrl, overlay: screen.overlay !== false, half: screen.layout === "overview" ? "left" : undefined });
+        return _jsx(BleedBackdrop, { url: screen.imageUrl, overlay: screen.overlay !== false, mono: screen.mono === true, half: screen.layout === "overview" ? "left" : undefined });
     }
     return undefined;
 }
@@ -391,7 +391,7 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
         // Fit / Fill / Desktop / Mobile images open the full image in a lightbox on click.
         const openLightbox = () => screen.imageUrl && setLightbox({ src: screen.imageUrl });
         const imageEl = imgMode === "off" || !screen.imageUrl || imgMode === "bleed" ? null
-            : imgMode === "fill" ? (_jsxs(LightboxTrigger, { onOpen: openLightbox, style: { position: "absolute", left: imgColX, top: B_M, width: B_COL, height: B_IMG_H, borderRadius: B_RADIUS, overflow: "hidden", zIndex: 1 }, children: [_jsx("img", { src: screen.imageUrl, alt: "", style: { width: "100%", height: "100%", objectFit: "cover", display: "block" } }), screen.overlay === true && _jsx("div", { style: { position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0))" } })] })) : imgMode === "fit" ? (_jsx(LightboxTrigger, { onOpen: openLightbox, style: { position: "absolute", left: imgColX, top: B_M, width: B_COL, zIndex: 1 }, children: _jsx("img", { src: screen.imageUrl, alt: "", style: { maxWidth: "100%", maxHeight: B_IMG_H, borderRadius: B_RADIUS, display: "block" } }) })) : (_jsx(LightboxTrigger, { onOpen: openLightbox, style: { position: "absolute", left: imgColX, top: 0, bottom: 0, width: B_COL, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }, children: _jsx(CaseStudyThumb, { src: screen.imageUrl, frame: imgMode === "mobile" ? "iphone" : "computer", phoneWidth: 210, fill: true }) }));
+            : imgMode === "fill" ? (_jsxs(LightboxTrigger, { onOpen: openLightbox, style: { position: "absolute", left: imgColX, top: B_M, width: B_COL, height: B_IMG_H, borderRadius: B_RADIUS, overflow: "hidden", zIndex: 1 }, children: [_jsx("img", { src: screen.imageUrl, alt: "", style: { width: "100%", height: "100%", objectFit: "cover", display: "block", filter: screen.mono === true ? MONO_FILTER : undefined } }), screen.overlay === true && _jsx("div", { style: { position: "absolute", inset: 0, background: OVERLAY_GRADIENT } })] })) : imgMode === "fit" ? (_jsx(LightboxTrigger, { onOpen: openLightbox, style: { position: "absolute", left: imgColX, top: B_M, width: B_COL, zIndex: 1 }, children: _jsx("img", { src: screen.imageUrl, alt: "", style: { maxWidth: "100%", maxHeight: B_IMG_H, borderRadius: B_RADIUS, display: "block" } }) })) : (_jsx(LightboxTrigger, { onOpen: openLightbox, style: { position: "absolute", left: imgColX, top: 0, bottom: 0, width: B_COL, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }, children: _jsx(CaseStudyThumb, { src: screen.imageUrl, frame: imgMode === "mobile" ? "iphone" : "computer", phoneWidth: 210, fill: true }) }));
         inner = (_jsxs("div", { style: { position: "absolute", inset: 0, background: bleed ? "transparent" : "#ffffff", overflow: "hidden" }, children: [bleed && (_jsx("div", { style: { position: "absolute", top: 0, bottom: 0, width: B_HALF, left: textLeft ? 0 : undefined, right: textLeft ? undefined : 0, background: "#ffffff" } })), theme !== "light" && (_jsx("div", { style: { position: "absolute", top: 0, bottom: 0, width: B_HALF, left: textLeft ? 0 : undefined, right: textLeft ? undefined : 0, background: c.bg } })), imageEl, _jsx("div", { style: { position: "absolute", left: textX, top: textLeft ? B_M + logoClear : B_M, width: B_COL, zIndex: 2 }, children: _jsx(BasicText, { screen: screen, colors: c, item: item, theme: theme }) })] }));
     }
     else if (screen.layout === "video") {

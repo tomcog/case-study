@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { LogoMark } from "./LogoMark.js";
 import { renderStyledText } from "./renderStyledText.js";
 
-import { RED, INK as BLACK } from "../theme.js";
+import { RED, INK as BLACK, OVERLAY_GRADIENT, MONO_FILTER } from "../theme.js";
 
 // Design reference (from Figma node 264:784): 460×260 card, image on the left
 // half, text on the right. Rendered at the fixed design size and scaled to fit
@@ -10,9 +10,10 @@ import { RED, INK as BLACK } from "../theme.js";
 const CARD_W = 460;
 const CARD_H = 260;
 
-export function ProjectPreviewCard({ image, imageOverlay, eyebrow, title, body, logo }: {
+export function ProjectPreviewCard({ image, imageOverlay, imageMono, eyebrow, title, body, logo }: {
   image?: string;
   imageOverlay?: boolean;
+  imageMono?: boolean;
   eyebrow?: string;
   title?: string;
   body?: string;
@@ -42,8 +43,8 @@ export function ProjectPreviewCard({ image, imageOverlay, eyebrow, title, body, 
         }}>
           {/* Image half — logo pinned top-left, mirroring the Intro slide */}
           <div style={{ position: "relative", width: CARD_W / 2, height: CARD_H, flexShrink: 0, background: "#e9e7e3", overflow: "hidden" }}>
-            {image && <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
-            {imageOverlay && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0))" }} />}
+            {image && <img src={image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: imageMono ? MONO_FILTER : undefined }} />}
+            {imageOverlay && <div style={{ position: "absolute", inset: 0, background: OVERLAY_GRADIENT }} />}
             {logo && <LogoMark src={logo} position="left top" style={{ position: "absolute", left: 20, top: 20, width: "63%", maxWidth: 135, height: 31.5 }} />}
           </div>
           {/* Text half */}

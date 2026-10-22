@@ -32,6 +32,7 @@ export interface Screen {
     imageUrl?: string;
     imageUrl2?: string;
     overlay?: boolean;
+    mono?: boolean;
     videoUrl?: string;
     linkUrl?: string;
     linkLabel?: string;
@@ -47,6 +48,7 @@ export interface Screen {
 export interface ProjectPreview {
     image?: string;
     imageOverlay?: boolean;
+    imageMono?: boolean;
     eyebrow?: string;
     title?: string;
     body?: string;
@@ -88,9 +90,10 @@ export declare function Stage({ background, backdrop, children }: {
 }): import("react").JSX.Element;
 /** A bleed image filling the whole Stage container (past the 16:9 safe area), or
  * just its left/right half when `half` is set, with an optional top gradient. */
-export declare function BleedBackdrop({ url, overlay, half }: {
+export declare function BleedBackdrop({ url, overlay, mono, half }: {
     url: string;
     overlay: boolean;
+    mono?: boolean;
     half?: "left" | "right";
 }): import("react").JSX.Element;
 /** Which background image (if any) escapes the 16:9 stage to bleed the whole
