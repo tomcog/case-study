@@ -6,6 +6,10 @@ export interface Box {
     w: number;
     h: number;
 }
+/** What shows behind the app: the margins beside one held to its max width,
+ * and anything an app leaves transparent. White, since that is what most
+ * apps assume they are drawn on. */
+export declare const STAGE_BG = "#fff";
 /** Why there is no app running, when there isn't. */
 export type Blocked = "no-app" | "foreign" | "small";
 /** The box around one or more demo rects, in stage pixels — which are app

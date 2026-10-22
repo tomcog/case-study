@@ -6,13 +6,17 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 // keeps this package's look rather than the product's. An opaque stage reports
 // nothing, so it is shown, its overlays are positioned by Area, and the reader
 // moves on with the panel's button. The stage itself (frame, scaling, overlay)
-// is shared with the builder — see stage.tsx.
+// is shared with the builder — see stage.tsx. Exit, Back and Next sit in one
+// toolbar pinned to the viewport's lower left, the same on every step, slides
+// included.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
+import { Segment, SegmentedControl, Toolbar } from "@tomcoggia/ui";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
 import { SlideView } from "../slide.js";
-import { Callouts, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
+import { Callouts, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
 import { bootsApp, contentOf, stepMarks } from "./types.js";
 const PANEL_W = 400;
 const LINE = "#e6e4e1";
@@ -150,7 +154,10 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
     // one can only be left by its button, whatever it was authored to wait for.
     const watching = !!driver && shown.kind === "app";
     const manual = !watching || step?.advance.on === "manual";
-    canGoOn.current = !step || manual;
+    // Forward is offered where the panel used to offer it: on a step that moves
+    // on by its button, or once a step waiting on the reader has nudged them.
+    const canNext = !!step && (manual || nudge);
+    canGoOn.current = canNext;
     const manualLabel = step?.advance.on === "manual" ? (step.advance.label ?? "Next") : "Next";
     return (_jsxs("div", { style: {
             position: "fixed",
@@ -167,9 +174,11 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
                     borderLeft: content.panelSide === "right" && !narrow ? `1px solid ${LINE}` : undefined,
                     display: "flex",
                     flexDirection: "column",
-                    padding: "26px 28px 22px",
+                    // The toolbar sits over the panel's lower left when the panel is on
+                    // the left, so the panel keeps its foot clear of it.
+                    padding: `26px 28px ${content.panelSide === "right" && !narrow ? 22 : 22 + TOOLBAR_CLEAR}px`,
                     overflowY: "auto",
-                }, children: [_jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }, children: [_jsx("span", { style: { fontSize: 13, fontWeight: 600, color: INK, letterSpacing: "-0.01em" }, children: content.title }), _jsx("span", { style: { fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }, children: finished ? `${steps.length} of ${steps.length}` : `${i + 1} of ${steps.length}` })] }), _jsx("div", { style: { height: 3, background: LINE, borderRadius: 2, margin: "14px 0 26px", overflow: "hidden" }, children: _jsx(motion.div, { initial: { width: 0 }, animate: { width: `${((finished ? steps.length : i) / Math.max(1, steps.length)) * 100}%` }, transition: reduced ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 30 }, style: { height: "100%", background: RED } }) }), _jsx("div", { style: { flex: 1, minHeight: 0 }, children: _jsx(AnimatePresence, { mode: "wait", initial: false, children: _jsx(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: reduced ? { opacity: 0 } : { opacity: 0, y: -8 }, transition: { duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }, children: step ? (_jsxs(_Fragment, { children: [step.eyebrow && (_jsx("div", { style: { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: RED, marginBottom: 10 }, children: step.eyebrow })), step.title && (_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: step.title })), step.body && (_jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: renderStyledText(step.body) })), step.imageUrl && (_jsx("img", { src: step.imageUrl, alt: "", style: { display: "block", width: "100%", borderRadius: 10, marginTop: 18, border: `1px solid ${LINE}` } }))] })) : (_jsxs(_Fragment, { children: [_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: "That's the walkthrough." }), _jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: "The product stays where you left it \u2014 keep clicking around, or start again from the top." })] })) }, step?.id ?? "__done") }) }), _jsxs("div", { style: { paddingTop: 22 }, children: [step && manual && (_jsx("button", { type: "button", onClick: next, style: primary, children: manualLabel })), step && !manual && (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: MUTED, minHeight: 38 }, children: [_jsx(motion.span, { animate: reduced ? {} : { opacity: [1, 0.25, 1] }, transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" }, style: { width: 7, height: 7, borderRadius: "50%", background: RED, flex: "none" } }), "Your turn \u2014 do it in the app"] })), !step && (_jsx("button", { type: "button", onClick: restart, style: primary, children: "Start again" })), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 14, marginTop: 14 }, children: [i > 0 && (_jsx("button", { type: "button", onClick: back, style: ghost, children: "Back" })), step && !manual && nudge && (_jsx("button", { type: "button", onClick: next, style: ghost, children: "Skip this step" })), onExit && (_jsx("button", { type: "button", onClick: onExit, style: { ...ghost, marginLeft: "auto" }, children: "Exit" }))] })] })] }), (demo.live || shown.kind !== "app") && !narrow && (_jsxs("div", { ref: demo.stageRef, style: { flex: 1, position: "relative", overflowX: "auto", overflowY: "hidden", background: "#0f1115" }, children: [demo.live && app && _jsx("iframe", { ref: demo.frameRef, title: app.label, style: demo.frameStyle }, app.src), shown.kind === "image" && _jsx(StageStill, { image: shown }), shown.kind === "embed" && (_jsx("iframe", { src: shown.url, title: content.title ?? "Embedded page", allowFullScreen: true, style: { position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 } }, shown.url)), _jsx(Spotlight, { box: box, shape: step?.spotlight?.shape, dim: step?.spotlight?.dim, lock: step?.spotlight?.lock, stageW: demo.contentW }), step?.callouts?.length ? _jsx(Callouts, { items: step.callouts, boxFor: calloutBox, bounds: demo.bounds }) : null] })), shown.kind === "app" && !demo.live && !narrow && _jsx(StageNotice, { blocked: demo.blocked, src: app?.src }), _jsx(AnimatePresence, { initial: false, children: slide && (_jsxs(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, scale: 1.01 }, animate: { opacity: 1, scale: 1 }, exit: reduced ? { opacity: 0 } : { opacity: 0, scale: 0.995 }, transition: { duration: reduced ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }, onClick: next, style: { position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }, children: [_jsx(SlideView, { screen: slide, play: true, reduced: !!reduced, logoSrc: content.preview?.logo }), _jsxs("div", { style: slideChrome, onClick: (e) => e.stopPropagation(), children: [i > 0 ? (_jsx("button", { type: "button", onClick: back, style: ghost, children: "Back" })) : (_jsx("span", {})), _jsxs("span", { style: { fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }, children: [i + 1, " of ", steps.length] }), onExit ? (_jsx("button", { type: "button", onClick: onExit, style: ghost, children: "Exit" })) : (_jsx("span", {}))] })] }, "slide")) })] }));
+                }, children: [_jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }, children: [_jsx("span", { style: { fontSize: 13, fontWeight: 600, color: INK, letterSpacing: "-0.01em" }, children: content.title }), _jsx("span", { style: { fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }, children: finished ? `${steps.length} of ${steps.length}` : `${i + 1} of ${steps.length}` })] }), _jsx("div", { style: { height: 3, background: LINE, borderRadius: 2, margin: "14px 0 26px", overflow: "hidden" }, children: _jsx(motion.div, { initial: { width: 0 }, animate: { width: `${((finished ? steps.length : i) / Math.max(1, steps.length)) * 100}%` }, transition: reduced ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 30 }, style: { height: "100%", background: RED } }) }), _jsx("div", { style: { flex: 1, minHeight: 0 }, children: _jsx(AnimatePresence, { mode: "wait", initial: false, children: _jsx(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: reduced ? { opacity: 0 } : { opacity: 0, y: -8 }, transition: { duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }, children: step ? (_jsxs(_Fragment, { children: [step.eyebrow && (_jsx("div", { style: { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: RED, marginBottom: 10 }, children: step.eyebrow })), step.title && (_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: step.title })), step.body && (_jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: renderStyledText(step.body) })), step.imageUrl && (_jsx("img", { src: step.imageUrl, alt: "", style: { display: "block", width: "100%", borderRadius: 10, marginTop: 18, border: `1px solid ${LINE}` } }))] })) : (_jsxs(_Fragment, { children: [_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: "That's the walkthrough." }), _jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: "The product stays where you left it \u2014 keep clicking around, or start again from the top." })] })) }, step?.id ?? "__done") }) }), _jsxs("div", { style: { paddingTop: 22 }, children: [step && manual && (_jsx("button", { type: "button", onClick: next, style: primary, children: manualLabel })), step && !manual && (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: MUTED, minHeight: 38 }, children: [_jsx(motion.span, { animate: reduced ? {} : { opacity: [1, 0.25, 1] }, transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" }, style: { width: 7, height: 7, borderRadius: "50%", background: RED, flex: "none" } }), "Your turn \u2014 do it in the app"] })), !step && (_jsx("button", { type: "button", onClick: restart, style: primary, children: "Start again" }))] })] }), (demo.live || shown.kind !== "app") && !narrow && (_jsxs("div", { ref: demo.stageRef, style: { flex: 1, position: "relative", overflowX: "auto", overflowY: "hidden", background: STAGE_BG }, children: [demo.live && app && _jsx("iframe", { ref: demo.frameRef, title: app.label, style: demo.frameStyle }, app.src), shown.kind === "image" && _jsx(StageStill, { image: shown }), shown.kind === "embed" && (_jsx("iframe", { src: shown.url, title: content.title ?? "Embedded page", allowFullScreen: true, style: { position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 } }, shown.url)), _jsx(Spotlight, { box: box, shape: step?.spotlight?.shape, dim: step?.spotlight?.dim, lock: step?.spotlight?.lock, stageW: demo.contentW }), step?.callouts?.length ? _jsx(Callouts, { items: step.callouts, boxFor: calloutBox, bounds: demo.bounds }) : null] })), shown.kind === "app" && !demo.live && !narrow && _jsx(StageNotice, { blocked: demo.blocked, src: app?.src }), _jsx(AnimatePresence, { initial: false, children: slide && (_jsxs(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, scale: 1.01 }, animate: { opacity: 1, scale: 1 }, exit: reduced ? { opacity: 0 } : { opacity: 0, scale: 0.995 }, transition: { duration: reduced ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }, onClick: next, style: { position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }, children: [_jsx(SlideView, { screen: slide, play: true, reduced: !!reduced, logoSrc: content.preview?.logo }), _jsxs("span", { style: slideCount, children: [i + 1, " of ", steps.length] })] }, "slide")) }), _jsxs(Toolbar, { "aria-label": "Walkthrough", style: toolbarAt, children: [onExit && (_jsx(SegmentedControl, { size: "sm", tone: "white", actions: true, "aria-label": "Leave", children: _jsx(Segment, { icon: _jsx(ExternalLink, {}), onClick: onExit, children: "Exit" }) })), _jsx(SegmentedControl, { size: "sm", tone: "white", actions: true, "aria-label": "Back", children: _jsx(Segment, { icon: _jsx(ArrowLeft, {}), hideLabel: true, disabled: i === 0, onClick: back, children: "Previous step" }) }), _jsx(SegmentedControl, { size: "sm", tone: "white", actions: true, "aria-label": "Next", children: _jsx(Segment, { icon: _jsx(ArrowRight, {}), hideLabel: true, disabled: !canNext, onClick: next, children: "Next step" }) })] })] }));
 }
 const primary = {
     appearance: "none",
@@ -183,28 +192,24 @@ const primary = {
     borderRadius: 8,
     cursor: "pointer",
 };
-const ghost = {
-    appearance: "none",
-    border: 0,
-    background: "none",
-    color: MUTED,
-    font: "inherit",
-    fontSize: 13.5,
-    padding: 0,
-    cursor: "pointer",
-    textDecoration: "underline",
-    textUnderlineOffset: 3,
-};
-// Where the panel keeps Back and Exit: the bottom edge, one on each side.
-const slideChrome = {
+// The toolbar's corner: its inset from the viewport's edges, and how much of
+// the panel's foot that leaves it (an sm control is 24 tall, the bar's own
+// inset 4 on each side).
+const TOOLBAR_INSET = 16;
+const TOOLBAR_CLEAR = TOOLBAR_INSET + 32;
+const toolbarAt = {
     position: "absolute",
-    left: 28,
-    right: 28,
+    left: TOOLBAR_INSET,
+    bottom: TOOLBAR_INSET,
+    zIndex: 1,
+};
+const slideCount = {
+    position: "absolute",
+    left: "50%",
     bottom: 22,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-    cursor: "default",
+    transform: "translateX(-50%)",
+    fontSize: 12,
+    color: MUTED,
+    fontVariantNumeric: "tabular-nums",
 };
 //# sourceMappingURL=WalkthroughPlayer.js.map

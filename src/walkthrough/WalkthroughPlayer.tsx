@@ -5,14 +5,18 @@
 // keeps this package's look rather than the product's. An opaque stage reports
 // nothing, so it is shown, its overlays are positioned by Area, and the reader
 // moves on with the panel's button. The stage itself (frame, scaling, overlay)
-// is shared with the builder — see stage.tsx.
+// is shared with the builder — see stage.tsx. Exit, Back and Next sit in one
+// toolbar pinned to the viewport's lower left, the same on every step, slides
+// included.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
+import { Segment, SegmentedControl, Toolbar } from "@tomcoggia/ui";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
 import { SlideView } from "../slide.js";
-import { Callouts, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
+import { Callouts, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
 import type { Box } from "./stage.js";
 import type { Driver } from "./driver.js";
 import { bootsApp, contentOf, stepMarks } from "./types.js";
@@ -166,7 +170,10 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
   // one can only be left by its button, whatever it was authored to wait for.
   const watching = !!driver && shown.kind === "app";
   const manual = !watching || step?.advance.on === "manual";
-  canGoOn.current = !step || manual;
+  // Forward is offered where the panel used to offer it: on a step that moves
+  // on by its button, or once a step waiting on the reader has nudged them.
+  const canNext = !!step && (manual || nudge);
+  canGoOn.current = canNext;
   const manualLabel = step?.advance.on === "manual" ? (step.advance.label ?? "Next") : "Next";
 
   return (
@@ -189,7 +196,9 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
           borderLeft: content.panelSide === "right" && !narrow ? `1px solid ${LINE}` : undefined,
           display: "flex",
           flexDirection: "column",
-          padding: "26px 28px 22px",
+          // The toolbar sits over the panel's lower left when the panel is on
+          // the left, so the panel keeps its foot clear of it.
+          padding: `26px 28px ${content.panelSide === "right" && !narrow ? 22 : 22 + TOOLBAR_CLEAR}px`,
           overflowY: "auto",
         }}
       >
@@ -274,29 +283,11 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
               Start again
             </button>
           )}
-
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14 }}>
-            {i > 0 && (
-              <button type="button" onClick={back} style={ghost}>
-                Back
-              </button>
-            )}
-            {step && !manual && nudge && (
-              <button type="button" onClick={next} style={ghost}>
-                Skip this step
-              </button>
-            )}
-            {onExit && (
-              <button type="button" onClick={onExit} style={{ ...ghost, marginLeft: "auto" }}>
-                Exit
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
       {(demo.live || shown.kind !== "app") && !narrow && (
-        <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflowX: "auto", overflowY: "hidden", background: "#0f1115" }}>
+        <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflowX: "auto", overflowY: "hidden", background: STAGE_BG }}>
           {/* The app sits underneath whatever the step displays, so it keeps
               running while an image or an embed covers it. Keyed by its src,
               so arriving at a different app is always a fresh document. */}
@@ -339,32 +330,35 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
           >
             <SlideView screen={slide} play reduced={!!reduced} logoSrc={content.preview?.logo} />
 
-            {/* The same controls the panel carries, in the same order and at
-                the same edge of the screen: Back on the left, Exit on the
-                right, the count between them. A slide has no panel to hold
-                them, not a different way of being navigated. */}
-            <div style={slideChrome} onClick={(e) => e.stopPropagation()}>
-              {i > 0 ? (
-                <button type="button" onClick={back} style={ghost}>
-                  Back
-                </button>
-              ) : (
-                <span />
-              )}
-              <span style={{ fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }}>
-                {i + 1} of {steps.length}
-              </span>
-              {onExit ? (
-                <button type="button" onClick={onExit} style={ghost}>
-                  Exit
-                </button>
-              ) : (
-                <span />
-              )}
-            </div>
+            {/* A slide has no panel to carry the count, so it sits at the
+                foot of the slide; the toolbar does the moving. */}
+            <span style={slideCount}>
+              {i + 1} of {steps.length}
+            </span>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Last, so it sits over the panel, the stage and a slide alike. */}
+      <Toolbar aria-label="Walkthrough" style={toolbarAt}>
+        {onExit && (
+          <SegmentedControl size="sm" tone="white" actions aria-label="Leave">
+            <Segment icon={<ExternalLink />} onClick={onExit}>
+              Exit
+            </Segment>
+          </SegmentedControl>
+        )}
+        <SegmentedControl size="sm" tone="white" actions aria-label="Back">
+          <Segment icon={<ArrowLeft />} hideLabel disabled={i === 0} onClick={back}>
+            Previous step
+          </Segment>
+        </SegmentedControl>
+        <SegmentedControl size="sm" tone="white" actions aria-label="Next">
+          <Segment icon={<ArrowRight />} hideLabel disabled={!canNext} onClick={next}>
+            Next step
+          </Segment>
+        </SegmentedControl>
+      </Toolbar>
     </div>
   );
 }
@@ -382,28 +376,25 @@ const primary: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const ghost: React.CSSProperties = {
-  appearance: "none",
-  border: 0,
-  background: "none",
-  color: MUTED,
-  font: "inherit",
-  fontSize: 13.5,
-  padding: 0,
-  cursor: "pointer",
-  textDecoration: "underline",
-  textUnderlineOffset: 3,
+// The toolbar's corner: its inset from the viewport's edges, and how much of
+// the panel's foot that leaves it (an sm control is 24 tall, the bar's own
+// inset 4 on each side).
+const TOOLBAR_INSET = 16;
+const TOOLBAR_CLEAR = TOOLBAR_INSET + 32;
+
+const toolbarAt: React.CSSProperties = {
+  position: "absolute",
+  left: TOOLBAR_INSET,
+  bottom: TOOLBAR_INSET,
+  zIndex: 1,
 };
 
-// Where the panel keeps Back and Exit: the bottom edge, one on each side.
-const slideChrome: React.CSSProperties = {
+const slideCount: React.CSSProperties = {
   position: "absolute",
-  left: 28,
-  right: 28,
+  left: "50%",
   bottom: 22,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 16,
-  cursor: "default",
+  transform: "translateX(-50%)",
+  fontSize: 12,
+  color: MUTED,
+  fontVariantNumeric: "tabular-nums",
 };

@@ -23,6 +23,10 @@ import { motion } from "motion/react";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
 import { sameOriginDriver } from "./driver.js";
+/** What shows behind the app: the margins beside one held to its max width,
+ * and anything an app leaves transparent. White, since that is what most
+ * apps assume they are drawn on. */
+export const STAGE_BG = "#fff";
 /** The box around one or more demo rects, in stage pixels — which are app
  * pixels, since the frame is never scaled. */
 export function toBox(rects, pad = 6) {

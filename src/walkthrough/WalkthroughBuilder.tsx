@@ -24,7 +24,7 @@ import { SlideFields, SlideView, newScreen } from "../slide.js";
 import { Field, ImageField, PreviewCardSettings, inputStyle } from "../editors.js";
 import { Button, ButtonRound, Segment, SegmentedControl } from "@tomcoggia/ui";
 import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
-import { AreaDraw, Callouts, HoverOutline, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
+import { AreaDraw, Callouts, HoverOutline, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
 import type { Box } from "./stage.js";
 import type { PickHit } from "./driver.js";
 import { appRuns, bootsApp, contentOf, stepLabel, stepMarks } from "./types.js";
@@ -402,7 +402,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
         </div>
 
         {/* The frame */}
-        <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden", display: "flex", background: demo.live || framed || isSlide ? "#0f1115" : "#e9e7e3" }}>
+        <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden", display: "flex", background: demo.live || framed || isSlide ? STAGE_BG : "#e9e7e3" }}>
           {demo.live || framed || isSlide ? (
             <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflowX: "auto", overflowY: "hidden" }}>
               {/* The app runs underneath whatever the step displays, so an
