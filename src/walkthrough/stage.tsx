@@ -1,12 +1,15 @@
 // ─── The frame ─────────────────────────────────────────────────────
-// The running app, scaled to fit its pane, with whatever the step displays
-// over it and the spotlight and callouts over that. The player and the builder
-// share this so an author sees exactly what a reader will.
+// The running app at its own size, with whatever the step displays over it
+// and the spotlight and callouts over that. The player and the builder share
+// this so an author sees exactly what a reader will.
 //
-// The app is read through a Driver, and every box it reports is in app pixels,
-// multiplied by the frame's scale on its way out. There is no fixed canvas as
-// there is for a screen: the frame gets a real viewport width and scales to
-// fit it.
+// The app is never scaled. It gets the viewport its entry in the pool asks
+// for, or the pane's own width when it asks for none, and the pane scrolls
+// when that doesn't fit. A demo shrunk to fit is a demo nobody can read, and
+// scrolling is the honest way to run out of room. So there is no canvas and
+// no transform here: every box the Driver reports is in app pixels, which are
+// already stage pixels, and the overlays scroll with the frame because they
+// share its scroll box.
 //
 // The app is mounted whenever a step names one, whether or not it is what the
 // step displays — an image or an embed is drawn over it, so it keeps running
@@ -32,14 +35,15 @@ export interface Box {
 /** Why there is no app running, when there isn't. */
 export type Blocked = "no-app" | "foreign" | "small";
 
-/** The box around one or more demo rects, in stage pixels. */
-export function toBox(rects: MarkRect[], scale: number, pad = 6): Box | null {
+/** The box around one or more demo rects, in stage pixels — which are app
+ * pixels, since the frame is never scaled. */
+export function toBox(rects: MarkRect[], pad = 6): Box | null {
   if (!rects.length) return null;
   const x1 = Math.min(...rects.map((r) => r.x)) - pad;
   const y1 = Math.min(...rects.map((r) => r.y)) - pad;
   const x2 = Math.max(...rects.map((r) => r.x + r.w)) + pad;
   const y2 = Math.max(...rects.map((r) => r.y + r.h)) + pad;
-  return { x: x1 * scale, y: y1 * scale, w: (x2 - x1) * scale, h: (y2 - y1) * scale };
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
 }
 
 /** An Area resolved against the stage it sits on. Fractions in, pixels out. */
@@ -140,19 +144,23 @@ export function useApp(src: string | undefined, marks: string[], size?: { width?
     measure();
   }, [measure, bounds.w, bounds.h]);
 
-  const width = size?.width ?? bounds.w;
-  const scale = bounds.w && width ? Math.min(1, bounds.w / width) : 1;
-
+  // An app that named a width gets exactly that viewport, so it lays itself
+  // out the way it was designed to rather than falling into its own narrow
+  // breakpoints; one that named none takes the pane. Either way it is drawn at
+  // 100% and the pane scrolls sideways if the pane is the smaller of the two.
   const frameStyle: React.CSSProperties = {
-    width: width || "100%",
-    height: scale ? bounds.h / scale : "100%",
+    width: size?.width ?? "100%",
+    height: "100%",
     border: 0,
     display: "block",
-    transform: `scale(${scale})`,
-    transformOrigin: "top left",
   };
 
-  return { frameRef, stageRef, driver, rects, scale, measure, live, blocked, frameStyle, bounds };
+  // What the stage is as wide as, which is the app's viewport rather than the
+  // pane's whenever the app named one. `bounds` stays the visible pane, since
+  // that is what an Area is a fraction of.
+  const contentW = size?.width ?? bounds.w;
+
+  return { frameRef, stageRef, driver, rects, measure, live, blocked, frameStyle, bounds, contentW };
 }
 
 const sameRects = (a: MarkRects, b: MarkRects) => {
@@ -169,11 +177,16 @@ const sameRects = (a: MarkRects, b: MarkRects) => {
  * dimmed and optionally click-proof. The two are independent: the shield that
  * blocks clicks is the same four panels that do the dimming, so `lock` without
  * `dim` just makes them invisible. */
-export function Spotlight({ box, shape, dim = true, lock }: {
+export function Spotlight({ box, shape, dim = true, lock, stageW }: {
   box: Box | null;
   shape?: "rect" | "pill";
   dim?: boolean;
   lock?: boolean;
+  /** The stage's full content width, which is the app's rather than the
+   * pane's when the two differ. The shields span that, so an app wider than
+   * its pane stays dimmed and locked across the part scrolled out of sight.
+   * Without it they fall back to the visible pane. */
+  stageW?: number;
 }) {
   if (!box) return null;
   const shield = (part: React.CSSProperties, key: string) => (
@@ -191,10 +204,15 @@ export function Spotlight({ box, shape, dim = true, lock }: {
     <>
       {(dim || lock) && (
         <>
-          {shield({ left: 0, top: 0, width: "100%", height: Math.max(0, box.y) }, "t")}
-          {shield({ left: 0, top: box.y + box.h, width: "100%", bottom: 0 }, "b")}
+          {shield({ left: 0, top: 0, width: stageW ?? "100%", height: Math.max(0, box.y) }, "t")}
+          {shield({ left: 0, top: box.y + box.h, width: stageW ?? "100%", bottom: 0 }, "b")}
           {shield({ left: 0, top: box.y, width: Math.max(0, box.x), height: box.h }, "l")}
-          {shield({ left: box.x + box.w, top: box.y, right: 0, height: box.h }, "r")}
+          {shield(
+            stageW === undefined
+              ? { left: box.x + box.w, top: box.y, right: 0, height: box.h }
+              : { left: box.x + box.w, top: box.y, width: Math.max(0, stageW - box.x - box.w), height: box.h },
+            "r",
+          )}
         </>
       )}
       <motion.div
@@ -353,9 +371,9 @@ export function StageNotice({ blocked, src }: { blocked: Blocked; src?: string }
 
 // ─── Callouts ──────────────────────────────────────────────────────
 // Labels anchored to something in the frame. The anchor comes from the caller
-// — a measured mark, or an Area resolved against the bounds — but the bubble
-// is always drawn at the stage's own scale: a demo shown at 0.4 would
-// otherwise have callouts no one could read.
+// — a measured mark, or an Area resolved against the bounds — and the bubble
+// is drawn at the stage's own size, which is the app's, since nothing here is
+// scaled.
 
 const BUBBLE_W = 236;
 const GAP = 16;

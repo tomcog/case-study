@@ -146,14 +146,14 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
     const spot = step?.spotlight;
     if (!spot) return null;
     if (spot.area) return areaBox(spot.area, demo.bounds);
-    return toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), demo.scale, spot.pad ?? 6);
+    return toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), spot.pad ?? 6);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demo.rects, spotMarks.join("|"), demo.scale, demo.bounds, step]);
+  }, [demo.rects, spotMarks.join("|"), demo.bounds, step]);
 
   const calloutBox = (callout: Callout): Box | null => {
     if (callout.area) return areaBox(callout.area, demo.bounds);
     const rect = callout.mark ? demo.rects[callout.mark] : undefined;
-    return rect ? toBox([rect], demo.scale, 0) : null;
+    return rect ? toBox([rect], 0) : null;
   };
 
   const restart = () => setI(0);
@@ -296,7 +296,7 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
       </div>
 
       {(demo.live || shown.kind !== "app") && !narrow && (
-        <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden", background: "#0f1115" }}>
+        <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflowX: "auto", overflowY: "hidden", background: "#0f1115" }}>
           {/* The app sits underneath whatever the step displays, so it keeps
               running while an image or an embed covers it. Keyed by its src,
               so arriving at a different app is always a fresh document. */}
@@ -313,7 +313,7 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
             />
           )}
 
-          <Spotlight box={box} shape={step?.spotlight?.shape} dim={step?.spotlight?.dim} lock={step?.spotlight?.lock} />
+          <Spotlight box={box} shape={step?.spotlight?.shape} dim={step?.spotlight?.dim} lock={step?.spotlight?.lock} stageW={demo.contentW} />
           {step?.callouts?.length ? <Callouts items={step.callouts} boxFor={calloutBox} bounds={demo.bounds} /> : null}
         </div>
       )}

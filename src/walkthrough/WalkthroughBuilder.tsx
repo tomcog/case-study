@@ -281,17 +281,17 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
     const spot = step?.spotlight;
     if (!spot) return null;
     if (spot.area) return areaBox(spot.area, demo.bounds);
-    return toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), demo.scale, spot.pad ?? 6);
+    return toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), spot.pad ?? 6);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demo.rects, spotMarks.join("|"), demo.scale, demo.bounds, step]);
+  }, [demo.rects, spotMarks.join("|"), demo.bounds, step]);
 
   const calloutBox = (callout: Callout): Box | null => {
     if (callout.area) return areaBox(callout.area, demo.bounds);
     const rect = callout.mark ? demo.rects[callout.mark] : undefined;
-    return rect ? toBox([rect], demo.scale, 0) : null;
+    return rect ? toBox([rect], 0) : null;
   };
 
-  const hoverBox = hover && toBox([hover.rect], demo.scale, 2);
+  const hoverBox = hover && toBox([hover.rect], 2);
   const overlaid = !!picking || !!drawing;
 
   if (playing) {
@@ -402,7 +402,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
         {/* The frame */}
         <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden", display: "flex", background: demo.live || framed || isSlide ? "#0f1115" : "#e9e7e3" }}>
           {demo.live || framed || isSlide ? (
-            <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+            <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflowX: "auto", overflowY: "hidden" }}>
               {/* The app runs underneath whatever the step displays, so an
                   image or a URL hides it without stopping it. */}
               {demo.live && app && <iframe key={app.src} ref={demo.frameRef} title={app.label} style={demo.frameStyle} />}
@@ -430,7 +430,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                 />
               )}
 
-              {!overlaid && <Spotlight box={box} shape={step.spotlight?.shape} dim={step.spotlight?.dim} lock={false} />}
+              {!overlaid && <Spotlight box={box} shape={step.spotlight?.shape} dim={step.spotlight?.dim} lock={false} stageW={demo.contentW} />}
               {!overlaid && step.callouts?.length ? <Callouts items={step.callouts} boxFor={calloutBox} bounds={demo.bounds} /> : null}
               {picking && <HoverOutline box={hoverBox} ok={!!hover?.mark} />}
               {drawing && (

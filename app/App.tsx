@@ -497,17 +497,19 @@ function AppCard({ app, used, onPatch, onDelete }: {
           type="number"
           size="md"
           label="Width"
+          placeholder="Pane width"
           defaultValue={app.width ?? ""}
           onBlur={(e) => onPatch({ width: e.target.value ? Number(e.target.value) : undefined })}
-          title="The viewport to give it, in px; the frame scales to fit"
+          title="The viewport to lay itself out at, in px. Nothing is scaled, so the pane scrolls if it's narrower. Blank: the app takes the pane's width and reflows"
         />
         <InputText
           type="number"
           size="md"
           label="Min width"
+          placeholder="900"
           defaultValue={app.minWidth ?? ""}
           onBlur={(e) => onPatch({ minWidth: e.target.value ? Number(e.target.value) : undefined })}
-          title="Below this the player drops the frame and shows the copy alone"
+          title="The narrowest reader window worth running a demo in. Below it the player drops the frame and shows the copy alone. Measured against the browser window, not the pane"
         />
       </div>
 

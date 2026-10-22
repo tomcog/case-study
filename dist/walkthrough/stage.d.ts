@@ -8,8 +8,9 @@ export interface Box {
 }
 /** Why there is no app running, when there isn't. */
 export type Blocked = "no-app" | "foreign" | "small";
-/** The box around one or more demo rects, in stage pixels. */
-export declare function toBox(rects: MarkRect[], scale: number, pad?: number): Box | null;
+/** The box around one or more demo rects, in stage pixels — which are app
+ * pixels, since the frame is never scaled. */
+export declare function toBox(rects: MarkRect[], pad?: number): Box | null;
 /** An Area resolved against the stage it sits on. Fractions in, pixels out. */
 export declare function areaBox(area: Area | undefined, bounds: {
     w: number;
@@ -28,7 +29,6 @@ export declare function useApp(src: string | undefined, marks: string[], size?: 
     stageRef: import("react").RefObject<HTMLDivElement | null>;
     driver: Driver | null;
     rects: MarkRects;
-    scale: number;
     measure: () => void;
     live: boolean;
     blocked: Blocked | null;
@@ -37,16 +37,22 @@ export declare function useApp(src: string | undefined, marks: string[], size?: 
         w: number;
         h: number;
     };
+    contentW: number;
 };
 /** A ring around the marked element, with the rest of the stage optionally
  * dimmed and optionally click-proof. The two are independent: the shield that
  * blocks clicks is the same four panels that do the dimming, so `lock` without
  * `dim` just makes them invisible. */
-export declare function Spotlight({ box, shape, dim, lock }: {
+export declare function Spotlight({ box, shape, dim, lock, stageW }: {
     box: Box | null;
     shape?: "rect" | "pill";
     dim?: boolean;
     lock?: boolean;
+    /** The stage's full content width, which is the app's rather than the
+     * pane's when the two differ. The shields span that, so an app wider than
+     * its pane stays dimmed and locked across the part scrolled out of sight.
+     * Without it they fall back to the visible pane. */
+    stageW?: number;
 }): import("react").JSX.Element | null;
 /** What the author is about to pick, outlined as they move over the demo. */
 export declare function HoverOutline({ box, ok }: {
