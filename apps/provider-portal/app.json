@@ -2,6 +2,6 @@
   "label": "Provider Portal",
   "entry": "index.html",
   "ingestedAt": 1792613013333,
-  "width": 1440,
-  "minWidth": 940
+  "minWidth": 1440,
+  "minWindow": 940
 }

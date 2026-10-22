@@ -250,7 +250,9 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
         const rect = callout.mark ? demo.rects[callout.mark] : undefined;
         return rect ? toBox([rect], 0) : null;
     };
-    const hoverBox = hover && toBox([hover.rect], 2);
+    // The pick reports its rect in the app's pixels, which the centering margin
+    // moves along before it is a stage pixel, as `useApp` does for the marks.
+    const hoverBox = hover && toBox([{ ...hover.rect, x: hover.rect.x + demo.offsetX }], 2);
     const overlaid = !!picking || !!drawing;
     if (playing) {
         return _jsx(WalkthroughPlayer, { content: content, apps: apps, startIndex: index, onExit: () => setPlaying(false) });

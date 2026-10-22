@@ -10,16 +10,18 @@ export interface IngestedApp {
     id: string;
     label: string;
     src: string;
-    /** Viewport width to give it, in px. The app is never scaled, so this is
-     * the width it actually lays itself out at and the pane scrolls sideways
-     * when it is the wider of the two. Leave it unset and the app takes the
-     * pane's own width, reflowing as the step affords it more or less room. */
-    width?: number;
+    /** The range of viewport widths to give it, in px. The app takes the pane's
+     * width and reflows as the step affords it more or less room, but never
+     * below `minWidth` or above `maxWidth`. It is never scaled: a pane narrower
+     * than the floor scrolls sideways, and one wider than the ceiling centers
+     * the app in it. Either unset leaves that side open. */
+    minWidth?: number;
+    maxWidth?: number;
     /** The narrowest reader window worth running a demo in; 900 when unset.
      * Below it the player drops the frame and shows the copy alone. Unrelated
-     * to `width`: this one is measured against the browser window, not the
-     * pane. Both belong to the app rather than to each step that runs it. */
-    minWidth?: number;
+     * to the two above: this one is measured against the browser window, not
+     * the pane. All three belong to the app rather than to each step. */
+    minWindow?: number;
     /** Kept out of the pickers, in every project, without being removed. A step
      * already running it keeps running it — hiding is how an app is retired
      * from new use, and deleting is the only thing that breaks a project. */

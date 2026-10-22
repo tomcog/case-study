@@ -496,19 +496,28 @@ function AppCard({ app, used, onPatch, onDelete }: {
         <InputText
           type="number"
           size="md"
-          label="Width"
-          placeholder="Pane width"
-          defaultValue={app.width ?? ""}
-          onBlur={(e) => onPatch({ width: e.target.value ? Number(e.target.value) : undefined })}
-          title="The viewport to lay itself out at, in px. Nothing is scaled, so the pane scrolls if it's narrower. Blank: the app takes the pane's width and reflows"
+          label="Min width"
+          placeholder="None"
+          defaultValue={app.minWidth ?? ""}
+          onBlur={(e) => onPatch({ minWidth: e.target.value ? Number(e.target.value) : undefined })}
+          title="The narrowest the app lays itself out, in px. It takes the pane's width and reflows, but never below this; nothing is scaled, so a narrower pane scrolls sideways. Blank: it follows the pane all the way down"
         />
         <InputText
           type="number"
           size="md"
-          label="Min width"
+          label="Max width"
+          placeholder="None"
+          defaultValue={app.maxWidth ?? ""}
+          onBlur={(e) => onPatch({ maxWidth: e.target.value ? Number(e.target.value) : undefined })}
+          title="The widest the app lays itself out, in px. A pane wider than this centers the app in it. Blank: it fills the pane however wide it gets"
+        />
+        <InputText
+          type="number"
+          size="md"
+          label="Min window"
           placeholder="900"
-          defaultValue={app.minWidth ?? ""}
-          onBlur={(e) => onPatch({ minWidth: e.target.value ? Number(e.target.value) : undefined })}
+          defaultValue={app.minWindow ?? ""}
+          onBlur={(e) => onPatch({ minWindow: e.target.value ? Number(e.target.value) : undefined })}
           title="The narrowest reader window worth running a demo in. Below it the player drops the frame and shows the copy alone. Measured against the browser window, not the pane"
         />
       </div>

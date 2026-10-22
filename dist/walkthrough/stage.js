@@ -4,13 +4,14 @@ import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-run
 // and the spotlight and callouts over that. The player and the builder share
 // this so an author sees exactly what a reader will.
 //
-// The app is never scaled. It gets the viewport its entry in the pool asks
-// for, or the pane's own width when it asks for none, and the pane scrolls
-// when that doesn't fit. A demo shrunk to fit is a demo nobody can read, and
-// scrolling is the honest way to run out of room. So there is no canvas and
-// no transform here: every box the Driver reports is in app pixels, which are
-// already stage pixels, and the overlays scroll with the frame because they
-// share its scroll box.
+// The app is never scaled. It takes the pane's width and reflows with it,
+// held between the min and max widths its entry in the pool asks for: below
+// the floor the pane scrolls sideways, above the ceiling the app sits centered
+// in it. A demo shrunk to fit is a demo nobody can read, and scrolling is the
+// honest way to run out of room. So there is no canvas and no transform here:
+// every box the Driver reports is in app pixels, shifted by the centering
+// margin into stage pixels, and the overlays scroll with the frame because
+// they share its scroll box.
 //
 // The app is mounted whenever a step names one, whether or not it is what the
 // step displays — an image or an embed is drawn over it, so it keeps running
@@ -72,7 +73,7 @@ export function useApp(src, marks, size) {
             return true;
         }
     }, [src]);
-    const blocked = !src ? "no-app" : foreign ? "foreign" : vw < (size?.minWidth ?? 900) ? "small" : null;
+    const blocked = !src ? "no-app" : foreign ? "foreign" : vw < (size?.minWindow ?? 900) ? "small" : null;
     const live = !blocked;
     useEffect(() => {
         const el = frameRef.current;
@@ -102,11 +103,23 @@ export function useApp(src, marks, size) {
     useEffect(() => {
         setRects({});
     }, [src]);
+    // The app's own width, held to its range, and the margin that centers it
+    // when the ceiling leaves the pane room to spare. CSS lays the frame out the
+    // same way (min-width beats max-width there too); this is so the overlays
+    // know where it went.
+    const frameW = Math.max(size?.minWidth ?? 0, Math.min(size?.maxWidth ?? Infinity, bounds.w));
+    const offsetX = Math.max(0, (bounds.w - frameW) / 2);
+    const offsetRef = useRef(offsetX);
+    offsetRef.current = offsetX;
     const measure = useCallback(() => {
         if (!driver)
             return;
         const ids = marksRef.current;
-        const next = ids.length ? driver.marks(ids) : {};
+        const dx = offsetRef.current;
+        const measured = ids.length ? driver.marks(ids) : {};
+        const next = {};
+        for (const id in measured)
+            next[id] = { ...measured[id], x: measured[id].x + dx };
         // The app reports layout every frame while it animates; only a box that
         // actually moved is worth a render.
         setRects((prev) => (sameRects(prev, next) ? prev : next));
@@ -124,22 +137,24 @@ export function useApp(src, marks, size) {
     }, [driver, measure]);
     useEffect(() => {
         measure();
-    }, [measure, bounds.w, bounds.h]);
-    // An app that named a width gets exactly that viewport, so it lays itself
-    // out the way it was designed to rather than falling into its own narrow
-    // breakpoints; one that named none takes the pane. Either way it is drawn at
-    // 100% and the pane scrolls sideways if the pane is the smaller of the two.
+    }, [measure, bounds.w, bounds.h, offsetX]);
+    // The app takes the pane and reflows with it, between its floor and its
+    // ceiling: never into narrow breakpoints it wasn't designed for, never
+    // stretched across a pane wider than it was designed to fill.
     const frameStyle = {
-        width: size?.width ?? "100%",
+        width: "100%",
+        minWidth: size?.minWidth,
+        maxWidth: size?.maxWidth,
         height: "100%",
+        margin: "0 auto",
         border: 0,
         display: "block",
     };
-    // What the stage is as wide as, which is the app's viewport rather than the
-    // pane's whenever the app named one. `bounds` stays the visible pane, since
-    // that is what an Area is a fraction of.
-    const contentW = size?.width ?? bounds.w;
-    return { frameRef, stageRef, driver, rects, measure, live, blocked, frameStyle, bounds, contentW };
+    // What the stage is as wide as: the pane, or the app's floor when the pane
+    // is narrower than it. `bounds` stays the visible pane, since that is what
+    // an Area is a fraction of.
+    const contentW = Math.max(frameW, bounds.w);
+    return { frameRef, stageRef, driver, rects, measure, live, blocked, frameStyle, bounds, contentW, offsetX };
 }
 const sameRects = (a, b) => {
     const keys = Object.keys(a);

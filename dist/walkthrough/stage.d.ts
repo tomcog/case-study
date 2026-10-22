@@ -22,8 +22,9 @@ export declare function areaBox(area: Area | undefined, bounds: {
  * The frame is keyed by it upstream, so arriving at a different app is always
  * a fresh document rather than whatever the last one left behind. */
 export declare function useApp(src: string | undefined, marks: string[], size?: {
-    width?: number;
     minWidth?: number;
+    maxWidth?: number;
+    minWindow?: number;
 }): {
     frameRef: import("react").RefObject<HTMLIFrameElement | null>;
     stageRef: import("react").RefObject<HTMLDivElement | null>;
@@ -38,6 +39,7 @@ export declare function useApp(src: string | undefined, marks: string[], size?: 
         h: number;
     };
     contentW: number;
+    offsetX: number;
 };
 /** A ring around the marked element, with the rest of the stage optionally
  * dimmed and optionally click-proof. The two are independent: the shield that

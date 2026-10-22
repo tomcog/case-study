@@ -29,7 +29,7 @@ import { basename, extname, join, resolve } from "node:path";
 //   GET  /apps/<id>/…                               an app's files, straight from disk
 //   GET  /__apps/usage                              which projects run each app, drafts included
 //   POST /__apps/ingest   { path, label }           → { id }  copies a built folder in
-//   POST /__apps/rename   { id, label|width|minWidth|hidden } → patches app.json (the id never changes)
+//   POST /__apps/rename   { id, label|minWidth|maxWidth|minWindow|hidden } → patches app.json (the id never changes)
 //   POST /__apps/delete   { id }                    → removes the folder
 //
 // A build copies projects/ and apps/ into the output, each with a static
@@ -65,6 +65,16 @@ const IMAGE = /\.(png|jpe?g|gif|webp|svg|avif|mp4)$/i;
 export function projectsPlugin(dir: string, appsDir: string): Plugin {
   // ── Ingested apps ──
   const appFile = (id: string) => join(appsDir, id, "app.json");
+  /** An app.json in the current shape. Before an app had a floor and a
+   * ceiling, `width` was its floor and `minWidth` the narrowest window; a
+   * file that still has `width` is read that way, and rewritten that way the
+   * next time anything about it is saved. */
+  function readApp(id: string) {
+    const meta = JSON.parse(readFileSync(appFile(id), "utf8"));
+    if (!("width" in meta)) return meta;
+    const { width, minWidth, ...rest } = meta;
+    return { ...rest, minWidth: width, minWindow: minWidth };
+  }
   const appIds = () => (existsSync(appsDir) ? readdirSync(appsDir).filter((f) => ID.test(f) && existsSync(appFile(f))) : []);
 
   /** One row per ingested app. The entry is whatever the build calls its
@@ -73,13 +83,14 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
   function apps() {
     return appIds()
       .map((id) => {
-        const meta = JSON.parse(readFileSync(appFile(id), "utf8"));
+        const meta = readApp(id);
         return {
           id,
           label: meta.label || id,
           src: `/apps/${id}/${meta.entry || "index.html"}`,
-          width: meta.width,
           minWidth: meta.minWidth,
+          maxWidth: meta.maxWidth,
+          minWindow: meta.minWindow,
           hidden: meta.hidden === true ? true : undefined,
           ingestedAt: meta.ingestedAt ?? statSync(appFile(id)).mtimeMs,
         };
@@ -112,9 +123,9 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
     if (path === "/__apps/ingest") return ingest(input);
     if (!ID.test(input.id ?? "") || !existsSync(appFile(input.id))) return [404, { error: "No such app" }];
     if (path === "/__apps/rename") {
-      const meta = JSON.parse(readFileSync(appFile(input.id), "utf8"));
+      const meta = readApp(input.id);
       const patch: Record<string, unknown> = {};
-      for (const key of ["label", "width", "minWidth", "hidden"]) if (key in input) patch[key] = input[key];
+      for (const key of ["label", "minWidth", "maxWidth", "minWindow", "hidden"]) if (key in input) patch[key] = input[key];
       // A cleared field is an absent one: undefined overrides what app.json
       // holds and JSON.stringify drops it, so showing an app again leaves no
       // "hidden": false behind.
