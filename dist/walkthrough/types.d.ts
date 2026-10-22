@@ -59,14 +59,27 @@ export interface Area {
     h: number;
 }
 export interface Spotlight {
-    /** One or more data-walkthrough ids, when the app is what's on screen. The
-     * first is what gets revealed. */
+    /** One or more targets — mark ids, or `css:` paths for unmarked elements —
+     * when the app is what's on screen. The first is what gets revealed. */
     mark?: string | string[];
     /** Where to draw it over an embed or an image, which have no marks. */
     area?: Area;
-    shape?: "rect" | "pill";
-    /** Padding around the element, in app px (default 6). Marks only. */
+    /** The glow's outline (Figma: `Highlight`, 978:3268). `rect` (the default)
+     * and `pill` follow the element's box; `circle` rings its longer side, as
+     * the Figma does. */
+    shape?: "rect" | "pill" | "circle";
+    /** Clear space between the element and the glow, in app px (default 6).
+     * Marks only. */
     pad?: number;
+    /** How far the glow reaches out from the element, in px (default 26, the
+     * Figma's). */
+    spread?: number;
+    /** The glow's opacity where it meets the element, fading to nothing at
+     * `spread` (0–1, default 0.35, the Figma's). */
+    strength?: number;
+    /** Breathe in and out, for an element that is easy to miss. Still under
+     * reduced motion. */
+    pulse?: boolean;
     /** Dim the rest of the frame (default true). Off leaves the app at full
      * strength with only the ring to draw the eye. */
     dim?: boolean;

@@ -5,9 +5,16 @@
 // app, while a cross-origin one would need the same methods implemented over
 // postMessage against a small script in it.
 //
-// Everything here reaches the app the way a reader does — by mark, through the
-// DOM — which is why an ingested app needs nothing added to it beyond the
-// marks a highlight already requires.
+// Everything here reaches the app the way a reader does — through the DOM —
+// so an ingested app needs nothing added to it.
+//
+// A target is a string of one of two kinds. A mark id names an element the app
+// tagged with data-walkthrough="<id>", and survives any redesign that keeps the
+// tag. A path (`css:` and a selector) is what picking writes for an element
+// with no tag: its place in the page, so anything can be pointed at without
+// touching the app. A path would rot against a live app, but an ingested app
+// is a snapshot, so it only breaks when the app is re-ingested with that part
+// of its page changed. Picking prefers a mark wherever there is one.
 
 
 /** An element's box in the demo's own viewport coordinates. */
@@ -20,9 +27,13 @@ export interface MarkRect {
 
 export type MarkRects = Record<string, MarkRect>;
 
-/** An element the author pointed at while picking a mark. `mark` is null when
- * the element carries no data-walkthrough id — which is the one thing the
- * builder most needs to be able to say. */
+/** Marks a target as a path rather than a mark id. */
+export const PATH_PREFIX = "css:";
+
+export const isPath = (target: string) => target.startsWith(PATH_PREFIX);
+
+/** An element the author pointed at while picking. `mark` is its mark id, or a
+ * path when it has none; null only when no path could single it out. */
 export interface PickHit {
   mark: string | null;
   label: string;
@@ -49,7 +60,9 @@ export interface Driver {
   reveal(id: string): void;
   /** The route the demo is showing, as a hash ("#/settings"). */
   currentPath(): string;
-  onClick(cb: (mark: string) => void): () => void;
+  /** The reader clicked something. `hit` says whether the click landed on (or
+   * inside) a given target, so a mark and a path are matched the same way. */
+  onClick(cb: (hit: (target: string) => boolean) => void): () => void;
   onPath(cb: (path: string) => void): () => void;
   onSignal(cb: (name: string, detail: unknown) => void): () => void;
   /** The demo scrolled, resized, or moved something: whatever `marks` returned
@@ -83,9 +96,57 @@ const describe = (el: Element) => {
   return text ? `${tag} “${text}”` : tag;
 };
 
+/** What a reader would say they clicked, when it isn't marked: the nearest
+ * control around the pointer rather than the icon or the text inside it. */
+const CONTROL =
+  "a, button, input, select, textarea, label, summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=option], [role=checkbox], [role=radio], [role=switch], [tabindex]";
+
+/** Hints that say what an element is, more steadily than its position does.
+ * Classes are left out: a build hashes them, and a re-ingest reshuffles them. */
+const STEADY = ["data-testid", "name", "aria-label"];
+
+/** A selector that finds exactly this element, or null. It climbs from the
+ * element until it reaches a mark, a unique id, or the body, naming each step
+ * by tag, a steady attribute if it has one, and its place among its siblings. */
+function pathTo(el: Element): string | null {
+  const d = el.ownerDocument;
+  const parts: string[] = [];
+  let anchored = false;
+  let node: Element | null = el;
+  while (node && node !== d.body && node !== d.documentElement) {
+    const mark = node.getAttribute("data-walkthrough");
+    if (mark) {
+      parts.unshift(`[data-walkthrough="${CSS.escape(mark)}"]`);
+      anchored = true;
+      break;
+    }
+    if (node.id && d.querySelectorAll(`#${CSS.escape(node.id)}`).length === 1) {
+      parts.unshift(`#${CSS.escape(node.id)}`);
+      anchored = true;
+      break;
+    }
+    let part = node.tagName.toLowerCase();
+    const hint = STEADY.find((a) => node!.getAttribute(a));
+    if (hint) part += `[${hint}="${CSS.escape(node.getAttribute(hint)!)}"]`;
+    const parent: Element | null = node.parentElement;
+    const tag = node.tagName;
+    const same = parent ? Array.from(parent.children).filter((c) => c.tagName === tag) : [];
+    if (same.length > 1) part += `:nth-of-type(${same.indexOf(node) + 1})`;
+    parts.unshift(part);
+    node = parent;
+  }
+  if (!parts.length) return null;
+  const selector = (anchored ? "" : "body > ") + parts.join(" > ");
+  try {
+    return d.querySelector(selector) === el ? selector : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Drive a demo served from the player's own origin. */
 export function sameOriginDriver(frame: HTMLIFrameElement, src: string): Driver {
-  const clicks = new Set<(mark: string) => void>();
+  const clicks = new Set<(hit: (target: string) => boolean) => void>();
   const paths = new Set<(path: string) => void>();
   const signals = new Set<(name: string, detail: unknown) => void>();
   const layouts = new Set<() => void>();
@@ -102,13 +163,18 @@ export function sameOriginDriver(frame: HTMLIFrameElement, src: string): Driver 
   const hitFrom = (node: EventTarget | null): { el: Element; hit: PickHit } | null => {
     const el = asElement(node);
     if (!el) return null;
+    // A mark wins, unless the pointer is on a separate control inside the
+    // marked element — then that control is what was meant.
     const marked = el.closest("[data-walkthrough]");
-    const chosen = marked ?? el;
+    const control = el.closest(CONTROL) ?? el.closest("svg") ?? el;
+    const useMark = marked && !(control !== marked && marked.contains(control) && control.matches(CONTROL));
+    const chosen = useMark ? marked : control;
+    const path = useMark ? null : pathTo(chosen);
     const r = chosen.getBoundingClientRect();
     return {
       el: chosen,
       hit: {
-        mark: marked?.getAttribute("data-walkthrough") ?? null,
+        mark: useMark ? marked.getAttribute("data-walkthrough") : path && PATH_PREFIX + path,
         label: describe(chosen),
         rect: { x: r.x, y: r.y, w: r.width, h: r.height },
       },
@@ -124,9 +190,10 @@ export function sameOriginDriver(frame: HTMLIFrameElement, src: string): Driver 
       if (found) picks.forEach((cb) => cb(found.hit));
       return;
     }
-    const el = asElement(e.target)?.closest("[data-walkthrough]");
-    const mark = el?.getAttribute("data-walkthrough");
-    if (mark) clicks.forEach((cb) => cb(mark));
+    const el = asElement(e.target);
+    if (!el) return;
+    const hit = (target: string) => !!query(target)?.contains(el);
+    clicks.forEach((cb) => cb(hit));
   };
 
   const handleSuppress = (e: Event) => {
@@ -271,7 +338,18 @@ export function sameOriginDriver(frame: HTMLIFrameElement, src: string): Driver 
 
   const loaded = () => !!doc() && doc()!.readyState !== "loading";
 
-  const query = (id: string) => doc()?.querySelector(`[data-walkthrough="${CSS.escape(id)}"]`) ?? null;
+  /** The element a target names, by mark id or by path. A path that no longer
+   * parses finds nothing rather than throwing. */
+  const query = (target: string): Element | null => {
+    const d = doc();
+    if (!d || !target) return null;
+    if (!isPath(target)) return d.querySelector(`[data-walkthrough="${CSS.escape(target)}"]`);
+    try {
+      return d.querySelector(target.slice(PATH_PREFIX.length));
+    } catch {
+      return null;
+    }
+  };
 
   return {
     ready() {

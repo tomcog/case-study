@@ -6,9 +6,11 @@ export interface MarkRect {
     h: number;
 }
 export type MarkRects = Record<string, MarkRect>;
-/** An element the author pointed at while picking a mark. `mark` is null when
- * the element carries no data-walkthrough id — which is the one thing the
- * builder most needs to be able to say. */
+/** Marks a target as a path rather than a mark id. */
+export declare const PATH_PREFIX = "css:";
+export declare const isPath: (target: string) => boolean;
+/** An element the author pointed at while picking. `mark` is its mark id, or a
+ * path when it has none; null only when no path could single it out. */
 export interface PickHit {
     mark: string | null;
     label: string;
@@ -36,7 +38,9 @@ export interface Driver {
     reveal(id: string): void;
     /** The route the demo is showing, as a hash ("#/settings"). */
     currentPath(): string;
-    onClick(cb: (mark: string) => void): () => void;
+    /** The reader clicked something. `hit` says whether the click landed on (or
+     * inside) a given target, so a mark and a path are matched the same way. */
+    onClick(cb: (hit: (target: string) => boolean) => void): () => void;
     onPath(cb: (path: string) => void): () => void;
     onSignal(cb: (name: string, detail: unknown) => void): () => void;
     /** The demo scrolled, resized, or moved something: whatever `marks` returned

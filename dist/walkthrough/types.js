@@ -23,12 +23,14 @@
 // the rail bands. It is derived every time and never stored: there is nothing
 // to get out of step with the steps themselves.
 //
-// An ingested app has to hold up three rules, and ingesting one means making
+// An ingested app has to hold up two rules, and ingesting one means making
 // them true of it:
-//   1. data-walkthrough="<id>" on anything a step points at or acts on (never
-//      CSS selectors, which rot)
-//   2. hash routes, so a starting screen is an assignment rather than a load
-//   3. built with base "./", since it is served from its own folder
+//   1. hash routes, so a starting screen is an assignment rather than a load
+//   2. built with base "./", since it is served from its own folder
+// Anything in it can then be pointed at: picking keeps an element's
+// data-walkthrough="<id>" when it has one, and its path in the page when it
+// doesn't (see driver.ts). A mark is still worth adding to anything a demo
+// leans on, since it survives a re-ingest that moves the element.
 /** What a new project starts as: one step, running nothing. */
 export const DEFAULT_WALKTHROUGH = {
     steps: [

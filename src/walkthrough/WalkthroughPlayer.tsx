@@ -36,7 +36,7 @@ export const marksOf = (mark?: string | string[]) => (!mark ? [] : Array.isArray
 function watch(driver: Driver, advance: StepAdvance, done: () => void): () => void {
   switch (advance.on) {
     case "click":
-      return driver.onClick((mark) => mark === advance.mark && done());
+      return driver.onClick((hit) => hit(advance.mark) && done());
     case "path":
       return driver.onPath((path) => norm(path) === norm(advance.path) && done());
     case "signal":
@@ -304,8 +304,8 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
             />
           )}
 
-          <Spotlight box={box} shape={step?.spotlight?.shape} dim={step?.spotlight?.dim} lock={step?.spotlight?.lock} stageW={demo.contentW} />
-          {step?.callouts?.length ? <Callouts items={step.callouts} boxFor={calloutBox} bounds={demo.bounds} /> : null}
+          <Spotlight box={box} shape={step?.spotlight?.shape} spread={step?.spotlight?.spread} strength={step?.spotlight?.strength} pulse={step?.spotlight?.pulse} dim={step?.spotlight?.dim} lock={step?.spotlight?.lock} stageW={demo.contentW} />
+          {step?.callouts?.length ? <Callouts items={step.callouts} boxFor={calloutBox} bounds={demo.bounds} scrollX={demo.scrollX} /> : null}
         </div>
       )}
 

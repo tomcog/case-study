@@ -23,12 +23,14 @@
 // the rail bands. It is derived every time and never stored: there is nothing
 // to get out of step with the steps themselves.
 //
-// An ingested app has to hold up three rules, and ingesting one means making
+// An ingested app has to hold up two rules, and ingesting one means making
 // them true of it:
-//   1. data-walkthrough="<id>" on anything a step points at or acts on (never
-//      CSS selectors, which rot)
-//   2. hash routes, so a starting screen is an assignment rather than a load
-//   3. built with base "./", since it is served from its own folder
+//   1. hash routes, so a starting screen is an assignment rather than a load
+//   2. built with base "./", since it is served from its own folder
+// Anything in it can then be pointed at: picking keeps an element's
+// data-walkthrough="<id>" when it has one, and its path in the page when it
+// doesn't (see driver.ts). A mark is still worth adding to anything a demo
+// leans on, since it survives a re-ingest that moves the element.
 
 import type { ProjectPreview, Screen } from "../core.js";
 
@@ -74,14 +76,27 @@ export interface Area {
 }
 
 export interface Spotlight {
-  /** One or more data-walkthrough ids, when the app is what's on screen. The
-   * first is what gets revealed. */
+  /** One or more targets — mark ids, or `css:` paths for unmarked elements —
+   * when the app is what's on screen. The first is what gets revealed. */
   mark?: string | string[];
   /** Where to draw it over an embed or an image, which have no marks. */
   area?: Area;
-  shape?: "rect" | "pill";
-  /** Padding around the element, in app px (default 6). Marks only. */
+  /** The glow's outline (Figma: `Highlight`, 978:3268). `rect` (the default)
+   * and `pill` follow the element's box; `circle` rings its longer side, as
+   * the Figma does. */
+  shape?: "rect" | "pill" | "circle";
+  /** Clear space between the element and the glow, in app px (default 6).
+   * Marks only. */
   pad?: number;
+  /** How far the glow reaches out from the element, in px (default 26, the
+   * Figma's). */
+  spread?: number;
+  /** The glow's opacity where it meets the element, fading to nothing at
+   * `spread` (0–1, default 0.35, the Figma's). */
+  strength?: number;
+  /** Breathe in and out, for an element that is easy to miss. Still under
+   * reduced motion. */
+  pulse?: boolean;
   /** Dim the rest of the frame (default true). Off leaves the app at full
    * strength with only the ring to draw the eye. */
   dim?: boolean;

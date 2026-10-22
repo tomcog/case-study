@@ -19,7 +19,7 @@ import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-run
 // report nothing, so anything drawn on them is positioned by an Area:
 // fractions of the frame, resolved against its measured bounds.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
 import { sameOriginDriver } from "./driver.js";
@@ -54,6 +54,8 @@ export function useApp(src, marks, size) {
     const stageRef = useRef(null);
     const [driver, setDriver] = useState(null);
     const [bounds, setBounds] = useState({ w: 0, h: 0 });
+    // How far the pane is scrolled sideways, when the app is wider than it.
+    const [scrollX, setScrollX] = useState(0);
     const [rects, setRects] = useState({});
     const [vw, setVw] = useState(() => window.innerWidth);
     const markKey = marks.join("|");
@@ -99,7 +101,12 @@ export function useApp(src, marks, size) {
             setBounds({ w: r.width, h: r.height });
         });
         ro.observe(el);
-        return () => ro.disconnect();
+        const onScroll = () => setScrollX(el.scrollLeft);
+        el.addEventListener("scroll", onScroll, { passive: true });
+        return () => {
+            ro.disconnect();
+            el.removeEventListener("scroll", onScroll);
+        };
     }, []);
     // Every rect was measured inside one app, so leaving it makes all of them
     // wrong rather than merely out of date. Dropping them is what stops a mark
@@ -158,7 +165,7 @@ export function useApp(src, marks, size) {
     // is narrower than it. `bounds` stays the visible pane, since that is what
     // an Area is a fraction of.
     const contentW = Math.max(frameW, bounds.w);
-    return { frameRef, stageRef, driver, rects, measure, live, blocked, frameStyle, bounds, contentW, offsetX };
+    return { frameRef, stageRef, driver, rects, measure, live, blocked, frameStyle, bounds, contentW, offsetX, scrollX };
 }
 const sameRects = (a, b) => {
     const keys = Object.keys(a);
@@ -170,13 +177,43 @@ const sameRects = (a, b) => {
         return y && x.x === y.x && x.y === y.y && x.w === y.w && x.h === y.h;
     });
 };
-/** A ring around the marked element, with the rest of the stage optionally
+/** A glow around the marked element, with the rest of the stage optionally
  * dimmed and optionally click-proof. The two are independent: the shield that
  * blocks clicks is the same four panels that do the dimming, so `lock` without
- * `dim` just makes them invisible. */
-export function Spotlight({ box, shape, dim = true, lock, stageW }) {
+ * `dim` just makes them invisible.
+ *
+ * The glow is the Figma's `Highlight` (978:3268): a ring whose hole is the
+ * element, filled with the accent fading linearly from `strength` at the
+ * hole's edge to nothing `spread` px out. A circle is drawn exactly that way,
+ * as a radial gradient. A rect or a pill follows the element's box, which a
+ * radial gradient can't, so it is a box-shadow instead — an outer shadow is
+ * never painted inside its own box, which is the hole. */
+export function Spotlight({ box, shape = "rect", spread = 26, strength = 0.35, pulse, dim = true, lock, stageW }) {
+    const reduced = useReducedMotion();
     if (!box)
         return null;
+    const reach = Math.max(0, spread);
+    const tint = (alpha) => `color-mix(in srgb, ${RED} ${Math.round(Math.min(1, Math.max(0, alpha)) * 100)}%, transparent)`;
+    // The glow's own box, which is the element's for a rect or a pill and the
+    // whole ring for a circle. The hole is a share of the radius rather than a
+    // pixel count, so it stays the element's size while the box travels.
+    const inner = Math.max(box.w, box.h) / 2;
+    const outer = inner + reach;
+    const glow = shape === "circle"
+        ? {
+            frame: { left: box.x + box.w / 2 - outer, top: box.y + box.h / 2 - outer, width: outer * 2, height: outer * 2 },
+            look: {
+                background: `radial-gradient(circle closest-side, transparent ${(inner / outer) * 100}%, ${tint(strength)} ${(inner / outer) * 100}%, ${tint(0)} 100%)`,
+            },
+        }
+        : {
+            frame: { left: box.x, top: box.y, width: box.w, height: box.h },
+            look: {
+                borderRadius: shape === "pill" ? 999 : 10,
+                boxShadow: `0 0 ${reach}px ${reach / 3}px ${tint(strength)}`,
+            },
+        };
+    const breathing = pulse && !reduced;
     const shield = (part, key) => (_jsx("div", { style: {
             position: "absolute",
             background: dim ? "rgba(12,14,18,0.46)" : "transparent",
@@ -185,12 +222,10 @@ export function Spotlight({ box, shape, dim = true, lock, stageW }) {
         } }, key));
     return (_jsxs(_Fragment, { children: [(dim || lock) && (_jsxs(_Fragment, { children: [shield({ left: 0, top: 0, width: stageW ?? "100%", height: Math.max(0, box.y) }, "t"), shield({ left: 0, top: box.y + box.h, width: stageW ?? "100%", bottom: 0 }, "b"), shield({ left: 0, top: box.y, width: Math.max(0, box.x), height: box.h }, "l"), shield(stageW === undefined
                         ? { left: box.x + box.w, top: box.y, right: 0, height: box.h }
-                        : { left: box.x + box.w, top: box.y, width: Math.max(0, stageW - box.x - box.w), height: box.h }, "r")] })), _jsx(motion.div, { initial: false, animate: { left: box.x, top: box.y, width: box.w, height: box.h }, transition: { type: "spring", stiffness: 420, damping: 36 }, style: {
-                    position: "absolute",
-                    borderRadius: shape === "pill" ? 999 : 10,
-                    boxShadow: `0 0 0 2px ${RED}, 0 10px 30px -8px rgba(0,0,0,0.5)`,
-                    pointerEvents: "none",
-                } })] }));
+                        : { left: box.x + box.w, top: box.y, width: Math.max(0, stageW - box.x - box.w), height: box.h }, "r")] })), _jsx(motion.div, { initial: false, animate: { ...glow.frame, opacity: breathing ? [1, 0.4, 1] : 1 }, transition: {
+                    default: { type: "spring", stiffness: 420, damping: 36 },
+                    opacity: breathing ? { duration: 1.8, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 },
+                }, style: { position: "absolute", pointerEvents: "none", ...glow.look } })] }));
 }
 /** What the author is about to pick, outlined as they move over the demo. */
 export function HoverOutline({ box, ok }) {
@@ -294,12 +329,13 @@ function sideFor(box, bounds, wanted) {
         return wanted;
     return ["right", "left", "bottom", "top"].find(fits) ?? wanted ?? "right";
 }
-export function Callouts({ items, boxFor, bounds }) {
+export function Callouts({ items, boxFor, bounds, scrollX = 0 }) {
     const placed = items
         .map((callout, i) => {
-        const box = boxFor(callout);
-        if (!box)
+        const found = boxFor(callout);
+        if (!found)
             return null;
+        const box = { ...found, x: found.x - scrollX };
         // An anchor scrolled out of the stage has nothing to point at.
         const cx = box.x + box.w / 2;
         const cy = box.y + box.h / 2;
@@ -331,7 +367,8 @@ export function Callouts({ items, boxFor, bounds }) {
         const placedAt = side === "top" || side === "bottom"
             ? { x: clamp(x, half + PAD, bounds.w - half - PAD), y }
             : { x, y: clamp(y, 44 + PAD, bounds.h - 44 - PAD) };
-        return { key: `${callout.mark ?? "area"}-${i}`, callout, edge, anchor: placedAt, shift };
+        const back = (p) => ({ x: p.x + scrollX, y: p.y });
+        return { key: `${callout.mark ?? "area"}-${i}`, callout, edge: back(edge), anchor: back(placedAt), shift };
     })
         .filter((p) => !!p);
     if (!placed.length)

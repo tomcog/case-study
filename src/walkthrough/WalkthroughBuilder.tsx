@@ -7,9 +7,9 @@
 // shared by every project — a step only ever picks which app it runs.
 //
 // The inspector offers a step only what that step can actually use, which is
-// decided by what it displays. On a running app, marks are picked by clicking
+// decided by what it displays. On a running app, targets are picked by clicking
 // the product: it is same-origin, so the builder can read what was clicked and
-// say when an element has no data-walkthrough id to point at yet. An embed or
+// keep its mark id, or its path in the page when it has none. An embed or
 // an image can't be read, so the author drags a rectangle instead. A slide
 // covers the stage and carries its own copy, so the panel fields, the overlays
 // drawn over the stage and the choice of what advances it all go away — on a
@@ -253,7 +253,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
     if (!picking) return;
     const offPick = driver.onPick((hit) => {
       if (!hit.mark) {
-        setWarning(`That ${hit.label} has no data-walkthrough id. Add one in the app, then pick it again.`);
+        setWarning(`That ${hit.label} can't be singled out in the page. Try the element around it.`);
         return;
       }
       applyMark(picking, hit.mark);
@@ -432,8 +432,8 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                 />
               )}
 
-              {!overlaid && <Spotlight box={box} shape={step.spotlight?.shape} dim={step.spotlight?.dim} lock={false} stageW={demo.contentW} />}
-              {!overlaid && step.callouts?.length ? <Callouts items={step.callouts} boxFor={calloutBox} bounds={demo.bounds} /> : null}
+              {!overlaid && <Spotlight box={box} shape={step.spotlight?.shape} spread={step.spotlight?.spread} strength={step.spotlight?.strength} pulse={step.spotlight?.pulse} dim={step.spotlight?.dim} lock={false} stageW={demo.contentW} />}
+              {!overlaid && step.callouts?.length ? <Callouts items={step.callouts} boxFor={calloutBox} bounds={demo.bounds} scrollX={demo.scrollX} /> : null}
               {picking && <HoverOutline box={hoverBox} ok={!!hover?.mark} />}
               {drawing && (
                 <AreaDraw
@@ -723,13 +723,13 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                   />
                   <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
                     <SegmentedControl size="md" aria-label="Spotlight shape" style={track}>
-                      {(["rect", "pill"] as const).map((shape) => (
+                      {(["rect", "pill", "circle"] as const).map((shape) => (
                         <Segment
                           key={shape}
                           selected={(step.spotlight!.shape ?? "rect") === shape}
                           onClick={() => update({ spotlight: { ...step.spotlight!, shape } })}
                         >
-                          {shape === "rect" ? "Rounded" : "Pill"}
+                          {shape === "rect" ? "Rounded" : shape === "pill" ? "Pill" : "Circle"}
                         </Segment>
                       ))}
                     </SegmentedControl>
@@ -743,7 +743,31 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                       />
                     )}
                   </div>
+                  <Slider
+                    label="Spread"
+                    value={step.spotlight.spread ?? 26}
+                    min={0}
+                    max={96}
+                    unit="px"
+                    onChange={(v) => update({ spotlight: { ...step.spotlight!, spread: v === 26 ? undefined : v } })}
+                  />
+                  <Slider
+                    label="Strength"
+                    value={Math.round((step.spotlight.strength ?? 0.35) * 100)}
+                    min={5}
+                    max={100}
+                    unit="%"
+                    onChange={(v) => update({ spotlight: { ...step.spotlight!, strength: v === 35 ? undefined : v / 100 } })}
+                  />
                   <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!step.spotlight.pulse}
+                      onChange={(e) => update({ spotlight: { ...step.spotlight!, pulse: e.target.checked || undefined } })}
+                    />
+                    Pulse
+                  </label>
+                  <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 6 }}>
                     <input
                       type="checkbox"
                       checked={step.spotlight.dim !== false}
@@ -984,7 +1008,7 @@ function Anchor({ mark, area, byArea, onMark, onPick, onDraw, busy, disabled }: 
   }
   return (
     <div style={{ display: "flex", gap: 6 }}>
-      <input value={mark} onChange={(e) => onMark(e.target.value)} placeholder="data-walkthrough id" style={inputStyle} />
+      <input value={mark} onChange={(e) => onMark(e.target.value)} placeholder="Mark id, or pick an element" style={inputStyle} />
       <Button
         size="sm"
         variant={busy ? "primary" : "ghost"}
@@ -997,6 +1021,35 @@ function Anchor({ mark, area, byArea, onMark, onPick, onDraw, busy, disabled }: 
         Pick
       </Button>
     </div>
+  );
+}
+
+/** One adjustable number, dragged rather than typed so its effect can be
+ * watched on the stage as it changes. */
+function Slider({ label, value, min, max, unit, onChange }: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  unit: string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label style={{ ...hint, display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+      <span style={{ width: 58, flex: "none" }}>{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ flex: 1, minWidth: 0, accentColor: ACCENT }}
+      />
+      <span style={{ width: 40, flex: "none", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+        {value}
+        {unit}
+      </span>
+    </label>
   );
 }
 

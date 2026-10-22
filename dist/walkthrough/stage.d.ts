@@ -44,14 +44,25 @@ export declare function useApp(src: string | undefined, marks: string[], size?: 
     };
     contentW: number;
     offsetX: number;
+    scrollX: number;
 };
-/** A ring around the marked element, with the rest of the stage optionally
+/** A glow around the marked element, with the rest of the stage optionally
  * dimmed and optionally click-proof. The two are independent: the shield that
  * blocks clicks is the same four panels that do the dimming, so `lock` without
- * `dim` just makes them invisible. */
-export declare function Spotlight({ box, shape, dim, lock, stageW }: {
+ * `dim` just makes them invisible.
+ *
+ * The glow is the Figma's `Highlight` (978:3268): a ring whose hole is the
+ * element, filled with the accent fading linearly from `strength` at the
+ * hole's edge to nothing `spread` px out. A circle is drawn exactly that way,
+ * as a radial gradient. A rect or a pill follows the element's box, which a
+ * radial gradient can't, so it is a box-shadow instead — an outer shadow is
+ * never painted inside its own box, which is the hole. */
+export declare function Spotlight({ box, shape, spread, strength, pulse, dim, lock, stageW }: {
     box: Box | null;
-    shape?: "rect" | "pill";
+    shape?: "rect" | "pill" | "circle";
+    spread?: number;
+    strength?: number;
+    pulse?: boolean;
     dim?: boolean;
     lock?: boolean;
     /** The stage's full content width, which is the app's rather than the
@@ -90,13 +101,19 @@ export declare function StageNotice({ blocked, src }: {
     blocked: Blocked;
     src?: string;
 }): import("react").JSX.Element;
-export declare function Callouts({ items, boxFor, bounds }: {
+export declare function Callouts({ items, boxFor, bounds, scrollX }: {
     items: Callout[];
     /** Where this callout points, in stage pixels, or null if it has nothing to
      * point at — an unmeasured mark, or an area on a stage with no size yet. */
     boxFor: (callout: Callout) => Box | null;
+    /** The visible pane. */
     bounds: {
         w: number;
         h: number;
     };
+    /** How far the pane is scrolled sideways. Stage pixels run across the whole
+     * app, but whether a callout fits, and where its bubble is clamped to, is a
+     * question about the part of it in view — so the placing is done in the
+     * view's pixels and shifted back. */
+    scrollX?: number;
 }): import("react").JSX.Element | null;

@@ -19,7 +19,7 @@
 // fractions of the frame, resolved against its measured bounds.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
 import { sameOriginDriver } from "./driver.js";
@@ -68,6 +68,8 @@ export function useApp(src: string | undefined, marks: string[], size?: { minWid
   const stageRef = useRef<HTMLDivElement>(null);
   const [driver, setDriver] = useState<Driver | null>(null);
   const [bounds, setBounds] = useState({ w: 0, h: 0 });
+  // How far the pane is scrolled sideways, when the app is wider than it.
+  const [scrollX, setScrollX] = useState(0);
   const [rects, setRects] = useState<MarkRects>({});
   const [vw, setVw] = useState(() => window.innerWidth);
 
@@ -115,7 +117,12 @@ export function useApp(src: string | undefined, marks: string[], size?: { minWid
       setBounds({ w: r.width, h: r.height });
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    const onScroll = () => setScrollX(el.scrollLeft);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   // Every rect was measured inside one app, so leaving it makes all of them
@@ -180,7 +187,7 @@ export function useApp(src: string | undefined, marks: string[], size?: { minWid
   // an Area is a fraction of.
   const contentW = Math.max(frameW, bounds.w);
 
-  return { frameRef, stageRef, driver, rects, measure, live, blocked, frameStyle, bounds, contentW, offsetX };
+  return { frameRef, stageRef, driver, rects, measure, live, blocked, frameStyle, bounds, contentW, offsetX, scrollX };
 }
 
 const sameRects = (a: MarkRects, b: MarkRects) => {
@@ -193,13 +200,23 @@ const sameRects = (a: MarkRects, b: MarkRects) => {
   });
 };
 
-/** A ring around the marked element, with the rest of the stage optionally
+/** A glow around the marked element, with the rest of the stage optionally
  * dimmed and optionally click-proof. The two are independent: the shield that
  * blocks clicks is the same four panels that do the dimming, so `lock` without
- * `dim` just makes them invisible. */
-export function Spotlight({ box, shape, dim = true, lock, stageW }: {
+ * `dim` just makes them invisible.
+ *
+ * The glow is the Figma's `Highlight` (978:3268): a ring whose hole is the
+ * element, filled with the accent fading linearly from `strength` at the
+ * hole's edge to nothing `spread` px out. A circle is drawn exactly that way,
+ * as a radial gradient. A rect or a pill follows the element's box, which a
+ * radial gradient can't, so it is a box-shadow instead — an outer shadow is
+ * never painted inside its own box, which is the hole. */
+export function Spotlight({ box, shape = "rect", spread = 26, strength = 0.35, pulse, dim = true, lock, stageW }: {
   box: Box | null;
-  shape?: "rect" | "pill";
+  shape?: "rect" | "pill" | "circle";
+  spread?: number;
+  strength?: number;
+  pulse?: boolean;
   dim?: boolean;
   lock?: boolean;
   /** The stage's full content width, which is the app's rather than the
@@ -208,7 +225,33 @@ export function Spotlight({ box, shape, dim = true, lock, stageW }: {
    * Without it they fall back to the visible pane. */
   stageW?: number;
 }) {
+  const reduced = useReducedMotion();
   if (!box) return null;
+  const reach = Math.max(0, spread);
+  const tint = (alpha: number) => `color-mix(in srgb, ${RED} ${Math.round(Math.min(1, Math.max(0, alpha)) * 100)}%, transparent)`;
+
+  // The glow's own box, which is the element's for a rect or a pill and the
+  // whole ring for a circle. The hole is a share of the radius rather than a
+  // pixel count, so it stays the element's size while the box travels.
+  const inner = Math.max(box.w, box.h) / 2;
+  const outer = inner + reach;
+  const glow =
+    shape === "circle"
+      ? {
+          frame: { left: box.x + box.w / 2 - outer, top: box.y + box.h / 2 - outer, width: outer * 2, height: outer * 2 },
+          look: {
+            background: `radial-gradient(circle closest-side, transparent ${(inner / outer) * 100}%, ${tint(strength)} ${(inner / outer) * 100}%, ${tint(0)} 100%)`,
+          } as React.CSSProperties,
+        }
+      : {
+          frame: { left: box.x, top: box.y, width: box.w, height: box.h },
+          look: {
+            borderRadius: shape === "pill" ? 999 : 10,
+            boxShadow: `0 0 ${reach}px ${reach / 3}px ${tint(strength)}`,
+          } as React.CSSProperties,
+        };
+  const breathing = pulse && !reduced;
+
   const shield = (part: React.CSSProperties, key: string) => (
     <div
       key={key}
@@ -237,14 +280,12 @@ export function Spotlight({ box, shape, dim = true, lock, stageW }: {
       )}
       <motion.div
         initial={false} // appear around the element, then travel between steps
-        animate={{ left: box.x, top: box.y, width: box.w, height: box.h }}
-        transition={{ type: "spring", stiffness: 420, damping: 36 }}
-        style={{
-          position: "absolute",
-          borderRadius: shape === "pill" ? 999 : 10,
-          boxShadow: `0 0 0 2px ${RED}, 0 10px 30px -8px rgba(0,0,0,0.5)`,
-          pointerEvents: "none",
+        animate={{ ...glow.frame, opacity: breathing ? [1, 0.4, 1] : 1 }}
+        transition={{
+          default: { type: "spring", stiffness: 420, damping: 36 },
+          opacity: breathing ? { duration: 1.8, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 },
         }}
+        style={{ position: "absolute", pointerEvents: "none", ...glow.look }}
       />
     </>
   );
@@ -413,17 +454,24 @@ function sideFor(box: Box, bounds: { w: number; h: number }, wanted?: Side): Sid
   return (["right", "left", "bottom", "top"] as Side[]).find(fits) ?? wanted ?? "right";
 }
 
-export function Callouts({ items, boxFor, bounds }: {
+export function Callouts({ items, boxFor, bounds, scrollX = 0 }: {
   items: Callout[];
   /** Where this callout points, in stage pixels, or null if it has nothing to
    * point at — an unmeasured mark, or an area on a stage with no size yet. */
   boxFor: (callout: Callout) => Box | null;
+  /** The visible pane. */
   bounds: { w: number; h: number };
+  /** How far the pane is scrolled sideways. Stage pixels run across the whole
+   * app, but whether a callout fits, and where its bubble is clamped to, is a
+   * question about the part of it in view — so the placing is done in the
+   * view's pixels and shifted back. */
+  scrollX?: number;
 }) {
   const placed = items
     .map((callout, i) => {
-      const box = boxFor(callout);
-      if (!box) return null;
+      const found = boxFor(callout);
+      if (!found) return null;
+      const box = { ...found, x: found.x - scrollX };
       // An anchor scrolled out of the stage has nothing to point at.
       const cx = box.x + box.w / 2;
       const cy = box.y + box.h / 2;
@@ -461,7 +509,8 @@ export function Callouts({ items, boxFor, bounds }: {
           ? { x: clamp(x, half + PAD, bounds.w - half - PAD), y }
           : { x, y: clamp(y, 44 + PAD, bounds.h - 44 - PAD) };
 
-      return { key: `${callout.mark ?? "area"}-${i}`, callout, edge, anchor: placedAt, shift };
+      const back = (p: { x: number; y: number }) => ({ x: p.x + scrollX, y: p.y });
+      return { key: `${callout.mark ?? "area"}-${i}`, callout, edge: back(edge), anchor: back(placedAt), shift };
     })
     .filter((p): p is NonNullable<typeof p> => !!p);
 

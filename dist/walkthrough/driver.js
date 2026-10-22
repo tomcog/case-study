@@ -5,9 +5,19 @@
 // app, while a cross-origin one would need the same methods implemented over
 // postMessage against a small script in it.
 //
-// Everything here reaches the app the way a reader does — by mark, through the
-// DOM — which is why an ingested app needs nothing added to it beyond the
-// marks a highlight already requires.
+// Everything here reaches the app the way a reader does — through the DOM —
+// so an ingested app needs nothing added to it.
+//
+// A target is a string of one of two kinds. A mark id names an element the app
+// tagged with data-walkthrough="<id>", and survives any redesign that keeps the
+// tag. A path (`css:` and a selector) is what picking writes for an element
+// with no tag: its place in the page, so anything can be pointed at without
+// touching the app. A path would rot against a live app, but an ingested app
+// is a snapshot, so it only breaks when the app is re-ingested with that part
+// of its page changed. Picking prefers a mark wherever there is one.
+/** Marks a target as a path rather than a mark id. */
+export const PATH_PREFIX = "css:";
+export const isPath = (target) => target.startsWith(PATH_PREFIX);
 const hash = (path) => (path ? `#${path.replace(/^#/, "")}` : "");
 /** The frame's elements come from another realm, so `instanceof Element` is
  * always false here. Recognise them by shape instead. */
@@ -21,6 +31,54 @@ const describe = (el) => {
     const text = (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
     return text ? `${tag} “${text}”` : tag;
 };
+/** What a reader would say they clicked, when it isn't marked: the nearest
+ * control around the pointer rather than the icon or the text inside it. */
+const CONTROL = "a, button, input, select, textarea, label, summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=option], [role=checkbox], [role=radio], [role=switch], [tabindex]";
+/** Hints that say what an element is, more steadily than its position does.
+ * Classes are left out: a build hashes them, and a re-ingest reshuffles them. */
+const STEADY = ["data-testid", "name", "aria-label"];
+/** A selector that finds exactly this element, or null. It climbs from the
+ * element until it reaches a mark, a unique id, or the body, naming each step
+ * by tag, a steady attribute if it has one, and its place among its siblings. */
+function pathTo(el) {
+    const d = el.ownerDocument;
+    const parts = [];
+    let anchored = false;
+    let node = el;
+    while (node && node !== d.body && node !== d.documentElement) {
+        const mark = node.getAttribute("data-walkthrough");
+        if (mark) {
+            parts.unshift(`[data-walkthrough="${CSS.escape(mark)}"]`);
+            anchored = true;
+            break;
+        }
+        if (node.id && d.querySelectorAll(`#${CSS.escape(node.id)}`).length === 1) {
+            parts.unshift(`#${CSS.escape(node.id)}`);
+            anchored = true;
+            break;
+        }
+        let part = node.tagName.toLowerCase();
+        const hint = STEADY.find((a) => node.getAttribute(a));
+        if (hint)
+            part += `[${hint}="${CSS.escape(node.getAttribute(hint))}"]`;
+        const parent = node.parentElement;
+        const tag = node.tagName;
+        const same = parent ? Array.from(parent.children).filter((c) => c.tagName === tag) : [];
+        if (same.length > 1)
+            part += `:nth-of-type(${same.indexOf(node) + 1})`;
+        parts.unshift(part);
+        node = parent;
+    }
+    if (!parts.length)
+        return null;
+    const selector = (anchored ? "" : "body > ") + parts.join(" > ");
+    try {
+        return d.querySelector(selector) === el ? selector : null;
+    }
+    catch {
+        return null;
+    }
+}
 /** Drive a demo served from the player's own origin. */
 export function sameOriginDriver(frame, src) {
     const clicks = new Set();
@@ -38,13 +96,18 @@ export function sameOriginDriver(frame, src) {
         const el = asElement(node);
         if (!el)
             return null;
+        // A mark wins, unless the pointer is on a separate control inside the
+        // marked element — then that control is what was meant.
         const marked = el.closest("[data-walkthrough]");
-        const chosen = marked ?? el;
+        const control = el.closest(CONTROL) ?? el.closest("svg") ?? el;
+        const useMark = marked && !(control !== marked && marked.contains(control) && control.matches(CONTROL));
+        const chosen = useMark ? marked : control;
+        const path = useMark ? null : pathTo(chosen);
         const r = chosen.getBoundingClientRect();
         return {
             el: chosen,
             hit: {
-                mark: marked?.getAttribute("data-walkthrough") ?? null,
+                mark: useMark ? marked.getAttribute("data-walkthrough") : path && PATH_PREFIX + path,
                 label: describe(chosen),
                 rect: { x: r.x, y: r.y, w: r.width, h: r.height },
             },
@@ -60,10 +123,11 @@ export function sameOriginDriver(frame, src) {
                 picks.forEach((cb) => cb(found.hit));
             return;
         }
-        const el = asElement(e.target)?.closest("[data-walkthrough]");
-        const mark = el?.getAttribute("data-walkthrough");
-        if (mark)
-            clicks.forEach((cb) => cb(mark));
+        const el = asElement(e.target);
+        if (!el)
+            return;
+        const hit = (target) => !!query(target)?.contains(el);
+        clicks.forEach((cb) => cb(hit));
     };
     const handleSuppress = (e) => {
         if (!picking)
@@ -204,7 +268,21 @@ export function sameOriginDriver(frame, src) {
         frame.src = "about:blank";
     });
     const loaded = () => !!doc() && doc().readyState !== "loading";
-    const query = (id) => doc()?.querySelector(`[data-walkthrough="${CSS.escape(id)}"]`) ?? null;
+    /** The element a target names, by mark id or by path. A path that no longer
+     * parses finds nothing rather than throwing. */
+    const query = (target) => {
+        const d = doc();
+        if (!d || !target)
+            return null;
+        if (!isPath(target))
+            return d.querySelector(`[data-walkthrough="${CSS.escape(target)}"]`);
+        try {
+            return d.querySelector(target.slice(PATH_PREFIX.length));
+        }
+        catch {
+            return null;
+        }
+    };
     return {
         ready() {
             if (loaded())

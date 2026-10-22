@@ -454,7 +454,8 @@ function IngestForm({ onIngest }: { onIngest: (path: string, label: string) => v
       </div>
       <p className="new__hint">
         The folder its build wrote &mdash; the one with <code>index.html</code> in it, not the source. It has to be built
-        with <code>base: "./"</code>, use hash routes, and put <code>data-walkthrough</code> on anything a step points at.
+        with <code>base: "./"</code> and use hash routes. Anything in it can be pointed at; a <code>data-walkthrough</code> id
+        on an element keeps a step finding it even after the app is re-ingested with a changed layout.
       </p>
     </form>
   );
