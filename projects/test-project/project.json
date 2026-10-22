@@ -1,8 +1,60 @@
 {
-  "schemaVersion": 5,
-  "title": "Test Project",
+  "schemaVersion": 6,
+  "title": "SimpleScreen CRC",
   "draft": true,
   "steps": [
+    {
+      "id": "step-mvj4xony-356",
+      "advance": {
+        "on": "manual"
+      },
+      "content": {
+        "kind": "slide",
+        "screen": {
+          "id": "s-1792651296986-553",
+          "layout": "cover",
+          "basicTheme": "image",
+          "theme": "light",
+          "bg": "#ffffff",
+          "fg": "#1a1a1a",
+          "accent": "#E51A38",
+          "eyebrow": "Case Study",
+          "title": "SimpleScreen CRC",
+          "body": "SimpleScreen CRC by Freenome is an FDA-approved non-invasive, blood-based screening test for colorectal cancer.",
+          "items": [
+            {
+              "id": "o1",
+              "label": "The Problem",
+              "body": "What problem did you set out to solve, and for whom?"
+            },
+            {
+              "id": "o2",
+              "label": "The Solution",
+              "body": "What did you design, and what changed as a result?"
+            },
+            {
+              "id": "o3",
+              "label": "My Role",
+              "body": "Research, Interaction Design, Prototyping"
+            },
+            {
+              "id": "o4",
+              "label": "Timeline",
+              "body": "6 months · 2024"
+            },
+            {
+              "id": "o5",
+              "label": "Tools",
+              "body": "Figma, Miro, FigJam, Jira"
+            }
+          ],
+          "showLogo": false,
+          "imageUrl": "/projects/test-project/images/Lab-testing-scaled.jpg",
+          "overlay": true,
+          "mono": true
+        }
+      }
+    },
     {
       "id": "s1",
       "advance": {
@@ -39,7 +91,7 @@
             {
               "id": "o4",
               "label": "Timeline",
-              "body": "6 months \u00b7 2024"
+              "body": "6 months · 2024"
             },
             {
               "id": "o5",
@@ -67,7 +119,7 @@
           "accent": "#E51A38",
           "eyebrow": "The problem",
           "title": "Nobody had ever ordered a test like this before.",
-          "body": "There was no precedent, no workflow, and no requirements \u2014 just a novel blood test and a thousand open questions about how it would actually reach a patient."
+          "body": "There was no precedent, no workflow, and no requirements — just a novel blood test and a thousand open questions about how it would actually reach a patient."
         }
       }
     },
@@ -79,7 +131,8 @@
       "app": "provider-portal",
       "start": "#/",
       "advance": {
-        "on": "manual"
+        "on": "click",
+        "mark": "order-test"
       }
     },
     {
@@ -146,12 +199,12 @@
           "metrics": [
             {
               "id": "m1",
-              "value": "\u221263%",
+              "value": "−63%",
               "label": "Order entry errors"
             },
             {
               "id": "m2",
-              "value": "8\u21922",
+              "value": "8→2",
               "label": "Steps to place an order"
             },
             {
@@ -163,5 +216,9 @@
         }
       }
     }
-  ]
+  ],
+  "preview": {
+    "image": "/projects/test-project/images/Lab-testing-scaled.jpg",
+    "title": "SimpleScreen CRC"
+  }
 }
