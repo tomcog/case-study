@@ -133,7 +133,12 @@
       "advance": {
         "on": "click",
         "mark": "order-test"
-      }
+      },
+      "spotlight": {
+        "mark": "status-filter",
+        "dim": false
+      },
+      "callouts": []
     },
     {
       "id": "s3",
