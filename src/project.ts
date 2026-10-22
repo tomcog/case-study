@@ -1,4 +1,4 @@
-import { DEFAULT_WALKTHROUGH } from "./walkthrough/types.js";
+import { DEFAULT_WALKTHROUGH, contentOf } from "./walkthrough/types.js";
 import type { ProjectPreview, Screen } from "./core.js";
 import type { StepContent, WalkthroughContent, WalkthroughStep } from "./walkthrough/types.js";
 
@@ -7,11 +7,11 @@ import type { StepContent, WalkthroughContent, WalkthroughStep } from "./walkthr
 // between apps: versioned, migrated on load, and with site-relative asset paths
 // ("/images/…") pinned to the site they came from.
 //
-// There are two kinds. A case study is a deck of screens; a walkthrough is
-// stepped copy beside a stage. `kind` tells them apart, and is absent on
-// everything saved before walkthroughs existed — so absent means case study.
+// There is one kind: an ordered list of steps, each displaying a slide, an
+// app, a framed URL or an image. The two kinds that came before it are folded
+// into that one by migrate().
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export type ProjectContent = WalkthroughContent;
 
@@ -65,20 +65,40 @@ interface LegacyDeck {
   screens?: Screen[];
 }
 
+/** A step displaying a slide has no panel and no stage of its own — the slide
+ * covers both — so panel copy, a spotlight and callouts say nothing on one.
+ * They were authorable until the builder stopped offering them on slides,
+ * which left them on saved steps: invisible to the reader and out of reach of
+ * the author. Version 6 drops them.
+ *
+ * `advance` stays as it is. It is required, and the player already treats a
+ * slide as manual whatever it says, so there is nothing to clean up — only a
+ * field that would have to be invented to be removed. */
+function stripSlidePanel(step: WalkthroughStep): WalkthroughStep {
+  if (contentOf(step).kind !== "slide") return step;
+  const { eyebrow, title, body, imageUrl, spotlight, callouts, ...rest } = step;
+  return rest;
+}
+
 interface LegacyStep {
   enter?: { app?: string; stage?: string; path?: string; state?: string };
   stage?: { src?: string; fit?: "center" | "fill" };
   still?: { src?: string; fit?: "center" | "fill" };
 }
 
-/** Bring any saved project up to the current shape. Never throws: unknown or
- * empty input falls back to one empty step.
+/** Bring any saved project up to the current shape. Never throws: anything
+ * that isn't an object falls back to one empty step, and an object without
+ * steps keeps none — the builder has an empty state for that, and inventing a
+ * step would put words in the author's mouth.
  *
  * A project used to be one of two kinds. A case study was a deck of screens; a
  * walkthrough was steps beside a live app. Version 5 makes it one thing — a
  * list of steps, each displaying a slide, an app, a URL or an image — because
  * a deck was only ever the case where every step displays a slide. A case
- * study's screens become exactly that, in order. */
+ * study's screens become exactly that, in order.
+ *
+ * Version 6 then takes off what a slide step can't use: see
+ * `stripSlidePanel`. */
 export function migrate(raw: unknown): ProjectContent {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_WALKTHROUGH, schemaVersion: SCHEMA_VERSION };
   const p = raw as Partial<WalkthroughContent> & LegacyWalkthrough & LegacyDeck;
@@ -101,7 +121,7 @@ export function migrate(raw: unknown): ProjectContent {
   const steps = Array.isArray(p.steps) ? p.steps : [];
   return {
     ...rest,
-    steps: legacy.length ? steps.map((s, i) => foldStep(s, steps, i, legacy)) : steps.map(plainStep),
+    steps: (legacy.length ? steps.map((s, i) => foldStep(s, steps, i, legacy)) : steps.map(plainStep)).map(stripSlidePanel),
     schemaVersion: SCHEMA_VERSION,
   };
 }
@@ -246,8 +266,6 @@ export interface ProjectSummary {
   preview: ProjectPreview | null;
   draft: boolean;       // only in ProjectBuilder's dev list; never published
   updatedAt: number;
-  /** @deprecated Use `count`. Screens only, so a walkthrough reports 0. */
-  screens: number;
 }
 
 /** Projects published by a ProjectBuilder site at `base` (e.g.

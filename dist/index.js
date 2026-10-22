@@ -2,7 +2,7 @@
 // image. See README.md for wiring it into an app.
 export { ProjectPreviewCard as CaseStudyCard } from "./ui/ProjectPreviewCard.js";
 export { CaseStudyProvider, useCaseStudyConfig } from "./config.js";
-export { Stage, ScreenView, bleedBg, backdropFor, DEFAULT_CONTENT, STAGE_W, STAGE_H } from "./core.js";
+export { Stage, ScreenView, bleedBg, backdropFor, STAGE_W, STAGE_H } from "./core.js";
 export { SlideFields, newScreen } from "./slide.js";
 export { migrate, withAssetBase, loadProject, previewCard, projectSource, SCHEMA_VERSION } from "./project.js";
 export { DEFAULT_ACCENT, DEFAULT_INK } from "./theme.js";
@@ -19,5 +19,5 @@ export { renderStyledText } from "./ui/renderStyledText.js";
 export { WalkthroughPlayer as ProjectPlayer } from "./walkthrough/WalkthroughPlayer.js";
 export { WalkthroughBuilder as ProjectBuilder } from "./walkthrough/WalkthroughBuilder.js";
 export { sameOriginDriver } from "./walkthrough/driver.js";
-export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, isLive, stepMarks } from "./walkthrough/types.js";
+export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, isLive, slideOf, stepLabel, stepMarks } from "./walkthrough/types.js";
 //# sourceMappingURL=index.js.map

@@ -1,17 +1,19 @@
-// ─── The walkthrough builder (edit mode) ───────────────────────────
-// Same shape as the case-study builder — rail, canvas, inspector — but the
-// canvas is the stage rather than a screen, so what you author is what plays.
-// Selecting a step puts its stage into the state that step describes.
+// ─── The project builder (edit mode) ───────────────────────────────
+// Rail, canvas, inspector. The canvas is the stage itself, so what you author
+// is what plays: selecting a step puts the stage into the state that step
+// describes.
 //
-// Stages are edited in one place, from the toolbar, because a stage belongs to
-// the walkthrough and not to the step you happen to have selected: several
-// steps run in one, and an address typed into a step's inspector would quietly
-// move all of them. A step only ever picks which stage it runs in.
+// The apps are edited in one place, from the toolbar, because the pool is
+// shared by every project — a step only ever picks which app it runs.
 //
-// On a driveable stage, marks are picked by clicking the product: it is
-// same-origin, so the builder can read what was clicked and say when an
-// element has no data-walkthrough id to point at yet. On an opaque one there
-// is nothing to read, so the author drags the rectangle instead.
+// The inspector offers a step only what that step can actually use, which is
+// decided by what it displays. On a running app, marks are picked by clicking
+// the product: it is same-origin, so the builder can read what was clicked and
+// say when an element has no data-walkthrough id to point at yet. An embed or
+// an image can't be read, so the author drags a rectangle instead. A slide
+// covers the stage and carries its own copy, so the panel fields, the overlays
+// drawn over the stage and the choice of what advances it all go away — on a
+// slide they would be controls whose effect the reader never sees.
 
 import { useEffect, useMemo, useState } from "react";
 import { Reorder } from "motion/react";
@@ -25,7 +27,7 @@ import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
 import { AreaDraw, Callouts, HoverOutline, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
 import type { Box } from "./stage.js";
 import type { PickHit } from "./driver.js";
-import { appRuns, bootsApp, contentOf, stepMarks } from "./types.js";
+import { appRuns, bootsApp, contentOf, stepLabel, stepMarks } from "./types.js";
 import type { Area, Callout, StepAction, StepAdvance, StepContent, WalkthroughContent, WalkthroughStep } from "./types.js";
 import type { IngestedApp } from "../project.js";
 
@@ -104,10 +106,16 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
   const runStarts = useMemo(() => new Map(runs.map((r) => [r.from, r])), [runs]);
   const boots = bootsApp(steps, index);
 
-  // Only a running app can be read into. An image or a URL anchors by
-  // rectangle, and the reader leaves it with the panel's button.
+  // What is on screen decides what can be pointed at, and there are three
+  // answers rather than two. A running app can be read into, so a mark follows
+  // its element as the app reflows. An embed or an image can't be read but can
+  // still be pointed at, by a rectangle drawn over the stage. A slide covers
+  // the stage outright and carries its own copy, so nothing is drawn over it
+  // and the panel has nothing to say — the inspector drops those fields rather
+  // than offering controls whose effect the reader would never see.
   const driveable = demo.live && !!driver && shown.kind === "app";
-  const opaque = shown.kind !== "app";
+  const framed = shown.kind === "embed" || shown.kind === "image";
+  const isSlide = shown.kind === "slide";
 
   const update = (patch: Partial<WalkthroughStep>) =>
     setContent((prev) => ({ ...prev, steps: prev.steps.map((s, i) => (i === index ? { ...s, ...patch } : s)) }));
@@ -367,6 +375,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
           >
             {steps.map((s, i) => {
               const run = runStarts.get(i);
+              const label = stepLabel(s);
               return (
                 <Reorder.Item
                   key={s.id}
@@ -392,10 +401,10 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
                   >
                     <div style={{ fontSize: 10, opacity: 0.5, position: "absolute", top: 6, right: 8 }}>{i + 1}</div>
                     <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: ACCENT, marginBottom: 4 }}>
-                      {s.eyebrow || (s.content?.kind === "slide" ? s.content.screen.eyebrow : "")}
+                      {label.eyebrow}
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {s.title || (s.content?.kind === "slide" ? s.content.screen.title : "") || s.id}
+                      {label.title || s.id}
                     </div>
                   </div>
                 </Reorder.Item>
@@ -408,8 +417,8 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
         </div>
 
         {/* The frame */}
-        <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden", display: "flex", background: demo.live || opaque ? "#0f1115" : "#e9e7e3" }}>
-          {demo.live || opaque ? (
+        <div style={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden", display: "flex", background: demo.live || framed || isSlide ? "#0f1115" : "#e9e7e3" }}>
+          {demo.live || framed || isSlide ? (
             <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflow: "hidden" }}>
               {/* The app runs underneath whatever the step displays, so an
                   image or a URL hides it without stopping it. */}
@@ -642,7 +651,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
                   <div style={{ marginTop: 6 }}>
                     <Anchor
                       mark={action.mark}
-                      opaque={false}
+                      byArea={false}
                       onMark={(mark) => patchAction(at, { ...action, mark })}
                       onPick={() => setPicking({ field: "action", at })}
                       onDraw={() => {}}
@@ -684,235 +693,252 @@ export function WalkthroughBuilder({ content, setContent, apps = [], onIngestApp
             <ButtonRound variant="tertiary" tone="danger" icon={<Trash2 size={16} />} onClick={deleteStep} disabled={steps.length <= 1} title="Delete" aria-label="Delete" />
           </div>
 
-          <Field label="Eyebrow">
-            <textarea value={step.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} rows={1} style={{ ...inputStyle, resize: "vertical" }} />
-          </Field>
+          {/* The panel's copy. A slide has none: it covers the panel and
+              carries its own, which Display edits a few fields up. Two sets of
+              Eyebrow / Title / Body in one inspector, only one of them ever
+              read, is the thing worth not having. */}
+          {!isSlide && (
+            <>
+              <Field label="Eyebrow">
+                <textarea value={step.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} rows={1} style={{ ...inputStyle, resize: "vertical" }} />
+              </Field>
 
-          <Field label="Title">
-            <textarea value={step.title ?? ""} onChange={(e) => update({ title: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
-          </Field>
+              <Field label="Title">
+                <textarea value={step.title ?? ""} onChange={(e) => update({ title: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
+              </Field>
 
-          <Field label="Body">
-            <textarea value={step.body ?? ""} onChange={(e) => update({ body: e.target.value })} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
-          </Field>
+              <Field label="Body">
+                <textarea value={step.body ?? ""} onChange={(e) => update({ body: e.target.value })} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+              </Field>
 
-          <Field label="Panel image" collapsible>
-            <ImageField value={step.imageUrl ?? ""} onChange={(v) => update({ imageUrl: v || undefined })} label="Panel image" />
-          </Field>
+              <Field label="Panel image" collapsible>
+                <ImageField value={step.imageUrl ?? ""} onChange={(v) => update({ imageUrl: v || undefined })} label="Panel image" />
+              </Field>
+            </>
+          )}
 
-          <Field label="Spotlight" collapsible>
-            {step.spotlight ? (
-              <>
-                <Anchor
-                  mark={marksOf(step.spotlight.mark).join(", ")}
-                  area={step.spotlight.area}
-                  opaque={opaque}
-                  onMark={(v) => {
-                    const list = v.split(",").map((m) => m.trim()).filter(Boolean);
-                    update({ spotlight: { ...step.spotlight!, mark: list.length === 1 ? list[0] : list } });
-                  }}
-                  onPick={() => setPicking({ field: "spotlight" })}
-                  onDraw={() => setDrawing({ field: "spotlight" })}
-                  busy={picking?.field === "spotlight" || drawing?.field === "spotlight"}
-                  disabled={!opaque && !driveable}
-                />
-                <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-                  <SegmentedControl size="md" aria-label="Spotlight shape" style={track}>
-                    {(["rect", "pill"] as const).map((shape) => (
-                      <Segment
-                        key={shape}
-                        selected={(step.spotlight!.shape ?? "rect") === shape}
-                        onClick={() => update({ spotlight: { ...step.spotlight!, shape } })}
-                      >
-                        {shape === "rect" ? "Rounded" : "Pill"}
-                      </Segment>
-                    ))}
-                  </SegmentedControl>
-                  {!opaque && (
-                    <input
-                      type="number"
-                      value={step.spotlight.pad ?? ""}
-                      onChange={(e) => update({ spotlight: { ...step.spotlight!, pad: e.target.value ? Number(e.target.value) : undefined } })}
-                      placeholder="Pad"
-                      style={{ ...inputStyle, width: 70 }}
-                    />
-                  )}
-                </div>
-                <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
-                  <input
-                    type="checkbox"
-                    checked={step.spotlight.dim !== false}
-                    onChange={(e) => update({ spotlight: { ...step.spotlight!, dim: e.target.checked ? undefined : false } })}
+          {/* Everything drawn over the stage, and the rule for leaving the
+              step. A slide covers the stage, so a spotlight or a callout
+              under it is never seen; and with no panel there is no button to
+              label, so a slide is clicked through like a deck. Offering any
+              of it here would be offering settings with no effect. */}
+          {!isSlide && (
+            <>
+            <Field label="Spotlight" collapsible>
+              {step.spotlight ? (
+                <>
+                  <Anchor
+                    mark={marksOf(step.spotlight.mark).join(", ")}
+                    area={step.spotlight.area}
+                    byArea={framed}
+                    onMark={(v) => {
+                      const list = v.split(",").map((m) => m.trim()).filter(Boolean);
+                      update({ spotlight: { ...step.spotlight!, mark: list.length === 1 ? list[0] : list } });
+                    }}
+                    onPick={() => setPicking({ field: "spotlight" })}
+                    onDraw={() => setDrawing({ field: "spotlight" })}
+                    busy={picking?.field === "spotlight" || drawing?.field === "spotlight"}
+                    disabled={!framed && !driveable}
                   />
-                  Dim the rest of the stage
-                </label>
-                <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 6 }}>
-                  <input
-                    type="checkbox"
-                    checked={!!step.spotlight.lock}
-                    onChange={(e) => update({ spotlight: { ...step.spotlight!, lock: e.target.checked || undefined } })}
-                  />
-                  Block clicks everywhere else
-                </label>
-                <Button variant="ghost" size="sm" tone="danger" onClick={() => update({ spotlight: undefined })} style={{ marginTop: 10 }}>Remove spotlight</Button>
-              </>
-            ) : (
-              <Button variant="ghost" size="sm" icon={<Plus size={15} />} onClick={() => update({ spotlight: {} })}>
-                Add a spotlight
-              </Button>
-            )}
-          </Field>
-
-          <Field label="Callouts" collapsible>
-            {(step.callouts ?? []).map((callout, at) => (
-              <div key={at} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10, marginBottom: 8 }}>
-                <Anchor
-                  mark={callout.mark ?? ""}
-                  area={callout.area}
-                  opaque={opaque}
-                  onMark={(v) => patchCallout(at, { mark: v })}
-                  onPick={() => setPicking({ field: "callout", at })}
-                  onDraw={() => setDrawing({ field: "callout", at })}
-                  busy={(picking?.field === "callout" && picking.at === at) || (drawing?.field === "callout" && drawing.at === at)}
-                  disabled={!opaque && !driveable}
-                />
-                <textarea
-                  value={callout.text}
-                  onChange={(e) => patchCallout(at, { text: e.target.value })}
-                  rows={2}
-                  placeholder="What this element is for"
-                  style={{ ...inputStyle, resize: "vertical", marginTop: 6 }}
-                />
-                <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
-                  <SegmentedControl size="md" aria-label="Which side the callout sits on" style={track}>
-                    {(["auto", "top", "right", "bottom", "left"] as const).map((side) => (
-                      <Segment
-                        key={side}
-                        selected={(callout.placement ?? "auto") === side}
-                        onClick={() => patchCallout(at, { placement: side === "auto" ? undefined : side })}
-                      >
-                        {side}
-                      </Segment>
-                    ))}
-                  </SegmentedControl>
-                  <ButtonRound
-                    size="sm"
-                    variant="tertiary"
-                    tone="danger"
-                    icon={<X size={13} />}
-                    onClick={() => removeCallout(at)}
-                    title="Remove"
-                    aria-label="Remove callout"
-                    style={{ marginLeft: "auto" }}
-                  />
-                </div>
-              </div>
-            ))}
-            <Button variant="ghost" size="sm" icon={<Plus size={15} />} onClick={addCallout}>
-              Add a callout
-            </Button>
-            <p style={hint}>
-              {opaque
-                ? "Anchored to an area of the stage, which an embed or a mock-up can't move out from under them."
-                : "Anchored to a mark, so they follow the element as the app reflows."}
-            </p>
-          </Field>
-
-          <Field label="Advances on" collapsible>
-            <SegmentedControl size="md" aria-label="What advances this step" style={track}>
-              {ADVANCE_KINDS.filter((k) => !opaque || k.value === "manual").map((k) => (
-                <Segment key={k.value} selected={step.advance.on === k.value} onClick={() => update({ advance: blankAdvance(k.value, step.advance) })}>
-                  {k.label}
-                </Segment>
-              ))}
-            </SegmentedControl>
-            <p style={hint}>
-              {opaque
-                ? "Nothing can be observed inside an embed or a mock-up, so a step on one is left with the panel's button."
-                : ADVANCE_KINDS.find((k) => k.value === step.advance.on)?.hint}
-            </p>
-
-            {step.advance.on === "manual" && (
-              <input
-                value={step.advance.label ?? ""}
-                onChange={(e) => update({ advance: { on: "manual", label: e.target.value || undefined } })}
-                placeholder="Button label (Next)"
-                style={inputStyle}
-              />
-            )}
-
-            {opaque && step.advance.on !== "manual" && (
-              <div style={warn}>
-                This step waits for something inside the stage, which can't be seen from here. The player will show its button instead.
-              </div>
-            )}
-
-            {!opaque && (step.advance.on === "click" || step.advance.on === "path" || step.advance.on === "signal") && (
-              <SimpleAdvance
-                advance={step.advance}
-                onChange={(a) => update({ advance: a })}
-                onPick={() => setPicking({ field: "advance" })}
-                picking={picking?.field === "advance"}
-                canPick={driveable}
-                currentPath={driver?.currentPath()}
-              />
-            )}
-
-            {!opaque && step.advance.on === "any" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {step.advance.of.map((a, at) => (
-                  <div key={at} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10 }}>
-                    <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
-                      <SegmentedControl size="md" aria-label="What this way waits for" style={track}>
-                        {(["click", "path", "signal"] as const).map((on) => (
-                          <Segment
-                            key={on}
-                            selected={a.on === on}
-                            onClick={() => updateAny(step.advance as Extract<StepAdvance, { on: "any" }>, at, blankAdvance(on, a), update)}
-                          >
-                            {on}
-                          </Segment>
-                        ))}
-                      </SegmentedControl>
-                      <ButtonRound
-                        size="sm"
-                        variant="tertiary"
-                        tone="danger"
-                        icon={<X size={13} />}
-                        onClick={() => {
-                          const any = step.advance as Extract<StepAdvance, { on: "any" }>;
-                          update({ advance: { ...any, of: any.of.filter((_, i) => i !== at) } });
-                        }}
-                        title="Remove"
-                        aria-label="Remove this way"
-                        style={{ marginLeft: "auto" }}
+                  <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
+                    <SegmentedControl size="md" aria-label="Spotlight shape" style={track}>
+                      {(["rect", "pill"] as const).map((shape) => (
+                        <Segment
+                          key={shape}
+                          selected={(step.spotlight!.shape ?? "rect") === shape}
+                          onClick={() => update({ spotlight: { ...step.spotlight!, shape } })}
+                        >
+                          {shape === "rect" ? "Rounded" : "Pill"}
+                        </Segment>
+                      ))}
+                    </SegmentedControl>
+                    {!framed && (
+                      <input
+                        type="number"
+                        value={step.spotlight.pad ?? ""}
+                        onChange={(e) => update({ spotlight: { ...step.spotlight!, pad: e.target.value ? Number(e.target.value) : undefined } })}
+                        placeholder="Pad"
+                        style={{ ...inputStyle, width: 70 }}
                       />
-                    </div>
-                    <SimpleAdvance
-                      advance={a}
-                      onChange={(next) => updateAny(step.advance as Extract<StepAdvance, { on: "any" }>, at, next, update)}
-                      onPick={() => setPicking({ field: "any", at })}
-                      picking={picking?.field === "any" && picking.at === at}
-                      canPick={driveable}
-                      currentPath={driver?.currentPath()}
+                    )}
+                  </div>
+                  <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={step.spotlight.dim !== false}
+                      onChange={(e) => update({ spotlight: { ...step.spotlight!, dim: e.target.checked ? undefined : false } })}
+                    />
+                    Dim the rest of the stage
+                  </label>
+                  <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!step.spotlight.lock}
+                      onChange={(e) => update({ spotlight: { ...step.spotlight!, lock: e.target.checked || undefined } })}
+                    />
+                    Block clicks everywhere else
+                  </label>
+                  <Button variant="ghost" size="sm" tone="danger" onClick={() => update({ spotlight: undefined })} style={{ marginTop: 10 }}>Remove spotlight</Button>
+                </>
+              ) : (
+                <Button variant="ghost" size="sm" icon={<Plus size={15} />} onClick={() => update({ spotlight: {} })}>
+                  Add a spotlight
+                </Button>
+              )}
+            </Field>
+
+            <Field label="Callouts" collapsible>
+              {(step.callouts ?? []).map((callout, at) => (
+                <div key={at} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                  <Anchor
+                    mark={callout.mark ?? ""}
+                    area={callout.area}
+                    byArea={framed}
+                    onMark={(v) => patchCallout(at, { mark: v })}
+                    onPick={() => setPicking({ field: "callout", at })}
+                    onDraw={() => setDrawing({ field: "callout", at })}
+                    busy={(picking?.field === "callout" && picking.at === at) || (drawing?.field === "callout" && drawing.at === at)}
+                    disabled={!framed && !driveable}
+                  />
+                  <textarea
+                    value={callout.text}
+                    onChange={(e) => patchCallout(at, { text: e.target.value })}
+                    rows={2}
+                    placeholder="What this element is for"
+                    style={{ ...inputStyle, resize: "vertical", marginTop: 6 }}
+                  />
+                  <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+                    <SegmentedControl size="md" aria-label="Which side the callout sits on" style={track}>
+                      {(["auto", "top", "right", "bottom", "left"] as const).map((side) => (
+                        <Segment
+                          key={side}
+                          selected={(callout.placement ?? "auto") === side}
+                          onClick={() => patchCallout(at, { placement: side === "auto" ? undefined : side })}
+                        >
+                          {side}
+                        </Segment>
+                      ))}
+                    </SegmentedControl>
+                    <ButtonRound
+                      size="sm"
+                      variant="tertiary"
+                      tone="danger"
+                      icon={<X size={13} />}
+                      onClick={() => removeCallout(at)}
+                      title="Remove"
+                      aria-label="Remove callout"
+                      style={{ marginLeft: "auto" }}
                     />
                   </div>
+                </div>
+              ))}
+              <Button variant="ghost" size="sm" icon={<Plus size={15} />} onClick={addCallout}>
+                Add a callout
+              </Button>
+              <p style={hint}>
+                {framed
+                  ? "Anchored to an area of the stage, which an embed or a mock-up can't move out from under them."
+                  : "Anchored to a mark, so they follow the element as the app reflows."}
+              </p>
+            </Field>
+
+            <Field label="Advances on" collapsible>
+              <SegmentedControl size="md" aria-label="What advances this step" style={track}>
+                {ADVANCE_KINDS.filter((k) => !framed || k.value === "manual").map((k) => (
+                  <Segment key={k.value} selected={step.advance.on === k.value} onClick={() => update({ advance: blankAdvance(k.value, step.advance) })}>
+                    {k.label}
+                  </Segment>
                 ))}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<Plus size={15} />}
-                  onClick={() => {
-                    const any = step.advance as Extract<StepAdvance, { on: "any" }>;
-                    update({ advance: { ...any, of: [...any.of, { on: "click", mark: "" }] } });
-                  }}
-                  style={undefined}
-                >
-                  Add a way
-                </Button>
-              </div>
-            )}
-          </Field>
+              </SegmentedControl>
+              <p style={hint}>
+                {framed
+                  ? "Nothing can be observed inside an embed or a mock-up, so a step on one is left with the panel's button."
+                  : ADVANCE_KINDS.find((k) => k.value === step.advance.on)?.hint}
+              </p>
+
+              {step.advance.on === "manual" && (
+                <input
+                  value={step.advance.label ?? ""}
+                  onChange={(e) => update({ advance: { on: "manual", label: e.target.value || undefined } })}
+                  placeholder="Button label (Next)"
+                  style={inputStyle}
+                />
+              )}
+
+              {framed && step.advance.on !== "manual" && (
+                <div style={warn}>
+                  This step waits for something inside the stage, which can't be seen from here. The player will show its button instead.
+                </div>
+              )}
+
+              {!framed && (step.advance.on === "click" || step.advance.on === "path" || step.advance.on === "signal") && (
+                <SimpleAdvance
+                  advance={step.advance}
+                  onChange={(a) => update({ advance: a })}
+                  onPick={() => setPicking({ field: "advance" })}
+                  picking={picking?.field === "advance"}
+                  canPick={driveable}
+                  currentPath={driver?.currentPath()}
+                />
+              )}
+
+              {!framed && step.advance.on === "any" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {step.advance.of.map((a, at) => (
+                    <div key={at} style={{ border: "1px solid #e3e0db", borderRadius: 8, padding: 10 }}>
+                      <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
+                        <SegmentedControl size="md" aria-label="What this way waits for" style={track}>
+                          {(["click", "path", "signal"] as const).map((on) => (
+                            <Segment
+                              key={on}
+                              selected={a.on === on}
+                              onClick={() => updateAny(step.advance as Extract<StepAdvance, { on: "any" }>, at, blankAdvance(on, a), update)}
+                            >
+                              {on}
+                            </Segment>
+                          ))}
+                        </SegmentedControl>
+                        <ButtonRound
+                          size="sm"
+                          variant="tertiary"
+                          tone="danger"
+                          icon={<X size={13} />}
+                          onClick={() => {
+                            const any = step.advance as Extract<StepAdvance, { on: "any" }>;
+                            update({ advance: { ...any, of: any.of.filter((_, i) => i !== at) } });
+                          }}
+                          title="Remove"
+                          aria-label="Remove this way"
+                          style={{ marginLeft: "auto" }}
+                        />
+                      </div>
+                      <SimpleAdvance
+                        advance={a}
+                        onChange={(next) => updateAny(step.advance as Extract<StepAdvance, { on: "any" }>, at, next, update)}
+                        onPick={() => setPicking({ field: "any", at })}
+                        picking={picking?.field === "any" && picking.at === at}
+                        canPick={driveable}
+                        currentPath={driver?.currentPath()}
+                      />
+                    </div>
+                  ))}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<Plus size={15} />}
+                    onClick={() => {
+                      const any = step.advance as Extract<StepAdvance, { on: "any" }>;
+                      update({ advance: { ...any, of: [...any.of, { on: "click", mark: "" }] } });
+                    }}
+                    style={undefined}
+                  >
+                    Add a way
+                  </Button>
+                </div>
+              )}
+            </Field>
+            </>
+          )}
 
           {warning && (
             <div style={warn}>
@@ -1054,17 +1080,18 @@ function AppsPanel({ apps, steps, error, onIngest, onPatch, onDelete, onClose }:
 /** Where a spotlight or a callout points: a mark on a driveable stage, an area
  * on one that can only be shown. The same field, because it is the same idea —
  * only the way of naming the spot differs. */
-function Anchor({ mark, area, opaque, onMark, onPick, onDraw, busy, disabled }: {
+function Anchor({ mark, area, byArea, onMark, onPick, onDraw, busy, disabled }: {
   mark: string;
   area?: Area;
-  opaque: boolean;
+  /** Point at a rectangle on the stage rather than at a mark in a live app. */
+  byArea: boolean;
   onMark: (v: string) => void;
   onPick: () => void;
   onDraw: () => void;
   busy: boolean;
   disabled: boolean;
 }) {
-  if (opaque) {
+  if (byArea) {
     const at = area ? `${Math.round(area.x * 100)}%, ${Math.round(area.y * 100)}% · ${Math.round(area.w * 100)}×${Math.round(area.h * 100)}` : "Nothing yet";
     return (
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -1140,7 +1167,7 @@ function SimpleAdvance({ advance, onChange, onPick, picking, canPick, currentPat
     return (
       <Anchor
         mark={advance.mark}
-        opaque={false}
+        byArea={false}
         onMark={(mark) => onChange({ on: "click", mark })}
         onPick={onPick}
         onDraw={() => {}}

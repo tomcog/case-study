@@ -109,9 +109,13 @@ export type StepAdvance = {
 export interface WalkthroughStep {
     /** Stable id. Deep links key off it. */
     id: string;
+    /** The panel's copy. A step displaying a slide has no panel — the slide
+     * covers the viewport and carries its own copy — so these four say nothing
+     * on one, and the builder doesn't offer them there. `stepLabel` is how a
+     * list asks a step what it's called without having to know which it is. */
     eyebrow?: string;
     title?: string;
-    /** Panel copy, in the same inline markup as a screen's text fields. */
+    /** In the same inline markup as a screen's text fields. */
     body?: string;
     /** Panel illustration, and what stands in for the frame on a small screen. */
     imageUrl?: string;
@@ -127,10 +131,14 @@ export interface WalkthroughStep {
     content?: StepContent;
     /** Performed on the running app as the step opens, in order. */
     actions?: StepAction[];
+    /** Drawn over the stage, so neither means anything on a step displaying a
+     * slide: the slide covers the stage outright. */
     spotlight?: Spotlight;
     /** Labels pointing at parts of what's on screen, shown for as long as the
      * step is. */
     callouts?: Callout[];
+    /** What carries the reader on. A slide is always `manual`: it has no panel
+     * to put a button in, so it is clicked through like a deck. */
     advance: StepAdvance;
     /** ms to wait before the panel offers a way past this step (default 12000). */
     nudgeAfter?: number;
@@ -148,6 +156,16 @@ export interface WalkthroughContent {
 export declare const DEFAULT_WALKTHROUGH: WalkthroughContent;
 /** What a step shows, defaulted. */
 export declare const contentOf: (step?: WalkthroughStep) => StepContent;
+/** The slide a step displays, if it displays one. */
+export declare const slideOf: (step?: WalkthroughStep) => Screen | undefined;
+/** What to call a step in a list. A step displaying a slide has no panel to
+ * put copy in — the slide carries its own — so the slide's copy is the only
+ * copy that step has. Anything in the step's own fields was authored before
+ * it became a slide and can't be seen, so it doesn't get to name it. */
+export declare function stepLabel(step?: WalkthroughStep): {
+    eyebrow?: string;
+    title?: string;
+};
 /** Whether what's on screen can be read into — marks, live geometry, advancing
  * on what the reader does. Only a running app can; an embed is another origin
  * and an image is a picture. */

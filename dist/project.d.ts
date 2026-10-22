@@ -1,6 +1,6 @@
 import type { ProjectPreview, Screen } from "./core.js";
 import type { WalkthroughContent } from "./walkthrough/types.js";
-export declare const SCHEMA_VERSION = 5;
+export declare const SCHEMA_VERSION = 6;
 export type ProjectContent = WalkthroughContent;
 /** An app ingested into the shared pool: a snapshot of someone's built output,
  * copied in and served from this site. Steps reference the `id`, so renaming
@@ -17,14 +17,19 @@ export interface IngestedApp {
     minWidth?: number;
     ingestedAt?: number;
 }
-/** Bring any saved project up to the current shape. Never throws: unknown or
- * empty input falls back to one empty step.
+/** Bring any saved project up to the current shape. Never throws: anything
+ * that isn't an object falls back to one empty step, and an object without
+ * steps keeps none — the builder has an empty state for that, and inventing a
+ * step would put words in the author's mouth.
  *
  * A project used to be one of two kinds. A case study was a deck of screens; a
  * walkthrough was steps beside a live app. Version 5 makes it one thing — a
  * list of steps, each displaying a slide, an app, a URL or an image — because
  * a deck was only ever the case where every step displays a slide. A case
- * study's screens become exactly that, in order. */
+ * study's screens become exactly that, in order.
+ *
+ * Version 6 then takes off what a slide step can't use: see
+ * `stripSlidePanel`. */
 export declare function migrate(raw: unknown): ProjectContent;
 /** Rewrite every site-relative asset path in a project to an absolute URL on
  * `base` (e.g. "https://www.tomcoggia.com"), so it renders from another origin.
@@ -63,8 +68,6 @@ export interface ProjectSummary {
     preview: ProjectPreview | null;
     draft: boolean;
     updatedAt: number;
-    /** @deprecated Use `count`. Screens only, so a walkthrough reports 0. */
-    screens: number;
 }
 /** Projects published by a ProjectBuilder site at `base` (e.g.
  * "https://projects.tomcoggia.com"; "" for the same origin). Asset paths come

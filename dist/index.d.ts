@@ -1,7 +1,7 @@
 export { ProjectPreviewCard as CaseStudyCard } from "./ui/ProjectPreviewCard.js";
 export { CaseStudyProvider, useCaseStudyConfig } from "./config.js";
 export type { CaseStudyConfig, CaseStudyAssets, ImageCaption } from "./config.js";
-export { Stage, ScreenView, bleedBg, backdropFor, DEFAULT_CONTENT, STAGE_W, STAGE_H } from "./core.js";
+export { Stage, ScreenView, bleedBg, backdropFor, STAGE_W, STAGE_H } from "./core.js";
 export type { Screen, ScreenLayout, Theme, Metric, OverviewItem, GalleryImage, ProjectPreview } from "./core.js";
 export { SlideFields, newScreen } from "./slide.js";
 export { migrate, withAssetBase, loadProject, previewCard, projectSource, SCHEMA_VERSION } from "./project.js";
@@ -19,6 +19,6 @@ export { renderStyledText } from "./ui/renderStyledText.js";
 export { WalkthroughPlayer as ProjectPlayer } from "./walkthrough/WalkthroughPlayer.js";
 export { WalkthroughBuilder as ProjectBuilder } from "./walkthrough/WalkthroughBuilder.js";
 export { sameOriginDriver } from "./walkthrough/driver.js";
-export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, isLive, stepMarks } from "./walkthrough/types.js";
+export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, isLive, slideOf, stepLabel, stepMarks } from "./walkthrough/types.js";
 export type { Driver, MarkRect, MarkRects, PickHit } from "./walkthrough/driver.js";
 export type { WalkthroughContent as ProjectFile, WalkthroughStep as Step, StepContent, StepAction, AppRun, Area, StepAdvance, Spotlight, Callout, } from "./walkthrough/types.js";

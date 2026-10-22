@@ -43,6 +43,19 @@ export const DEFAULT_WALKTHROUGH = {
 };
 /** What a step shows, defaulted. */
 export const contentOf = (step) => step?.content ?? { kind: "app" };
+/** The slide a step displays, if it displays one. */
+export const slideOf = (step) => {
+    const content = contentOf(step);
+    return content.kind === "slide" ? content.screen : undefined;
+};
+/** What to call a step in a list. A step displaying a slide has no panel to
+ * put copy in — the slide carries its own — so the slide's copy is the only
+ * copy that step has. Anything in the step's own fields was authored before
+ * it became a slide and can't be seen, so it doesn't get to name it. */
+export function stepLabel(step) {
+    const slide = slideOf(step);
+    return slide ? { eyebrow: slide.eyebrow, title: slide.title } : { eyebrow: step?.eyebrow, title: step?.title };
+}
 /** Whether what's on screen can be read into — marks, live geometry, advancing
  * on what the reader does. Only a running app can; an embed is another origin
  * and an image is a picture. */

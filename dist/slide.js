@@ -1,8 +1,12 @@
 import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
+// ─── Slides ────────────────────────────────────────────────────────
+// A slide is a screen composed on the fixed 1280×720 canvas: the ten layouts
+// and the fields each of them uses. This file is only the slide itself — what
+// a new one starts as, and the one set of controls every step that displays
+// one is edited with, so two of them can't drift apart.
 import { RED, DEFAULT_ACCENT } from "./theme.js";
 import { ACCENT, THEMES, DEFAULT_OVERVIEW_ITEMS, DEFAULT_GALLERY, DEFAULT_ANNOTATIONS, DEFAULT_STAT, screenTheme, } from "./core.js";
 import { MetricsEditor, ImageField, OverviewEditor, GalleryEditor, StatEditor, Field, ColorInput, inputStyle, } from "./editors.js";
-// ─── The builder (edit mode) ───────────────────────────────────────
 const LAYOUTS = [
     { value: "cover", label: "Title Card" },
     { value: "overview", label: "Intro" },

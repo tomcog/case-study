@@ -43,7 +43,6 @@ export interface Screen {
     metrics?: Metric[];
     items?: OverviewItem[];
     images?: GalleryImage[];
-    caseNumber?: string;
 }
 export interface ProjectPreview {
     image?: string;
@@ -55,14 +54,6 @@ export interface ProjectPreview {
     cardLogo?: string;
     /** @deprecated Ignored. Each site that shows projects picks which ones itself. */
     show?: boolean;
-}
-export interface CaseStudyContent {
-    kind?: "case-study";
-    schemaVersion?: number;
-    title?: string;
-    draft?: boolean;
-    screens: Screen[];
-    preview?: ProjectPreview;
 }
 export declare const ACCENT = "var(--cs-accent, #E51A38)";
 export declare const THEMES: Record<Theme, {
@@ -84,7 +75,6 @@ export declare const DEFAULT_OVERVIEW_ITEMS: OverviewItem[];
 export declare const DEFAULT_GALLERY: GalleryImage[];
 export declare const DEFAULT_ANNOTATIONS: OverviewItem[];
 export declare const DEFAULT_STAT: Metric;
-export declare const DEFAULT_CONTENT: CaseStudyContent;
 export declare const EASE: readonly [0.22, 1, 0.36, 1];
 export declare const STAGE_W = 1280;
 export declare const STAGE_H = 720;

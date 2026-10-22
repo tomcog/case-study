@@ -9,9 +9,10 @@ import { getVideoEmbedUrl, isVideoSrc } from "./video.js";
 import { RED, INK, DEFAULT_ACCENT } from "./theme.js";
 
 // ─── Data model ────────────────────────────────────────────────────
-// A case study is an ordered list of Screens. Each screen is presented
-// one-at-a-time, transitions in with a "spatial push", and builds itself
-// up by staggering its parts (eyebrow → title → body → media).
+// A Screen is one composed slide: a layout and one flat bag of optional
+// fields, of which the layout decides what it uses. A step displays one.
+// It transitions in with a "spatial push" and builds itself up by staggering
+// its parts (eyebrow → title → body → media).
 
 export type ScreenLayout = "cover" | "overview" | "quote" | "metrics" | "gallery" | "showcase" | "bento" | "video" | "basic1" | "basic2";
 
@@ -64,7 +65,6 @@ export interface Screen {
   metrics?: Metric[];
   items?: OverviewItem[];
   images?: GalleryImage[];
-  caseNumber?: string;
 }
 
 export interface ProjectPreview {
@@ -77,15 +77,6 @@ export interface ProjectPreview {
   cardLogo?: string;     // logo shown on the Projects page preview card (falls back to `logo`)
   /** @deprecated Ignored. Each site that shows projects picks which ones itself. */
   show?: boolean;
-}
-
-export interface CaseStudyContent {
-  kind?: "case-study";    // absent on everything saved before walkthroughs existed
-  schemaVersion?: number; // see migrate() in project.ts; absent = saved before versioning
-  title?: string;         // the project's name, for apps that don't keep it elsewhere
-  draft?: boolean;        // ProjectBuilder: left out of the published build (default false)
-  screens: Screen[];
-  preview?: ProjectPreview; // the Projects-page preview card, authored here
 }
 
 export const ACCENT = RED;
@@ -150,76 +141,6 @@ export const DEFAULT_ANNOTATIONS: OverviewItem[] = [
 ];
 
 export const DEFAULT_STAT: Metric = { id: "b1", value: "−63%", label: "Order entry errors" };
-
-export const DEFAULT_CONTENT: CaseStudyContent = {
-  screens: [
-    {
-      id: "s1",
-      layout: "overview",
-      theme: "light",
-      bg: THEMES.light.bg,
-      fg: THEMES.light.fg,
-      accent: DEFAULT_ACCENT,
-      eyebrow: "Case Study",
-      title: "Reinventing the cancer-screening workflow",
-      body: "How a clinician-first redesign cut order errors and gave a brand-new diagnostic its first real product.",
-      items: DEFAULT_OVERVIEW_ITEMS,
-    },
-    {
-      id: "s2",
-      layout: "cover",
-      basicTheme: "light",
-      theme: "light",
-      bg: THEMES.light.bg,
-      fg: THEMES.light.fg,
-      accent: DEFAULT_ACCENT,
-      eyebrow: "The problem",
-      title: "Nobody had ever ordered a test like this before.",
-      body: "There was no precedent, no workflow, and no requirements — just a novel blood test and a thousand open questions about how it would actually reach a patient.",
-    },
-    {
-      id: "s3",
-      layout: "basic2",
-      basicTheme: "light",
-      basicTextSide: "left",
-      basicImage: "fill",
-      theme: "light",
-      bg: THEMES.light.bg,
-      fg: THEMES.light.fg,
-      accent: DEFAULT_ACCENT,
-      eyebrow: "Research",
-      title: "100+ conversations with the people in the loop",
-      body: "Clinicians, lab techs, IT admins, and support agents. We mapped every hand-off from order to result and found where the workflow quietly broke.",
-      imageUrl: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1200&q=80",
-    },
-    {
-      id: "s-quote",
-      layout: "quote",
-      theme: "light",
-      bg: THEMES.light.bg,
-      fg: THEMES.light.fg,
-      accent: DEFAULT_ACCENT,
-      eyebrow: "From the field",
-      title: "For the first time, I could place an order without second-guessing a single step.",
-      body: "Dr. Lena Ortiz, Oncologist",
-    },
-    {
-      id: "s4",
-      layout: "metrics",
-      theme: "light",
-      bg: THEMES.light.bg,
-      fg: THEMES.light.fg,
-      accent: DEFAULT_ACCENT,
-      eyebrow: "Outcome",
-      title: "What changed",
-      metrics: [
-        { id: "m1", value: "−63%", label: "Order entry errors" },
-        { id: "m2", value: "8→2", label: "Steps to place an order" },
-        { id: "m3", value: "1st", label: "Design system at the company" },
-      ],
-    },
-  ],
-};
 
 // ─── Animation variants ────────────────────────────────────────────
 

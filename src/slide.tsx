@@ -1,29 +1,19 @@
 // ─── Slides ────────────────────────────────────────────────────────
 // A slide is a screen composed on the fixed 1280×720 canvas: the ten layouts
-// and the fields each of them uses. A step displaying one edits it with these
-// controls, which are the same ones the deck builder used — there is only one
-// set, so they can't drift.
+// and the fields each of them uses. This file is only the slide itself — what
+// a new one starts as, and the one set of controls every step that displays
+// one is edited with, so two of them can't drift apart.
 
-import { useState } from "react";
-import { Reorder } from "motion/react";
-import {
-  Plus, Trash2, ChevronUp, ChevronDown, Play, LayoutGrid, Image as ImageIcon, Copy,
-} from "lucide-react";
-import { Button, ButtonRound } from "@tomcoggia/ui";
 import { RED, DEFAULT_ACCENT } from "./theme.js";
 import {
   ACCENT, THEMES, DEFAULT_OVERVIEW_ITEMS, DEFAULT_GALLERY, DEFAULT_ANNOTATIONS, DEFAULT_STAT,
-  screenTheme, themeColors, bleedBg, backdropFor, Stage, ScreenView,
+  screenTheme,
 } from "./core.js";
-import type {
-  ScreenLayout, Theme, Screen, CaseStudyContent,
-} from "./core.js";
+import type { ScreenLayout, Theme, Screen } from "./core.js";
 import {
   MetricsEditor, ImageField, OverviewEditor, GalleryEditor, StatEditor, Field, ColorInput,
-  PreviewCardSettings, inputStyle,
+  inputStyle,
 } from "./editors.js";
-
-// ─── The builder (edit mode) ───────────────────────────────────────
 
 const LAYOUTS: { value: ScreenLayout; label: string }[] = [
   { value: "cover", label: "Title Card" },

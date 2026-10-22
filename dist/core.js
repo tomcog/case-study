@@ -7,7 +7,7 @@ import { CaseStudyThumb } from "./ui/CaseStudyThumb.js";
 import { CaseStudyLink } from "./ui/CaseStudyLink.js";
 import { LogoMark } from "./ui/LogoMark.js";
 import { getVideoEmbedUrl, isVideoSrc } from "./video.js";
-import { RED, INK, DEFAULT_ACCENT } from "./theme.js";
+import { RED, INK } from "./theme.js";
 export const ACCENT = RED;
 // Theme is the single source of truth for background + text color. Light is the
 // default for every template; the builder toggles between the two.
@@ -63,75 +63,6 @@ export const DEFAULT_ANNOTATIONS = [
     { id: "a3", label: "One source of truth", body: "Order, sample, and result status all live on a single screen." },
 ];
 export const DEFAULT_STAT = { id: "b1", value: "−63%", label: "Order entry errors" };
-export const DEFAULT_CONTENT = {
-    screens: [
-        {
-            id: "s1",
-            layout: "overview",
-            theme: "light",
-            bg: THEMES.light.bg,
-            fg: THEMES.light.fg,
-            accent: DEFAULT_ACCENT,
-            eyebrow: "Case Study",
-            title: "Reinventing the cancer-screening workflow",
-            body: "How a clinician-first redesign cut order errors and gave a brand-new diagnostic its first real product.",
-            items: DEFAULT_OVERVIEW_ITEMS,
-        },
-        {
-            id: "s2",
-            layout: "cover",
-            basicTheme: "light",
-            theme: "light",
-            bg: THEMES.light.bg,
-            fg: THEMES.light.fg,
-            accent: DEFAULT_ACCENT,
-            eyebrow: "The problem",
-            title: "Nobody had ever ordered a test like this before.",
-            body: "There was no precedent, no workflow, and no requirements — just a novel blood test and a thousand open questions about how it would actually reach a patient.",
-        },
-        {
-            id: "s3",
-            layout: "basic2",
-            basicTheme: "light",
-            basicTextSide: "left",
-            basicImage: "fill",
-            theme: "light",
-            bg: THEMES.light.bg,
-            fg: THEMES.light.fg,
-            accent: DEFAULT_ACCENT,
-            eyebrow: "Research",
-            title: "100+ conversations with the people in the loop",
-            body: "Clinicians, lab techs, IT admins, and support agents. We mapped every hand-off from order to result and found where the workflow quietly broke.",
-            imageUrl: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1200&q=80",
-        },
-        {
-            id: "s-quote",
-            layout: "quote",
-            theme: "light",
-            bg: THEMES.light.bg,
-            fg: THEMES.light.fg,
-            accent: DEFAULT_ACCENT,
-            eyebrow: "From the field",
-            title: "For the first time, I could place an order without second-guessing a single step.",
-            body: "Dr. Lena Ortiz, Oncologist",
-        },
-        {
-            id: "s4",
-            layout: "metrics",
-            theme: "light",
-            bg: THEMES.light.bg,
-            fg: THEMES.light.fg,
-            accent: DEFAULT_ACCENT,
-            eyebrow: "Outcome",
-            title: "What changed",
-            metrics: [
-                { id: "m1", value: "−63%", label: "Order entry errors" },
-                { id: "m2", value: "8→2", label: "Steps to place an order" },
-                { id: "m3", value: "1st", label: "Design system at the company" },
-            ],
-        },
-    ],
-};
 // ─── Animation variants ────────────────────────────────────────────
 export const EASE = [0.22, 1, 0.36, 1];
 // Every screen is composed on a fixed 16:9 stage, then scaled to fit whatever

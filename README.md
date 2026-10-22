@@ -2,7 +2,7 @@
 
 The case study (mini project) builder and immersive player from tomcoggia.com, packaged for any React 18/19 app.
 
-A project is one JSON object (`CaseStudyContent`): an ordered list of `screens` plus a `preview` card. The package renders and edits it. The app decides where it's stored.
+A project is one JSON object (`ProjectFile`): an ordered list of `steps` plus a `preview` card. Each step says for itself which app it runs, what it displays — a slide, that app, a framed URL or an image — and what it does to the app as it opens. The package renders and edits it. The app decides where it's stored.
 
 ## Install
 
@@ -24,14 +24,14 @@ Playing a project needs neither import to work, but the builders will look unsty
 ## Use
 
 ```tsx
-import { CaseStudyPlayer, CaseStudyBuilder, CaseStudyCard, CaseStudyProvider, loadProject, previewCard } from "@tomcog/case-study";
+import { ProjectPlayer, ProjectBuilder, CaseStudyCard, CaseStudyProvider, loadProject, previewCard } from "@tomcog/case-study";
 
-// Play one (full screen; Esc or the X calls onExit)
-<CaseStudyPlayer screens={project.screens} logoSrc={project.preview?.logo} onExit={close} />
+// Play one (full screen; Esc calls onExit). `apps` is the pool its steps run.
+<ProjectPlayer content={project} apps={apps} onExit={close} />
 
 // Edit one (full screen). You own the state and the saving.
 <CaseStudyProvider assets={{ upload, list, libraryUrl }}>
-  <CaseStudyBuilder content={project} setContent={setProject} projectName="Acme" onClose={close} />
+  <ProjectBuilder content={project} setContent={setProject} apps={apps} projectName="Acme" onClose={close} />
 </CaseStudyProvider>
 
 // Its preview card
@@ -46,7 +46,7 @@ ProjectBuilder (below) is the one source for projects. It publishes them at `htt
 
 ```ts
 const projects = projectSource("https://projects.tomcoggia.com");
-const rows = await projects.list();            // index.json: id, title, screens, cover, …
+const rows = await projects.list();            // index.json: id, title, count, cover, preview, …
 const project = await projects.get("augmedix"); // fetched, migrated, image paths made absolute
 ```
 
