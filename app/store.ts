@@ -31,10 +31,11 @@ async function post<T = { ok: true }>(action: string, body: unknown): Promise<T>
 
 /** A new project starts from the starter, so it opens composed rather than as
  * an empty shell. */
-export const createProject = (title: string) =>
-  post<{ id: string }>("create", { title, data: migrate(DEFAULT_WALKTHROUGH) });
+export const createProject = (title: string, id?: string) =>
+  post<{ id: string }>("create", { title, id, data: migrate(DEFAULT_WALKTHROUGH) });
 export const saveProject = (id: string, data: ProjectContent) => post("save", { id, data });
 export const renameProject = (id: string, title: string) => post("rename", { id, title });
+export const moveProject = (id: string, to: string) => post<{ id: string }>("move", { id, to });
 export const publishProject = (id: string, published: boolean) => post("publish", { id, published });
 export const duplicateProject = (id: string, title: string) => post<{ id: string }>("duplicate", { id, title });
 export const deleteProject = (id: string) => post("delete", { id });

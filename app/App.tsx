@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Copy, Eye, EyeOff, Globe, Layers, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
-import { Button, ButtonRound, Card, InputText, Tag } from "@tomcoggia/ui";
+import { Button, ButtonRound, Card, InputText, Modal, Tag } from "@tomcoggia/ui";
 import {
   CaseStudyProvider, ProjectBuilder, ProjectPlayer, SlideView,
   type ProjectContent,
 } from "../src/index.js";
 import {
   appsUsage, beaconProject, canEdit, createProject, deleteApp, deleteProject, duplicateProject, getProject, ingestApp,
-  listApps, listProjects, patchApp, projectAssets, publishProject, renameProject, saveProject,
+  listApps, listProjects, moveProject, patchApp, projectAssets, publishProject, renameProject, saveProject,
   type AppUse, type ProjectRow,
 } from "./store";
 import type { IngestedApp } from "../src/index.js";
@@ -94,10 +94,10 @@ function ProjectList() {
     await refresh();
   }
 
-  async function create(title: string) {
+  async function create(title: string, id: string) {
     try {
-      const { id } = await createProject(title);
-      go(`#/${id}/edit`);
+      const { id: created } = await createProject(title, id);
+      go(`#/${created}/edit`);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -137,6 +137,11 @@ function ProjectList() {
             onRename={(title) => act(() => renameProject(row.id, title))}
             onPublish={(published) => act(() => publishProject(row.id, published))}
             onDuplicate={() => act(() => duplicateProject(row.id, `${row.title} copy`))}
+            // Not through act(): a refused id is shown in the dialog, which stays open.
+            onMove={async (to) => {
+              await moveProject(row.id, to);
+              await refresh();
+            }}
             onDelete={() => act(() => deleteProject(row.id))}
           />
         ))}
@@ -152,15 +157,19 @@ function ProjectList() {
   );
 }
 
-function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string) => void; onCancel: () => void }) {
+function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string, id: string) => void; onCancel: () => void }) {
   const [title, setTitle] = useState("");
+  // The id follows the name until it's typed into, then it's the author's.
+  const [typedId, setTypedId] = useState<string | null>(null);
   const name = title.trim();
+  const id = typedId ?? slugPreview(name);
+  const idProblem = typedId !== null ? idCheck(id) : null;
   return (
     <form
       className="new"
       onSubmit={(e) => {
         e.preventDefault();
-        if (name) onCreate(name);
+        if (name && !idCheck(id)) onCreate(name, id);
       }}
     >
       <div className="new__row">
@@ -174,11 +183,24 @@ function NewProjectForm({ onCreate, onCancel }: { onCreate: (title: string) => v
           placeholder="e.g. SimpleScreen CRC"
           autoFocus
         />
-        <Button variant="primary" type="submit" disabled={!name}>Create</Button>
+        <InputText
+          id="new-id"
+          className="new__id"
+          label="Id"
+          value={id}
+          onChange={(e) => setTypedId(toId(e.target.value))}
+          onKeyDown={(e) => e.key === "Escape" && onCancel()}
+          placeholder="simplescreen-crc"
+        />
+        <Button variant="primary" type="submit" disabled={!name || !!idCheck(id)}>Create</Button>
         <Button variant="ghost" type="button" onClick={onCancel}>Cancel</Button>
       </div>
       <p className="new__hint">
-        Its id will be <code>{slugPreview(name)}</code>. Other sites load the project by its id, so the id stays the same if you rename the project later. A project is a list of steps, each showing a slide, an app, a URL or an image.
+        {idProblem ?? (
+          <>
+            The id names its folder, <code>projects/{id || "…"}</code>, and its address, and it's how other sites load the project. You can change it later from the project's tile, though sites that load it by the old id would stop finding it. A project is a list of steps, each showing a slide, an app, a URL or an image.
+          </>
+        )}
       </p>
     </form>
   );
@@ -189,14 +211,27 @@ const unit = ({ count }: ProjectRow) => (count === 1 ? "step" : "steps");
 // Mirrors freeId() in projects-plugin.ts (the server adds a suffix if the id is taken or reserved).
 const slugPreview = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "project";
 
-function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
+/** What's typed into an id field, kept to an id's characters as it's typed. */
+const toId = (typed: string) => typed.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+/, "").replace(/-{2,}/g, "-");
+
+/** Why an id won't do, as far as the list can tell; the server also refuses one that's taken. */
+function idCheck(id: string) {
+  if (!id) return "The project needs an id.";
+  if (id.endsWith("-")) return "An id can't end with a hyphen.";
+  if (id === "apps") return "\"apps\" is reserved: it's the address of the Apps screen.";
+  return null;
+}
+
+function ProjectTile({ row, onRename, onPublish, onDuplicate, onMove, onDelete }: {
   row: ProjectRow;
   onRename: (title: string) => void;
   onPublish: (published: boolean) => void;
   onDuplicate: () => void;
+  onMove: (to: string) => Promise<void>;
   onDelete: () => void;
 }) {
   const [renaming, setRenaming] = useState(false);
+  const [moving, setMoving] = useState(false);
   return (
     <Card variant="flat" className="tile">
       <a href={`#/${row.id}`} className="tile__thumb" aria-label={`Play ${row.title}`}>
@@ -223,7 +258,14 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
           {row.draft && <Tag title="Not published: other sites can't load it">Draft</Tag>}
         </div>
         <p className="tile__meta">
-          <code>{row.id}</code> · {row.count} {unit(row)} · {ago(row.updatedAt)}
+          {canEdit ? (
+            <button className="tile__id" onClick={() => setMoving(true)} title="Change the id">
+              <code>{row.id}</code>
+            </button>
+          ) : (
+            <code>{row.id}</code>
+          )}{" "}
+          · {row.count} {unit(row)} · {ago(row.updatedAt)}
         </p>
         <div className="tile__actions">
           {/* asChild keeps these real links: cmd-click and "open in new tab" still work. */}
@@ -256,9 +298,11 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onDelete }: {
               aria-label="Duplicate"
             />
           )}
-          {canEdit && <DeleteButton onDelete={onDelete} />}
+          {canEdit && <DeleteProjectButton row={row} onDelete={onDelete} />}
         </div>
       </div>
+      {/* Outside the meta line, which doesn't wrap and can't hold a dialog. */}
+      {canEdit && <ChangeIdDialog row={row} open={moving} onClose={() => setMoving(false)} onMove={onMove} />}
     </Card>
   );
 }
@@ -297,8 +341,127 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (title: str
   );
 }
 
+// Changing a project's id. It's the folder's name and the project's address,
+// and other sites load the project by it, so a published project says so
+// before it moves.
+function ChangeIdDialog({ row, open, onClose, onMove }: {
+  row: ProjectRow;
+  open: boolean;
+  onClose: () => void;
+  onMove: (to: string) => Promise<void>;
+}) {
+  const [to, setTo] = useState(row.id);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  // Each opening starts from the id as it is.
+  useEffect(() => {
+    if (!open) return;
+    setTo(row.id);
+    setError(null);
+  }, [open, row.id]);
+  const problem = to === row.id ? null : idCheck(to);
+  async function save() {
+    if (to === row.id) return onClose();
+    if (problem) return;
+    setBusy(true);
+    try {
+      await onMove(to);
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Change id"
+      icon={<Pencil />}
+      actions={
+        <>
+          <Button size="lg" variant="tertiary" onClick={onClose}>Cancel</Button>
+          <Button size="lg" variant="primary" disabled={busy || !!problem || to === row.id} onClick={() => void save()}>
+            Change id
+          </Button>
+        </>
+      }
+    >
+      <InputText
+        id={`id-${row.id}`}
+        label="Id"
+        value={to}
+        onChange={(e) => {
+          setTo(toId(e.target.value));
+          setError(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void save();
+        }}
+      />
+      <p className="move__note">
+        {error ?? problem ?? (
+          <>
+            Its folder becomes <code>projects/{to || "…"}</code> and its address <code>#/{to || "…"}</code>.
+            {row.draft
+              ? " It's a draft, so no other site loads it yet."
+              : <> <strong>It's published:</strong> sites that load it as <code>{row.id}</code> will stop finding it until they're pointed at the new id.</>}
+          </>
+        )}
+      </p>
+    </Modal>
+  );
+}
+
+// A project is deleted only through a confirmation: removing its folder takes
+// its images and Ask AI Tom document with it, and, once it's published, other
+// sites stop finding it.
+function DeleteProjectButton({ row, onDelete }: { row: ProjectRow; onDelete: () => void }) {
+  const [asking, setAsking] = useState(false);
+  return (
+    <>
+      <ButtonRound
+        size="sm"
+        tone="danger"
+        variant="tertiary"
+        icon={<Trash2 size={14} />}
+        onClick={() => setAsking(true)}
+        title="Delete the project and its images"
+        aria-label="Delete"
+      />
+      <Modal
+        open={asking}
+        onClose={() => setAsking(false)}
+        title={`Delete ${row.title}?`}
+        icon={<Trash2 />}
+        iconColor="danger"
+        actions={
+          <>
+            <Button size="lg" variant="tertiary" onClick={() => setAsking(false)}>Cancel</Button>
+            <Button
+              size="lg"
+              variant="primary"
+              tone="danger"
+              onClick={() => {
+                setAsking(false);
+                onDelete();
+              }}
+            >
+              Delete project
+            </Button>
+          </>
+        }
+      >
+        This removes <code>projects/{row.id}</code>: its {row.count} {unit(row)}, its images and its Ask AI Tom
+        document.{row.draft ? "" : " Sites that load it will no longer find it."} It can't be undone here.
+      </Modal>
+    </>
+  );
+}
+
 // Asks before deleting: the first click arms it ("Delete?"), a second click within 3 seconds deletes.
-function DeleteButton({ onDelete, title = "Delete the project and its images" }: { onDelete: () => void; title?: string }) {
+function DeleteButton({ onDelete, title }: { onDelete: () => void; title: string }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
     if (!armed) return;

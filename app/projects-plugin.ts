@@ -1,5 +1,5 @@
 import type { Plugin } from "vite";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 
 // ─── Project files and ingested apps ───────────────────────────────
@@ -16,11 +16,12 @@ import { basename, extname, join, resolve } from "node:path";
 //
 //   GET  /projects/index.json                       one row per project, built from disk
 //   GET  /projects/<id>/…                           project files, straight from disk
-//   POST /__projects/create     { title, data }     → { id }  new folder, id from the title, a draft
+//   POST /__projects/create     { title, data, id? } → { id }  new folder, a draft; the id is the one given, or one from the title
 //   POST /__projects/save       { id, data }        → overwrites project.json (keeps its draft flag)
 //   POST /__projects/publish    { id, published }   → sets or clears the draft flag
-//   POST /__projects/rename     { id, title }       → sets the title (the id never changes)
-//   POST /__projects/duplicate  { id, title }       → { id }  copies the folder, images included, as a draft
+//   POST /__projects/rename     { id, title }       → sets the title (the id stays)
+//   POST /__projects/move       { id, to }          → { id }  changes the id: moves the folder, repoints its image paths
+//   POST /__projects/duplicate  { id, title }       → { id }  copies the folder, images and ask.md included, as a draft
 //   POST /__projects/delete     { id }              → removes the folder
 //   POST /__projects/upload     { id, fileName, dataUrl } → { path }  into projects/<id>/images/
 //   GET  /__projects/images?id=<id>                 image names in projects/<id>/images/
@@ -202,6 +203,14 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
   // have it as an id — it would be unreachable at #/apps.
   const RESERVED = new Set(["apps"]);
 
+  /** Why `id` can't be a new project's id, or null if it can. */
+  function takenId(id: string) {
+    if (!ID.test(id) || id.endsWith("-")) return "An id is lowercase letters, numbers and hyphens, starting with a letter or number";
+    if (RESERVED.has(id)) return `"${id}" is reserved`;
+    if (existsSync(join(dir, id))) return `A project already has the id "${id}"`;
+    return null;
+  }
+
   function freeId(title: string) {
     const base = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "project";
     let id = base;
@@ -220,7 +229,10 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
 
   function handle(path: string, input: any): [number, unknown] {
     if (path === "/__projects/create") {
-      const id = freeId(input.title ?? "");
+      const asked = typeof input.id === "string" && input.id ? input.id : null;
+      const problem = asked && takenId(asked);
+      if (problem) return [409, { error: problem }];
+      const id = asked ?? freeId(input.title ?? "");
       write(id, { ...input.data, title: input.title, draft: true });
       return [200, { id }];
     }
@@ -242,9 +254,27 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
       write(id, { ...read(id), title: input.title });
       return [200, { ok: true }];
     }
+    if (path === "/__projects/move") {
+      // The id is the folder's name and part of every image path the project
+      // stores, so both move with it. Sites that load it by the old id stop
+      // finding it; the list says so before a published project is moved.
+      const to = String(input.to ?? "");
+      if (to === id) return [200, { id }];
+      const problem = takenId(to);
+      if (problem) return [409, { error: problem }];
+      renameSync(join(dir, id), join(dir, to));
+      const text = readFileSync(projectFile(to), "utf8").split(`/projects/${id}/`).join(`/projects/${to}/`);
+      writeFileSync(projectFile(to), text);
+      return [200, { id: to }];
+    }
     if (path === "/__projects/duplicate") {
       const copy = freeId(input.title ?? "");
       if (existsSync(imagesDir(id))) cpSync(imagesDir(id), imagesDir(copy), { recursive: true });
+      // Ask AI Tom's document goes with it, so the copy answers as the original does.
+      if (existsSync(join(dir, id, "ask.md"))) {
+        mkdirSync(join(dir, copy), { recursive: true });
+        cpSync(join(dir, id, "ask.md"), join(dir, copy, "ask.md"));
+      }
       // Point the copy at its own images, so editing or deleting either project leaves the other alone.
       const text = readFileSync(projectFile(id), "utf8").split(`/projects/${id}/`).join(`/projects/${copy}/`);
       write(copy, { ...JSON.parse(text), title: input.title, draft: true });

@@ -87,6 +87,10 @@ code {
   flex: 1;
 }
 
+.new__id {
+  width: 220px;
+}
+
 .new__hint {
   margin: 10px 0 0;
   color: var(--muted);
@@ -206,6 +210,27 @@ code {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The id, which opens the Change id dialog; it reads as part of the meta line
+   until it's pointed at. */
+.tile__id {
+  padding: 1px 4px;
+  margin-left: -4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tile__id:hover {
+  border-color: var(--line);
+}
+
+.move__note {
+  margin: 12px 0 0;
 }
 
 .tile__actions {

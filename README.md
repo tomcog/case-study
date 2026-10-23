@@ -75,7 +75,7 @@ npm install
 npm run dev     # ProjectBuilder at http://localhost:5187
 ```
 
-Each project lives in `projects/<id>/`: `project.json` plus an `images/` folder. That folder is the only copy of the project. The id comes from the name you give a new project and never changes, even if you rename it, because other sites load projects by id. Duplicate makes an independent copy with its own id and images.
+Each project lives in `projects/<id>/`: `project.json` plus an `images/` folder. That folder is the only copy of the project. The id is suggested from the name you give a new project, and you can edit it before you create it. Renaming the project later leaves the id alone, because other sites load projects by id; to change the id itself, click it on the project's tile. That moves the folder and its image paths, and any site loading a published project by the old id stops finding it. Duplicate makes an independent copy with its own id and images.
 
 Editing autosaves to those files, and only works under `npm run dev`. New projects and duplicates start as drafts; use Publish on the project list when one is ready. Commit as you go: pushing to `main` publishes everything that isn't a draft. Vercel runs `npm run build:app` (see `vercel.json`), which builds a read-only site into `app-dist/` with the projects and a generated `projects/index.json`, served at `https://projects.tomcoggia.com` for other apps to load with `projectSource`.
 
