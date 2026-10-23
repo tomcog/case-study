@@ -24,7 +24,7 @@ import { SlideFields, SlideView, newScreen } from "../slide.js";
 import { Field, ImageField, PreviewCardSettings, inputStyle } from "../editors.js";
 import { Button, ButtonRound, Segment, SegmentedControl } from "@tomcoggia/ui";
 import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
-import { AreaDraw, Callouts, HoverOutline, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
+import { AreaDraw, Callouts, HoverOutline, SPOT_STRENGTH, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, spotlightBox, toBox, useApp } from "./stage.js";
 import type { Box } from "./stage.js";
 import type { PickHit } from "./driver.js";
 import { appRuns, bootsApp, contentOf, stepLabel, stepMarks } from "./types.js";
@@ -93,7 +93,6 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
   const step = steps[index];
 
   const markIds = useMemo(() => stepMarks(step), [step]);
-  const spotMarks = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
   // The app the selected step runs, and what it displays over it.
   const app = useMemo(() => apps.find((a) => a.id === step?.app), [apps, step?.app]);
   // What the picker offers: the pool minus the hidden ones, plus whichever app
@@ -277,13 +276,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
     return () => window.removeEventListener("keydown", onKey);
   }, [picking]);
 
-  const box = useMemo(() => {
-    const spot = step?.spotlight;
-    if (!spot) return null;
-    if (spot.area) return areaBox(spot.area, demo.bounds);
-    return toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), spot.pad ?? 6);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demo.rects, spotMarks.join("|"), demo.bounds, step]);
+  const box = useMemo(() => spotlightBox(step?.spotlight, demo.rects, demo.bounds), [step?.spotlight, demo.rects, demo.bounds]);
 
   const calloutBox = (callout: Callout): Box | null => {
     if (callout.area) return areaBox(callout.area, demo.bounds);
@@ -743,6 +736,35 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                       />
                     )}
                   </div>
+                  {!framed && (
+                    <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
+                      <input
+                        type="checkbox"
+                        checked={step.spotlight.fit === "content"}
+                        onChange={(e) => update({ spotlight: { ...step.spotlight!, fit: e.target.checked ? "content" : undefined } })}
+                      />
+                      Fit to content — wrap its text and icons, not its whole box
+                    </label>
+                  )}
+                  <div style={{ ...hint, marginTop: 10 }}>Move edges (px, + out / − in)</div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                    {(["top", "right", "bottom", "left"] as const).map((side) => (
+                      <label key={side} style={{ ...hint, flex: 1, minWidth: 0 }}>
+                        {side[0].toUpperCase() + side.slice(1)}
+                        <input
+                          type="number"
+                          value={step.spotlight!.edges?.[side] ?? ""}
+                          placeholder="0"
+                          onChange={(e) => {
+                            const edges = { ...step.spotlight!.edges, [side]: e.target.value ? Number(e.target.value) : undefined };
+                            const any = Object.values(edges).some((v) => v !== undefined);
+                            update({ spotlight: { ...step.spotlight!, edges: any ? edges : undefined } });
+                          }}
+                          style={inputStyle}
+                        />
+                      </label>
+                    ))}
+                  </div>
                   <Slider
                     label="Spread"
                     value={step.spotlight.spread ?? 26}
@@ -753,11 +775,11 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                   />
                   <Slider
                     label="Strength"
-                    value={Math.round((step.spotlight.strength ?? 0.35) * 100)}
+                    value={Math.round((step.spotlight.strength ?? SPOT_STRENGTH) * 100)}
                     min={5}
                     max={100}
                     unit="%"
-                    onChange={(v) => update({ spotlight: { ...step.spotlight!, strength: v === 35 ? undefined : v / 100 } })}
+                    onChange={(v) => update({ spotlight: { ...step.spotlight!, strength: v === Math.round(SPOT_STRENGTH * 100) ? undefined : v / 100 } })}
                   />
                   <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}>
                     <input
@@ -770,8 +792,8 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                   <label style={{ ...hint, display: "flex", alignItems: "center", gap: 7, marginTop: 6 }}>
                     <input
                       type="checkbox"
-                      checked={step.spotlight.dim !== false}
-                      onChange={(e) => update({ spotlight: { ...step.spotlight!, dim: e.target.checked ? undefined : false } })}
+                      checked={!!step.spotlight.dim}
+                      onChange={(e) => update({ spotlight: { ...step.spotlight!, dim: e.target.checked || undefined } })}
                     />
                     Dim the rest of the stage
                   </label>

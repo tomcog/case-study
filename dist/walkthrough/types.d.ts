@@ -71,17 +71,29 @@ export interface Spotlight {
     /** Clear space between the element and the glow, in app px (default 6).
      * Marks only. */
     pad?: number;
+    /** Wrap what's inside the element — its text, icons and fields — rather
+     * than its whole box, so a wide cell holding a short name is lit around the
+     * name. Measured live, so it follows the content as it changes. Marks only. */
+    fit?: "content";
+    /** Move each edge after everything else, in px: out when positive, in when
+     * negative. For the part of an element a demo is actually about. */
+    edges?: {
+        top?: number;
+        right?: number;
+        bottom?: number;
+        left?: number;
+    };
     /** How far the glow reaches out from the element, in px (default 26, the
      * Figma's). */
     spread?: number;
     /** The glow's opacity where it meets the element, fading to nothing at
-     * `spread` (0–1, default 0.35, the Figma's). */
+     * `spread` (0–1, default 0.38, the Figma's). */
     strength?: number;
     /** Breathe in and out, for an element that is easy to miss. Still under
      * reduced motion. */
     pulse?: boolean;
-    /** Dim the rest of the frame (default true). Off leaves the app at full
-     * strength with only the ring to draw the eye. */
+    /** Dim the rest of the frame (default false). Off leaves the app at full
+     * strength with only the glow to draw the eye. */
     dim?: boolean;
     /** Block clicks everywhere but the marked element. Independent of `dim`:
      * the shield is there either way, it just isn't visible without it. */

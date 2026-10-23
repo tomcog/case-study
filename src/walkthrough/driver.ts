@@ -23,6 +23,9 @@ export interface MarkRect {
   y: number;
   w: number;
   h: number;
+  /** The box around what's inside it — text, icons, fields — when that is
+   * smaller than the element itself. */
+  content?: { x: number; y: number; w: number; h: number };
 }
 
 export type MarkRects = Record<string, MarkRect>;
@@ -142,6 +145,50 @@ function pathTo(el: Element): string | null {
   } catch {
     return null;
   }
+}
+
+/** Elements that draw their own content, so their box is it: inside one,
+ * nothing smaller is worth measuring. */
+const SOLID = "img, svg, video, canvas, input, select, textarea, button, [role=button]";
+
+/** The box around what's inside an element: each run of text and each solid
+ * element, clipped to the element. Undefined when that is the element's own
+ * box anyway — a field, a button, or something with nothing in it. */
+function contentBox(el: Element): MarkRect["content"] {
+  if (el.matches(SOLID)) return undefined;
+  const d = el.ownerDocument;
+  const outer = el.getBoundingClientRect();
+  let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+  const add = (r: DOMRect) => {
+    if (!r.width || !r.height) return;
+    x1 = Math.min(x1, r.left);
+    y1 = Math.min(y1, r.top);
+    x2 = Math.max(x2, r.right);
+    y2 = Math.max(y2, r.bottom);
+  };
+  const range = d.createRange();
+  // NodeFilter's numbers rather than the constants: the frame's realm has its
+  // own NodeFilter, and these are the same in every one.
+  const walker = d.createTreeWalker(el, 0x1 | 0x4, {
+    acceptNode(node) {
+      if (node.nodeType === 3) return node.textContent?.trim() ? 1 : 3;
+      const child = node as Element;
+      if (!child.matches(SOLID)) return 3; // look inside it, but not at its box
+      add(child.getBoundingClientRect());
+      return 2; // its box is its content; skip what's in it
+    },
+  });
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    range.selectNodeContents(node);
+    add(range.getBoundingClientRect());
+  }
+  x1 = Math.max(x1, outer.left);
+  y1 = Math.max(y1, outer.top);
+  x2 = Math.min(x2, outer.right);
+  y2 = Math.min(y2, outer.bottom);
+  if (!(x2 > x1 && y2 > y1)) return undefined;
+  const same = x1 - outer.left < 0.5 && y1 - outer.top < 0.5 && outer.right - x2 < 0.5 && outer.bottom - y2 < 0.5;
+  return same ? undefined : { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
 }
 
 /** Drive a demo served from the player's own origin. */
@@ -401,7 +448,7 @@ export function sameOriginDriver(frame: HTMLIFrameElement, src: string): Driver 
         const el = query(id);
         if (!el) continue;
         const r = el.getBoundingClientRect();
-        out[id] = { x: r.x, y: r.y, w: r.width, h: r.height };
+        out[id] = { x: r.x, y: r.y, w: r.width, h: r.height, content: contentBox(el) };
       }
       return out;
     },

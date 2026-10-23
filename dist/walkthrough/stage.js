@@ -38,6 +38,33 @@ export function toBox(rects, pad = 6) {
     const y2 = Math.max(...rects.map((r) => r.y + r.h)) + pad;
     return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
 }
+/** Where a step's spotlight sits, in stage pixels: its area, or the box
+ * around its marks — or around what's inside them, when it fits to content —
+ * grown by its pad, then each edge moved by its own amount. Shared by the
+ * player and the builder so the two can't disagree about it. */
+export function spotlightBox(spot, rects, bounds) {
+    if (!spot)
+        return null;
+    let box;
+    if (spot.area)
+        box = areaBox(spot.area, bounds);
+    else {
+        const ids = !spot.mark ? [] : Array.isArray(spot.mark) ? spot.mark : [spot.mark];
+        const found = ids.map((id) => rects[id]).filter(Boolean);
+        box = toBox(spot.fit === "content" ? found.map((r) => r.content ?? r) : found, spot.pad ?? 6);
+    }
+    const e = spot.edges;
+    if (!box || !e)
+        return box;
+    const left = box.x - (e.left ?? 0);
+    const top = box.y - (e.top ?? 0);
+    return {
+        x: left,
+        y: top,
+        w: Math.max(0, box.x + box.w + (e.right ?? 0) - left),
+        h: Math.max(0, box.y + box.h + (e.bottom ?? 0) - top),
+    };
+}
 /** An Area resolved against the stage it sits on. Fractions in, pixels out. */
 export function areaBox(area, bounds) {
     if (!area)
@@ -129,8 +156,10 @@ export function useApp(src, marks, size) {
         const dx = offsetRef.current;
         const measured = ids.length ? driver.marks(ids) : {};
         const next = {};
-        for (const id in measured)
-            next[id] = { ...measured[id], x: measured[id].x + dx };
+        for (const id in measured) {
+            const r = measured[id];
+            next[id] = { ...r, x: r.x + dx, content: r.content && { ...r.content, x: r.content.x + dx } };
+        }
         // The app reports layout every frame while it animates; only a box that
         // actually moved is worth a render.
         setRects((prev) => (sameRects(prev, next) ? prev : next));
@@ -174,7 +203,8 @@ const sameRects = (a, b) => {
     return keys.every((k) => {
         const x = a[k];
         const y = b[k];
-        return y && x.x === y.x && x.y === y.y && x.w === y.w && x.h === y.h;
+        const same = (p, q) => p === q || (!!p && !!q && p.x === q.x && p.y === q.y && p.w === q.w && p.h === q.h);
+        return y && same(x, y) && same(x.content, y.content);
     });
 };
 /** A glow around the marked element, with the rest of the stage optionally
@@ -186,14 +216,16 @@ const sameRects = (a, b) => {
  * element, filled with the accent fading linearly from `strength` at the
  * hole's edge to nothing `spread` px out. A circle is drawn exactly that way,
  * as a radial gradient. A rect or a pill follows the element's box, which a
- * radial gradient can't, so it is a box-shadow instead — an outer shadow is
- * never painted inside its own box, which is the hole. */
-export function Spotlight({ box, shape = "rect", spread = 26, strength = 0.35, pulse, dim = true, lock, stageW }) {
+ * radial gradient can't, so it is drawn as box-shadows instead — an outer
+ * shadow is never painted inside its own box, which is the hole. One blurred
+ * shadow fades as a curve and comes out a quarter weaker than the Figma at the
+ * element's edge, so it is a stack of bands (`fadeShadows`) that together fall
+ * off in the same straight line the circle does. */
+export function Spotlight({ box, shape = "rect", spread = 26, strength = SPOT_STRENGTH, pulse, dim = false, lock, stageW }) {
     const reduced = useReducedMotion();
     if (!box)
         return null;
     const reach = Math.max(0, spread);
-    const tint = (alpha) => `color-mix(in srgb, ${RED} ${Math.round(Math.min(1, Math.max(0, alpha)) * 100)}%, transparent)`;
     // The glow's own box, which is the element's for a rect or a pill and the
     // whole ring for a circle. The hole is a share of the radius rather than a
     // pixel count, so it stays the element's size while the box travels.
@@ -210,7 +242,7 @@ export function Spotlight({ box, shape = "rect", spread = 26, strength = 0.35, p
             frame: { left: box.x, top: box.y, width: box.w, height: box.h },
             look: {
                 borderRadius: shape === "pill" ? 999 : 10,
-                boxShadow: `0 0 ${reach}px ${reach / 3}px ${tint(strength)}`,
+                boxShadow: fadeShadows(reach, strength),
             },
         };
     const breathing = pulse && !reduced;
@@ -226,6 +258,31 @@ export function Spotlight({ box, shape = "rect", spread = 26, strength = 0.35, p
                     default: { type: "spring", stiffness: 420, damping: 36 },
                     opacity: breathing ? { duration: 1.8, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 },
                 }, style: { position: "absolute", pointerEvents: "none", ...glow.look } })] }));
+}
+/** The glow's opacity where it meets the element. The Figma's gradient runs
+ * from the accent at full strength at the centre, through half at 31.25% of
+ * the radius, to nothing at the edge; its ring starts 24 of 50 out, where
+ * that line stands at 0.378. */
+export const SPOT_STRENGTH = 0.38;
+const BANDS = 10;
+/** The accent at a given opacity, 0–1. */
+const tint = (alpha) => `color-mix(in srgb, ${RED} ${Math.round(Math.min(1, Math.max(0, alpha)) * 100)}%, transparent)`;
+/** Box-shadows falling off linearly from `strength` at the box to nothing
+ * `reach` px out. The bands are nested, each a little further out than the
+ * last, and a point is covered by every band that reaches it — so each band's
+ * own alpha is chosen to bring the stack to the line's value at the middle of
+ * its own ring, and a blur of one band's width hides the steps between them. */
+function fadeShadows(reach, strength) {
+    if (reach <= 0 || strength <= 0)
+        return "none";
+    const step = reach / BANDS;
+    const target = (band) => (band > BANDS ? 0 : strength * (1 - (band - 0.5) / BANDS));
+    const layers = [];
+    for (let band = 1; band <= BANDS; band++) {
+        const alpha = 1 - (1 - target(band)) / (1 - target(band + 1));
+        layers.push(`0 0 ${step}px ${step * band}px ${tint(alpha)}`);
+    }
+    return layers.join(", ");
 }
 /** What the author is about to pick, outlined as they move over the demo. */
 export function HoverOutline({ box, ok }) {
@@ -315,7 +372,7 @@ export function StageNotice({ blocked, src }) {
 // is drawn at the stage's own size, which is the app's, since nothing here is
 // scaled.
 const BUBBLE_W = 236;
-const GAP = 16;
+const GAP = 24;
 /** The side with room for the bubble, preferring the one that was asked for. */
 function sideFor(box, bounds, wanted) {
     const room = {
@@ -380,9 +437,8 @@ export function Callouts({ items, boxFor, bounds, scrollX = 0 }) {
                     transform: p.shift,
                     width: BUBBLE_W,
                     background: "#fff",
-                    border: "1px solid #e6e4e1",
                     borderRadius: 9,
-                    boxShadow: "0 10px 28px -10px rgba(0,0,0,0.45)",
+                    border: `2px solid ${RED}`,
                     padding: "9px 12px",
                     fontSize: 13,
                     lineHeight: 1.45,

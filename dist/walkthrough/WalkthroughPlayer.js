@@ -16,7 +16,7 @@ import { Segment, SegmentedControl, Toolbar } from "@tomcoggia/ui";
 import { INK, RED } from "../theme.js";
 import { renderStyledText } from "../ui/renderStyledText.js";
 import { SlideView } from "../slide.js";
-import { Callouts, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, toBox, useApp } from "./stage.js";
+import { Callouts, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, spotlightBox, toBox, useApp } from "./stage.js";
 import { bootsApp, contentOf, stepMarks } from "./types.js";
 const PANEL_W = 400;
 const LINE = "#e6e4e1";
@@ -64,7 +64,6 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
     // Spotlight and callouts are measured together.
     const markIds = useMemo(() => stepMarks(step), [step]);
     const markKey = markIds.join("|");
-    const spotMarks = useMemo(() => marksOf(step?.spotlight?.mark), [step]);
     // The app this step runs, and what it displays over it. Changing the app
     // swaps the document; displaying something else leaves it running underneath.
     const app = useMemo(() => apps.find((a) => a.id === step?.app), [apps, step?.app]);
@@ -130,15 +129,7 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
     }, [onExit, back, next]);
     // A spotlight is anchored either way: to measured marks on a driveable
     // stage, or to a rectangle on one that can only be shown.
-    const box = useMemo(() => {
-        const spot = step?.spotlight;
-        if (!spot)
-            return null;
-        if (spot.area)
-            return areaBox(spot.area, demo.bounds);
-        return toBox(spotMarks.map((id) => demo.rects[id]).filter(Boolean), spot.pad ?? 6);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [demo.rects, spotMarks.join("|"), demo.bounds, step]);
+    const box = useMemo(() => spotlightBox(step?.spotlight, demo.rects, demo.bounds), [step?.spotlight, demo.rects, demo.bounds]);
     const calloutBox = (callout) => {
         if (callout.area)
             return areaBox(callout.area, demo.bounds);

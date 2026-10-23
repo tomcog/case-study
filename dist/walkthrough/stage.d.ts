@@ -1,5 +1,5 @@
 import type { Driver, MarkRect, MarkRects } from "./driver.js";
-import type { Area, Callout } from "./types.js";
+import type { Area, Callout, Spotlight as SpotlightSpec } from "./types.js";
 export interface Box {
     x: number;
     y: number;
@@ -15,6 +15,14 @@ export type Blocked = "no-app" | "foreign" | "small";
 /** The box around one or more demo rects, in stage pixels — which are app
  * pixels, since the frame is never scaled. */
 export declare function toBox(rects: MarkRect[], pad?: number): Box | null;
+/** Where a step's spotlight sits, in stage pixels: its area, or the box
+ * around its marks — or around what's inside them, when it fits to content —
+ * grown by its pad, then each edge moved by its own amount. Shared by the
+ * player and the builder so the two can't disagree about it. */
+export declare function spotlightBox(spot: SpotlightSpec | undefined, rects: MarkRects, bounds: {
+    w: number;
+    h: number;
+}): Box | null;
 /** An Area resolved against the stage it sits on. Fractions in, pixels out. */
 export declare function areaBox(area: Area | undefined, bounds: {
     w: number;
@@ -55,8 +63,11 @@ export declare function useApp(src: string | undefined, marks: string[], size?: 
  * element, filled with the accent fading linearly from `strength` at the
  * hole's edge to nothing `spread` px out. A circle is drawn exactly that way,
  * as a radial gradient. A rect or a pill follows the element's box, which a
- * radial gradient can't, so it is a box-shadow instead — an outer shadow is
- * never painted inside its own box, which is the hole. */
+ * radial gradient can't, so it is drawn as box-shadows instead — an outer
+ * shadow is never painted inside its own box, which is the hole. One blurred
+ * shadow fades as a curve and comes out a quarter weaker than the Figma at the
+ * element's edge, so it is a stack of bands (`fadeShadows`) that together fall
+ * off in the same straight line the circle does. */
 export declare function Spotlight({ box, shape, spread, strength, pulse, dim, lock, stageW }: {
     box: Box | null;
     shape?: "rect" | "pill" | "circle";
@@ -71,6 +82,11 @@ export declare function Spotlight({ box, shape, spread, strength, pulse, dim, lo
      * Without it they fall back to the visible pane. */
     stageW?: number;
 }): import("react").JSX.Element | null;
+/** The glow's opacity where it meets the element. The Figma's gradient runs
+ * from the accent at full strength at the centre, through half at 31.25% of
+ * the radius, to nothing at the edge; its ring starts 24 of 50 out, where
+ * that line stands at 0.378. */
+export declare const SPOT_STRENGTH = 0.38;
 /** What the author is about to pick, outlined as they move over the demo. */
 export declare function HoverOutline({ box, ok }: {
     box: Box | null;

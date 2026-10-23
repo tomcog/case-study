@@ -4,6 +4,14 @@ export interface MarkRect {
     y: number;
     w: number;
     h: number;
+    /** The box around what's inside it — text, icons, fields — when that is
+     * smaller than the element itself. */
+    content?: {
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+    };
 }
 export type MarkRects = Record<string, MarkRect>;
 /** Marks a target as a path rather than a mark id. */
