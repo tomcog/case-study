@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Copy, Eye, EyeOff, Globe, Layers, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
-import { Button, ButtonRound, Card, InputText, Modal, Tag } from "@tomcoggia/ui";
+import { BotMessageSquare, Copy, Eye, EyeOff, Globe, Layers, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { Button, ButtonRound, Card, Checkbox, InputText, Modal, Tag } from "@tomcoggia/ui";
 import {
   CaseStudyProvider, ProjectBuilder, ProjectPlayer, SlideView,
   type ProjectContent,
 } from "../src/index.js";
 import {
   appsUsage, beaconProject, canEdit, createProject, deleteApp, deleteProject, duplicateProject, getProject, ingestApp,
-  listApps, listProjects, moveProject, patchApp, projectAssets, publishProject, renameProject, saveProject,
-  type AppUse, type ProjectRow,
+  getAsk, listApps, listProjects, moveProject, patchApp, projectAssets, publishProject, pullAsk, renameProject, saveProject, setAsk,
+  type AppUse, type AskInfo, type ProjectRow,
 } from "./store";
 import type { IngestedApp } from "../src/index.js";
 
@@ -232,6 +232,7 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onMove, onDelete }
 }) {
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [asking, setAsking] = useState(false);
   return (
     <Card variant="flat" className="tile">
       <a href={`#/${row.id}`} className="tile__thumb" aria-label={`Play ${row.title}`}>
@@ -298,11 +299,22 @@ function ProjectTile({ row, onRename, onPublish, onDuplicate, onMove, onDelete }
               aria-label="Duplicate"
             />
           )}
+          {canEdit && (
+            <ButtonRound
+              size="sm"
+              variant="tertiary"
+              icon={<BotMessageSquare size={14} />}
+              onClick={() => setAsking(true)}
+              title="Ask AI Tom: what it answers from"
+              aria-label="Ask AI Tom"
+            />
+          )}
           {canEdit && <DeleteProjectButton row={row} onDelete={onDelete} />}
         </div>
       </div>
       {/* Outside the meta line, which doesn't wrap and can't hold a dialog. */}
       {canEdit && <ChangeIdDialog row={row} open={moving} onClose={() => setMoving(false)} onMove={onMove} />}
+      {canEdit && <AskDialog row={row} open={asking} onClose={() => setAsking(false)} />}
     </Card>
   );
 }
@@ -407,6 +419,97 @@ function ChangeIdDialog({ row, open, onClose, onMove }: {
             {row.draft
               ? " It's a draft, so no other site loads it yet."
               : <> <strong>It's published:</strong> sites that load it as <code>{row.id}</code> will stop finding it until they're pointed at the new id.</>}
+          </>
+        )}
+      </p>
+    </Modal>
+  );
+}
+
+// Ask AI Tom for one project: on or off, and the Google Doc its ask.md comes
+// from. Pulling replaces ask.md with the Doc; answering only ever reads
+// ask.md, so the Doc is read here and nowhere else.
+function AskDialog({ row, open, onClose }: { row: ProjectRow; open: boolean; onClose: () => void }) {
+  const [info, setInfo] = useState<AskInfo | null>(null);
+  const [source, setSource] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pulled, setPulled] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setError(null);
+    setPulled(false);
+    getAsk(row.id).then(
+      (got) => {
+        setInfo(got);
+        setSource(got.source ?? "");
+      },
+      (err) => setError((err as Error).message),
+    );
+  }, [open, row.id]);
+
+  async function run(change: () => Promise<AskInfo>) {
+    setBusy(true);
+    setError(null);
+    try {
+      setInfo(await change());
+      return true;
+    } catch (err) {
+      setError((err as Error).message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pull() {
+    if (!(await run(() => setAsk(row.id, { source })))) return;
+    if (await run(() => pullAsk(row.id))) setPulled(true);
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Ask AI Tom"
+      icon={<BotMessageSquare />}
+      iconColor="brand"
+      actions={
+        <>
+          <Button size="lg" variant="tertiary" onClick={onClose}>Close</Button>
+          <Button size="lg" variant="primary" disabled={busy || !source.trim()} onClick={() => void pull()}>
+            {busy ? "Pulling…" : "Pull from Doc"}
+          </Button>
+        </>
+      }
+    >
+      <Checkbox
+        label="Show Ask AI Tom on this project"
+        checked={info?.enabled ?? false}
+        disabled={!info || busy}
+        onChange={(e) => void run(() => setAsk(row.id, { enabled: e.target.checked }))}
+      />
+      <div className="ask__field">
+        <InputText
+          id={`ask-${row.id}`}
+          label="Google Doc link"
+          value={source}
+          onChange={(e) => {
+            setSource(e.target.value);
+            setError(null);
+          }}
+          placeholder="https://docs.google.com/document/d/…"
+        />
+      </div>
+      <p className="ask__note">
+        {error ?? (
+          <>
+            {pulled ? "Pulled. " : ""}
+            {info?.doc
+              ? <><code>ask.md</code> is {info.doc.chars.toLocaleString()} characters, updated {since(info.doc.updatedAt)}.</>
+              : <>No <code>ask.md</code> yet, so AI Tom answers from the slides alone.</>}{" "}
+            Pulling replaces it with the Doc. Share the Doc as “Anyone with the link can view”; Google Docs comments aren't pulled, so they make good private notes.
           </>
         )}
       </p>

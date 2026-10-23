@@ -25,6 +25,9 @@ import { basename, extname, join, resolve } from "node:path";
 //   POST /__projects/delete     { id }              → removes the folder
 //   POST /__projects/upload     { id, fileName, dataUrl } → { path }  into projects/<id>/images/
 //   GET  /__projects/images?id=<id>                 image names in projects/<id>/images/
+//   GET  /__projects/ask?id=<id>                    Ask AI Tom: on or off, the Google Doc, and ask.md's size and age
+//   POST /__projects/ask        { id, enabled?, source? } → the same, after setting them
+//   POST /__projects/ask-pull   { id }              → the same, after replacing ask.md with the Doc as markdown
 //
 //   GET  /apps/index.json                           one row per ingested app
 //   GET  /apps/<id>/…                               an app's files, straight from disk
@@ -227,6 +230,46 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
     return name;
   }
 
+  // ─── Ask AI Tom's document ───
+  // A project's ask.md can be pulled from a Google Doc, so it's written where
+  // it's easiest to keep adding to. Pulling is the only time the Doc is read:
+  // answering reads ask.md, so a question never waits on Google.
+  const askFile = (id: string) => join(dir, id, "ask.md");
+
+  function askInfo(id: string) {
+    const ask = read(id).ask ?? {};
+    const file = askFile(id);
+    const doc = existsSync(file) ? { chars: readFileSync(file, "utf8").length, updatedAt: statSync(file).mtimeMs } : null;
+    return { enabled: ask.enabled === true, source: typeof ask.source === "string" ? ask.source : null, doc };
+  }
+
+  /** The Doc's id from its address (or the id itself). */
+  const docId = (source: string) => source.match(/\/document\/d\/([\w-]+)/)?.[1] ?? (/^[\w-]{20,}$/.test(source) ? source : null);
+
+  async function pullAsk(id: string): Promise<[number, unknown]> {
+    const source = read(id).ask?.source;
+    const doc = typeof source === "string" ? docId(source) : null;
+    if (!doc) return [400, { error: "Add the Google Doc's link first" }];
+    // The export address works for a Doc shared as "Anyone with the link can
+    // view"; a private Doc answers with Google's sign-in page instead.
+    const res = await fetch(`https://docs.google.com/document/d/${doc}/export?format=md`, { redirect: "follow" });
+    const type = res.headers.get("content-type") ?? "";
+    if (!res.ok || type.includes("text/html")) {
+      return [502, { error: "Couldn't read the Doc. Share it as \"Anyone with the link can view\", then pull again." }];
+    }
+    const markdown = (await res.text())
+      // Pictures come as base64 data, which is no use to the model and can
+      // run to megabytes: drop them, and the references to them.
+      .replace(/^\[image\d+\]:\s*<?data:[^\n]*$/gm, "")
+      .replace(/!\[[^\]]*\]\[image\d+\]/g, "")
+      .replace(/!\[[^\]]*\]\(data:[^)]*\)/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    const note = `<!-- Pulled from ${source} on ${new Date().toISOString()}. Edit the Google Doc, not this file: the next pull replaces it. -->`;
+    writeFileSync(askFile(id), `${note}\n\n${markdown}\n`);
+    return [200, askInfo(id)];
+  }
+
   function handle(path: string, input: any): [number, unknown] {
     if (path === "/__projects/create") {
       const asked = typeof input.id === "string" && input.id ? input.id : null;
@@ -245,6 +288,19 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
       // Publishing is set from the list, so an editor's save never changes it.
       write(id, { ...input.data, draft: isDraft(id) });
       return [200, { ok: true }];
+    }
+    if (path === "/__projects/ask") {
+      const data = read(id);
+      const ask = { ...data.ask };
+      if (typeof input.enabled === "boolean") ask.enabled = input.enabled;
+      if (typeof input.source === "string") {
+        const source = input.source.trim();
+        if (source && !docId(source)) return [400, { error: "That isn't a Google Doc link" }];
+        if (source) ask.source = source;
+        else delete ask.source;
+      }
+      write(id, { ...data, ask });
+      return [200, askInfo(id)];
     }
     if (path === "/__projects/publish") {
       write(id, { ...read(id), draft: !input.published });
@@ -345,6 +401,11 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
           return reply(200, readdirSync(imagesDir(id)).filter((name) => IMAGE.test(name)));
         }
         if (req.method === "GET" && path === "/__apps/usage") return reply(200, appUsage());
+        if (req.method === "GET" && path === "/__projects/ask") {
+          const id = url.searchParams.get("id") ?? "";
+          if (!ID.test(id) || !existsSync(projectFile(id))) return reply(404, { error: "No such project" });
+          return reply(200, askInfo(id));
+        }
         if (req.method !== "POST") return next();
 
         let body = "";
@@ -352,6 +413,15 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
         req.on("end", () => {
           try {
             const input = JSON.parse(body);
+            // Pulling waits on Google; everything else is a local file write.
+            if (path === "/__projects/ask-pull") {
+              if (!ID.test(input.id ?? "") || !existsSync(projectFile(input.id))) return reply(404, { error: "No such project" });
+              pullAsk(input.id).then(
+                (result) => reply(...result),
+                (err) => reply(502, { error: `Couldn't reach Google: ${(err as Error).message}` }),
+              );
+              return;
+            }
             reply(...(path.startsWith("/__apps/") ? handleApps(path, input) : handle(path, input)));
           } catch (err) {
             reply(400, { error: (err as Error).message });

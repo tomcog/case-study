@@ -233,6 +233,14 @@ code {
   margin: 12px 0 0;
 }
 
+.ask__field {
+  margin-top: 16px;
+}
+
+.ask__note {
+  margin: 12px 0 0;
+}
+
 .tile__actions {
   display: flex;
   flex-wrap: wrap;

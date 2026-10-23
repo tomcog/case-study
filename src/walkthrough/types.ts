@@ -191,6 +191,9 @@ export interface WalkthroughContent {
     enabled?: boolean;
     /** The suggestion pills before the first question (ASK_SUGGESTIONS by default). */
     suggestions?: string[];
+    /** The Google Doc ask.md is pulled from, in ProjectBuilder. Pulling
+     * replaces ask.md; nothing reads the Doc when a question is asked. */
+    source?: string;
   };
   steps: WalkthroughStep[];
 }

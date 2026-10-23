@@ -36,6 +36,18 @@ export const createProject = (title: string, id?: string) =>
 export const saveProject = (id: string, data: ProjectContent) => post("save", { id, data });
 export const renameProject = (id: string, title: string) => post("rename", { id, title });
 export const moveProject = (id: string, to: string) => post<{ id: string }>("move", { id, to });
+
+/** Ask AI Tom for one project: whether it's on, the Google Doc its ask.md is
+ * pulled from, and that file's size and age. */
+export type AskInfo = { enabled: boolean; source: string | null; doc: { chars: number; updatedAt: number } | null };
+export async function getAsk(id: string): Promise<AskInfo> {
+  const res = await fetch(`/__projects/ask?id=${encodeURIComponent(id)}`);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? `Couldn't read Ask AI Tom (${res.status})`);
+  return json;
+}
+export const setAsk = (id: string, patch: { enabled?: boolean; source?: string }) => post<AskInfo>("ask", { id, ...patch });
+export const pullAsk = (id: string) => post<AskInfo>("ask-pull", { id });
 export const publishProject = (id: string, published: boolean) => post("publish", { id, published });
 export const duplicateProject = (id: string, title: string) => post<{ id: string }>("duplicate", { id, title });
 export const deleteProject = (id: string) => post("delete", { id });
