@@ -321,7 +321,26 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
             onClick={next}
             style={{ position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }}
           >
-            <SlideView screen={slide} play reduced={!!reduced} logoSrc={content.preview?.logo} />
+            {/* One slide to the next crossfades over a second. The incoming
+                slide is laid over the outgoing one and fades in while the old
+                one stays opaque beneath it, so the backgrounds blend without
+                the backdrop showing through between them. The content still
+                makes its own entrance on top of that. */}
+            <AnimatePresence initial={false}>
+              <motion.div
+                key={slide.id}
+                initial={{ opacity: 0, zIndex: 1 }}
+                animate={{ opacity: 1, zIndex: 1 }}
+                // Leaving is a wait, not a fade: the old slide has to stay up
+                // for as long as the new one takes to cover it. Its opacity
+                // only drops once the incoming one is fully opaque.
+                exit={{ opacity: 0, zIndex: 0, transition: { delay: reduced ? 0 : SLIDE_FADE, duration: 0.01 } }}
+                transition={{ duration: reduced ? 0 : SLIDE_FADE, ease: "linear" }}
+                style={{ position: "absolute", inset: 0 }}
+              >
+                <SlideView screen={slide} play reduced={!!reduced} logoSrc={content.preview?.logo} />
+              </motion.div>
+            </AnimatePresence>
 
             {/* A slide has no panel to carry the count, so it sits at the
                 foot of the slide; the toolbar does the moving. */}
@@ -382,8 +401,12 @@ const toolbarAt: React.CSSProperties = {
   zIndex: 1,
 };
 
+/** Seconds one slide's background takes to crossfade into the next's. */
+const SLIDE_FADE = 1;
+
 const slideCount: React.CSSProperties = {
   position: "absolute",
+  zIndex: 2,
   left: "50%",
   bottom: 22,
   transform: "translateX(-50%)",

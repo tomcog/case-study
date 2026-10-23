@@ -359,10 +359,11 @@ export function BasicCtaButton({ href, label, theme }: { href?: string; label?: 
 export function BasicText({ screen, colors, item, theme, titleSize = 51, bodySize = 19, gap = B_GAP, bodyColor, bodyLetterSpacing = "-0.01em", titleLetterSpacing = "0" }: { screen: Screen; colors: { eyebrow: string; title: string; body: string }; item: Variants; theme: "light" | "dark" | "red" | "image"; titleSize?: number; bodySize?: number; gap?: number; bodyColor?: string; bodyLetterSpacing?: string; titleLetterSpacing?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap }}>
+      {/* No entrance: the eyebrow is anchored (see eyebrowEl in ScreenView). */}
       {screen.eyebrow && (
-        <motion.div variants={item} style={{ fontSize: 20, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", lineHeight: 1, color: colors.eyebrow, whiteSpace: "pre-line", marginBottom: -10 }}>
+        <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", lineHeight: 1, color: colors.eyebrow, whiteSpace: "pre-line", marginBottom: -10 }}>
           {screen.eyebrow}
-        </motion.div>
+        </div>
       )}
       {screen.title && (
         <motion.div variants={item} style={{ fontSize: titleSize, fontWeight: 700, letterSpacing: titleLetterSpacing, lineHeight: 1.3, color: colors.title, whiteSpace: "pre-line" }}>
@@ -414,7 +415,10 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
   // this is stable and won't feedback-loop.
   const fitRef = useRef<HTMLDivElement>(null);
   const [fitScale, setFitScale] = useState(1);
-  const availH = STAGE_H - (screen.layout === "overview" ? 0 : 112) * 2;
+  // The centered layouts share the Basic templates' margin, so their eyebrow
+  // lands exactly where an Intro's does.
+  const pad = card ? 100 : B_M;
+  const availH = STAGE_H - (screen.layout === "overview" ? 0 : pad) * 2;
   useLayoutEffect(() => {
     // Full-bleed / split layouts manage their own margins and don't use the
     // uniform top-left fit-scale (it would drag text over an adjacent image half).
@@ -437,21 +441,26 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
   // can share the title's measure when desired.
   const titleMaxWidth = titleSize * 15;
 
+  // The eyebrow makes no entrance. It sits in the same place on every slide
+  // that has one, so moving from slide to slide it should hold still while the
+  // rest arrives around it — the crossfade between the two slides is all the
+  // change it gets, and an unchanged eyebrow doesn't visibly change at all.
+  // Its type and spacing are the Intro's (BasicText): 20px at line height 1,
+  // with 22px to the title (B_GAP less BasicText's -10 margin). It
+  // counter-scales the fit-to-page shrink so it always renders at a constant
+  // size, no matter how much text the slide has.
   const eyebrowEl = screen.eyebrow ? (
-    // The inner div counter-scales the fit-to-page shrink so the eyebrow always
-    // renders at a constant size, no matter how much text the slide has. (motion
-    // owns the outer transform for the entrance animation, so keep them separate.)
-    <motion.div variants={item} style={{ marginBottom: 24 }}>
+    <div style={{ marginBottom: B_GAP - 10 }}>
       <div
         style={{
-          fontSize: 16 * textScale, letterSpacing: "0.18em", textTransform: "uppercase",
+          fontSize: 20, lineHeight: 1, letterSpacing: "0.18em", textTransform: "uppercase",
           fontWeight: 600, color: screen.accent, whiteSpace: "pre-line", width: "fit-content",
           transform: fitScale < 1 ? `scale(${1 / fitScale})` : undefined, transformOrigin: "left top",
         }}
       >
         {screen.eyebrow}
       </div>
-    </motion.div>
+    </div>
   ) : null;
 
   const titleEl = screen.title ? (
@@ -672,10 +681,11 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
       <div style={{ position: "absolute", inset: 0, background: c.bg, overflow: "hidden" }}>
         {/* Image-theme background bleeds the whole viewport via a Stage backdrop (see backdropFor). */}
         <div style={{ position: "absolute", left: B_M, top: B_M + logoClear, right: B_M, bottom: B_M, zIndex: 1, textAlign: "left" }}>
+          {/* No entrance: the eyebrow is anchored (see eyebrowEl). */}
           {screen.eyebrow && (
-            <motion.div variants={item} style={{ fontSize: 20, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600, color: c.eyebrow, marginBottom: 24, whiteSpace: "pre-line" }}>
+            <div style={{ fontSize: 20, lineHeight: 1, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600, color: c.eyebrow, marginBottom: 30, whiteSpace: "pre-line" }}>
               {screen.eyebrow}
-            </motion.div>
+            </div>
           )}
           <motion.div variants={item} aria-hidden="true" style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 128, lineHeight: 0.85, fontWeight: 700, color: c.eyebrow, marginBottom: 8 }}>
             &ldquo;
@@ -782,7 +792,7 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
   // Project logo, top-left. It lives in the same (scaled) stage coordinate space
   // as the text, at the same left margin, so the two always share a left edge.
   const fullBleed = isBasic || screen.layout === "overview";
-  const logoLeft = fullBleed ? B_M : (card ? 100 : 112);
+  const logoLeft = fullBleed ? B_M : pad;
   const logoEl = screen.showLogo && logoSrc ? (
     <div style={{ position: "absolute", left: logoLeft, top: 12, width: 300, height: 80, zIndex: 3, pointerEvents: "none" }}>
       <LogoMark src={logoSrc} position="left top" style={{ width: "100%", height: "100%" }} />
@@ -799,9 +809,9 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
         // and manage their own margins; everything else is a centered content block.
         alignItems: (screen.layout === "overview" || isBasic) ? "stretch" : "flex-start",
         justifyContent: "center",
-        padding: screen.layout === "overview" || isBasic ? 0 : card ? 100 : 112, overflow: "hidden", boxSizing: "border-box",
+        padding: screen.layout === "overview" || isBasic ? 0 : pad, overflow: "hidden", boxSizing: "border-box",
         // Centered-flow layouts reserve extra top space for the corner logo.
-        ...(screen.layout === "overview" || isBasic ? {} : { paddingTop: (card ? 100 : 112) + logoClear }),
+        ...(screen.layout === "overview" || isBasic ? {} : { paddingTop: pad + logoClear }),
       }}
     >
       {/* Fit-to-page wrapper: shrinks the slide's content to fit when it overflows. */}
