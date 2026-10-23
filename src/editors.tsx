@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Plus, Trash2, ChevronDown, FolderOpen, Image as ImageIcon, Contrast, Layers } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, FolderOpen, Image as ImageIcon, Contrast, Layers } from "lucide-react";
 import { Button, ButtonRound } from "@tomcoggia/ui";
 import { RED as ACCENT, DEFAULT_ACCENT } from "./theme.js";
 import { useCaseStudyConfig } from "./config.js";
@@ -142,6 +142,13 @@ export function ImageField({ value, onChange, overlay, onOverlayChange, mono, on
 }
 
 export function OverviewEditor({ items, onChange, label = "Index items" }: { items: OverviewItem[]; onChange: (m: OverviewItem[]) => void; label?: string }) {
+  // Swapping an item with its neighbour. The number beside each one is its
+  // position, so it follows the move rather than the item.
+  const move = (i: number, by: -1 | 1) => {
+    const next = [...items];
+    [next[i], next[i + by]] = [next[i + by], next[i]];
+    onChange(next);
+  };
   return (
     <Field label={label}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -150,6 +157,8 @@ export function OverviewEditor({ items, onChange, label = "Index items" }: { ite
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <span style={{ fontSize: 11, color: "#8a857d", fontVariantNumeric: "tabular-nums" }}>{String(i + 1).padStart(2, "0")}</span>
               <textarea value={it.label} onChange={(e) => onChange(items.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Label" rows={1} style={{ ...inputStyle, resize: "vertical" }} />
+              <ButtonRound size="sm" variant="tertiary" icon={<ChevronUp size={14} />} onClick={() => move(i, -1)} disabled={i === 0} title="Move up" aria-label="Move up" />
+              <ButtonRound size="sm" variant="tertiary" icon={<ChevronDown size={14} />} onClick={() => move(i, 1)} disabled={i === items.length - 1} title="Move down" aria-label="Move down" />
               <ButtonRound size="sm" variant="tertiary" tone="danger" icon={<Trash2 size={14} />} onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label="Remove item" />
             </div>
             <textarea value={it.body} onChange={(e) => onChange(items.map((x, j) => j === i ? { ...x, body: e.target.value } : x))} rows={2} placeholder="Description" style={{ ...inputStyle, resize: "vertical" }} />

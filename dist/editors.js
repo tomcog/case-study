@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useState, useRef } from "react";
-import { Plus, Trash2, ChevronDown, FolderOpen, Image as ImageIcon, Contrast, Layers } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, FolderOpen, Image as ImageIcon, Contrast, Layers } from "lucide-react";
 import { Button, ButtonRound } from "@tomcoggia/ui";
 import { RED as ACCENT, DEFAULT_ACCENT } from "./theme.js";
 import { useCaseStudyConfig } from "./config.js";
@@ -60,7 +60,14 @@ export function ImageField({ value, onChange, overlay, onOverlayChange, mono, on
                         handleFile(f); e.target.value = ""; } })] }) }));
 }
 export function OverviewEditor({ items, onChange, label = "Index items" }) {
-    return (_jsx(Field, { label: label, children: _jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [items.map((it, i) => (_jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6, border: "1px solid #e3e0db", borderRadius: 8, padding: 8 }, children: [_jsxs("div", { style: { display: "flex", gap: 6, alignItems: "center" }, children: [_jsx("span", { style: { fontSize: 11, color: "#8a857d", fontVariantNumeric: "tabular-nums" }, children: String(i + 1).padStart(2, "0") }), _jsx("textarea", { value: it.label, onChange: (e) => onChange(items.map((x, j) => j === i ? { ...x, label: e.target.value } : x)), placeholder: "Label", rows: 1, style: { ...inputStyle, resize: "vertical" } }), _jsx(ButtonRound, { size: "sm", variant: "tertiary", tone: "danger", icon: _jsx(Trash2, { size: 14 }), onClick: () => onChange(items.filter((_, j) => j !== i)), "aria-label": "Remove item" })] }), _jsx("textarea", { value: it.body, onChange: (e) => onChange(items.map((x, j) => j === i ? { ...x, body: e.target.value } : x)), rows: 2, placeholder: "Description", style: { ...inputStyle, resize: "vertical" } })] }, it.id))), _jsx(Button, { variant: "ghost", size: "sm", icon: _jsx(Plus, { size: 14 }), onClick: () => onChange([...items, { id: `o-${Date.now()}`, label: "Section", body: "Describe this section." }]), style: addStyle, children: "Add item" })] }) }));
+    // Swapping an item with its neighbour. The number beside each one is its
+    // position, so it follows the move rather than the item.
+    const move = (i, by) => {
+        const next = [...items];
+        [next[i], next[i + by]] = [next[i + by], next[i]];
+        onChange(next);
+    };
+    return (_jsx(Field, { label: label, children: _jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [items.map((it, i) => (_jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6, border: "1px solid #e3e0db", borderRadius: 8, padding: 8 }, children: [_jsxs("div", { style: { display: "flex", gap: 6, alignItems: "center" }, children: [_jsx("span", { style: { fontSize: 11, color: "#8a857d", fontVariantNumeric: "tabular-nums" }, children: String(i + 1).padStart(2, "0") }), _jsx("textarea", { value: it.label, onChange: (e) => onChange(items.map((x, j) => j === i ? { ...x, label: e.target.value } : x)), placeholder: "Label", rows: 1, style: { ...inputStyle, resize: "vertical" } }), _jsx(ButtonRound, { size: "sm", variant: "tertiary", icon: _jsx(ChevronUp, { size: 14 }), onClick: () => move(i, -1), disabled: i === 0, title: "Move up", "aria-label": "Move up" }), _jsx(ButtonRound, { size: "sm", variant: "tertiary", icon: _jsx(ChevronDown, { size: 14 }), onClick: () => move(i, 1), disabled: i === items.length - 1, title: "Move down", "aria-label": "Move down" }), _jsx(ButtonRound, { size: "sm", variant: "tertiary", tone: "danger", icon: _jsx(Trash2, { size: 14 }), onClick: () => onChange(items.filter((_, j) => j !== i)), "aria-label": "Remove item" })] }), _jsx("textarea", { value: it.body, onChange: (e) => onChange(items.map((x, j) => j === i ? { ...x, body: e.target.value } : x)), rows: 2, placeholder: "Description", style: { ...inputStyle, resize: "vertical" } })] }, it.id))), _jsx(Button, { variant: "ghost", size: "sm", icon: _jsx(Plus, { size: 14 }), onClick: () => onChange([...items, { id: `o-${Date.now()}`, label: "Section", body: "Describe this section." }]), style: addStyle, children: "Add item" })] }) }));
 }
 export function GalleryEditor({ images, onChange }) {
     const set = (i, patch) => onChange(images.map((x, j) => j === i ? { ...x, ...patch } : x));
