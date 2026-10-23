@@ -1,16 +1,19 @@
 // ─── Ask AI Tom FAB ────────────────────────────────────────────────
-// The mark beside an "Ask AI Tom" label, pinned to the viewport's top right.
-// Opens the rail. On a phone-width viewport the label goes and the mark
-// stands alone. Ported from tomcoggia-com's AskAiFab.
+// The mark beside an "Ask AI Tom" label, pinned to the viewport's lower right,
+// the corner across from the player's toolbar and the one a running app is
+// least likely to use. (The site pins it top right, under its header.) Opens
+// the rail. On a phone-width viewport the label goes and the mark stands
+// alone. Ported from tomcoggia-com's AskAiFab.
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { INK, RED } from "../theme.js";
 import { AskMark } from "./AskMark.js";
 
-/** How far the FAB sits from the viewport's top right; the player's panel
- * clears this much at its top when it sits on the right. */
-export const FAB_INSET = { top: 24, right: 32 };
-export const FAB_CLEAR = FAB_INSET.top + 40;
+/** How far the FAB sits from the viewport's lower right (level with the
+ * toolbar's inset); the player's panel clears this much at its foot when the
+ * FAB is over it. */
+export const FAB_INSET = { bottom: 16, right: 24 };
+export const FAB_CLEAR = FAB_INSET.bottom + 40;
 
 const NARROW = "(max-width: 640px)";
 
@@ -35,7 +38,7 @@ export function AskFab({ onClick, hidden = false }: {
 
   const wrap: CSSProperties = {
     position: "fixed",
-    top: FAB_INSET.top,
+    bottom: FAB_INSET.bottom,
     right: narrow ? 16 : FAB_INSET.right,
     zIndex: 10,
     display: "flex",

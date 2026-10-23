@@ -208,8 +208,12 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
           flexDirection: "column",
           // The toolbar sits over the panel's lower left when the panel is on
           // the left, so the panel keeps its foot clear of it.
-          // …and its head clear of the Ask AI Tom FAB when it's under it.
-          padding: `${askOn && (narrow || content.panelSide === "right") ? FAB_CLEAR : 26}px 28px ${content.panelSide === "right" && !narrow ? 22 : 22 + TOOLBAR_CLEAR}px`,
+          // So does the Ask AI Tom FAB at its lower right, on a panel on the
+          // right or one taking the whole width.
+          padding: `26px 28px ${22 + Math.max(
+            content.panelSide === "right" && !narrow ? 0 : TOOLBAR_CLEAR,
+            askOn && (narrow || content.panelSide === "right") ? FAB_CLEAR : 0,
+          )}px`,
           overflowY: "auto",
         }}
       >
