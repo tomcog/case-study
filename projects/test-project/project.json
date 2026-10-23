@@ -20,7 +20,7 @@
           "accent": "#E51A38",
           "eyebrow": "Case Study",
           "title": "SimpleScreen CRC",
-          "body": "SimpleScreen CRC by Freenome is an FDA-approved non-invasive, blood-based screening test for colorectal cancer.",
+          "body": "",
           "items": [
             {
               "id": "o1",
@@ -70,35 +70,36 @@
           "fg": "#1a1a1a",
           "accent": "#E51A38",
           "eyebrow": "Case Study",
-          "title": "Reinventing the cancer-screening workflow",
-          "body": "How a clinician-first redesign cut order errors and gave a brand-new diagnostic its first real product.",
+          "title": "SimpleScreen CRC",
+          "body": "Bringing an FDA-Approved Blood-Based Cancer Screening Test to Market",
           "items": [
             {
               "id": "o1",
-              "label": "The Problem",
-              "body": "What problem did you set out to solve, and for whom?"
+              "label": "Role",
+              "body": "Founding Product Designer & UX Researcher"
             },
             {
               "id": "o2",
-              "label": "The Solution",
-              "body": "What did you design, and what changed as a result?"
+              "label": "Company",
+              "body": "Freenome"
+            },
+            {
+              "id": "o-1792728586470",
+              "label": "Timeline",
+              "body": "2021 - 2026"
             },
             {
               "id": "o3",
-              "label": "My Role",
-              "body": "Research, Interaction Design, Prototyping"
+              "label": "Scope",
+              "body": "Digital Platforms (Provider Portal, Lab Operations) + Physical Touchpoints (Kits, Labeling, Reports)"
             },
             {
               "id": "o4",
-              "label": "Timeline",
-              "body": "6 months · 2024"
-            },
-            {
-              "id": "o5",
-              "label": "Tools",
-              "body": "Figma, Miro, FigJam, Jira"
+              "label": "Milestone",
+              "body": "FDA Approval Preparation & Commercial Launch"
             }
-          ]
+          ],
+          "basicTheme": "light"
         }
       }
     },
@@ -131,14 +132,22 @@
       "app": "provider-portal",
       "start": "#/",
       "advance": {
-        "on": "click",
-        "mark": "order-test"
+        "on": "signal",
+        "name": ""
       },
+      "callouts": [
+        {
+          "text": "Orders numbers are generated to match the report numbers just be changing the prefix to RE",
+          "mark": "open-order",
+          "placement": "top"
+        }
+      ],
       "spotlight": {
-        "mark": "status-filter",
-        "dim": false
-      },
-      "callouts": []
+        "mark": "order-test",
+        "dim": false,
+        "spread": 25,
+        "strength": 0.24
+      }
     },
     {
       "id": "s3",
