@@ -18,15 +18,20 @@ import { z } from "zod";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const responseSchema = z.object({
+// Two shapes of reply. A jump to another step is only on offer where it can't
+// pull the reader out of the sequence: on the last step, or on one marked
+// `askLinks`. Everywhere else the field isn't there to fill.
+const textOnly = z.object({
   text: z.string().describe("The written answer."),
+});
+const withStep = textOnly.extend({
   step: z
     .object({ id: z.string(), label: z.string() })
     .optional()
     .describe("OMIT unless the visitor explicitly asked where something is or to see/go to it. Then: the step that shows it; id is the exact step id from STEPS, label is short button text."),
 });
 
-export type AskReply = z.infer<typeof responseSchema>;
+export type AskReply = z.infer<typeof withStep>;
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 export type AskEnv = {
@@ -70,7 +75,7 @@ export function sanitizeMessages(raw: unknown): ChatMessage[] {
 
 // ─── What the project says ───
 
-type StepCopy = { id: string; lines: string[] };
+type StepCopy = { id: string; lines: string[]; links: boolean };
 
 /** Copy fields worth reading aloud, by key. Ids, colors and URLs are not. */
 const COPY_KEYS = new Set(["eyebrow", "title", "body", "label", "value", "text", "caption", "quote", "attribution", "linkLabel"]);
@@ -104,7 +109,7 @@ function stepsOf(project: any): StepCopy[] {
     const lines: string[] = [];
     if (s?.content?.kind === "slide") copyOf(s.content.screen, lines);
     else copyOf({ eyebrow: s?.eyebrow, title: s?.title, body: s?.body, callouts: s?.callouts }, lines);
-    return { id: String(s?.id ?? `step-${i + 1}`), lines };
+    return { id: String(s?.id ?? `step-${i + 1}`), lines, links: s?.askLinks === true };
   });
 }
 
@@ -115,7 +120,7 @@ function loadDoc(dir: string): string {
   return readFileSync(file, "utf-8").replace(/<!--[\s\S]*?-->/g, "").trim();
 }
 
-function buildSystemPrompt(title: string, doc: string, steps: StepCopy[], at: number | null): string {
+function buildSystemPrompt(title: string, doc: string, steps: StepCopy[], at: number | null, links: boolean): string {
   const stepLines = steps.length
     ? steps
         .map((s, i) => `Step ${i + 1} of ${steps.length} — id: ${s.id}${i === at ? "  ← THE READER IS HERE" : ""}\n${s.lines.map((l) => `    ${l}`).join("\n") || "    (no copy)"}`)
@@ -130,7 +135,7 @@ function buildSystemPrompt(title: string, doc: string, steps: StepCopy[], at: nu
     "Rules:",
     "- Everything you say about this project must come ONLY from THE DOCUMENT",
     "  and STEPS below. Never invent or embellish. If something isn't there, say",
-    "  so plainly (e.g. \"I haven't written that up here yet\").",
+    "  so plainly, as yourself and in your own words — not a stock line.",
     "- You MAY briefly explain a general term or concept that comes up (e.g.",
     "  \"what is a liquid biopsy?\") from general knowledge. Keep it short, then",
     "  bring it back to the project.",
@@ -147,13 +152,26 @@ function buildSystemPrompt(title: string, doc: string, steps: StepCopy[], at: nu
     "  did about it. Plain words first; a technical term only when it's the",
     "  right word, explained in passing if a visitor might not know it.",
     "  Approachable never means vague: every fact you state stays exact.",
+    "- SPEAK FROM MEMORY: the sources below are your own memory of your own",
+    "  work, not something you're reading alongside the visitor. State what you",
+    "  know as plain fact, the way you'd recall it (\"I was at Freenome from 2021",
+    "  to 2026\"). Never refer to your sources or hedge toward them: no \"based",
+    "  on what's here\", \"according to the document\", \"from what I can see\",",
+    "  \"it looks like\", \"the slides say\", \"it's listed as\", \"this write-up\",",
+    "  \"what I've written here\", \"I don't cover that\". That holds when the",
+    "  answer is missing too: say it as a person would (\"I'd rather not guess",
+    "  at that\"), not as a document that lacks a section. The visitor should",
+    "  never be able to tell there is a document at all. (A step they're",
+    "  looking at is fine to point to — \"the screen you're on\" — since they can",
+    "  see it too.)",
     "- STEPS is what the visitor is clicking through, in order. When they say",
     "  \"this\", \"here\" or \"this screen\", they mean the step marked THE READER IS",
     "  HERE. You can refer to other steps by what they show.",
     "- NEVER GUESS A HARD FACT. Numbers, dates, names, regulatory status and",
     "  outcomes must be copied from the sources below, not inferred. If the",
     "  answer isn't there, say you'd rather share that directly and point them",
-    "  to tom.coggia@gmail.com.",
+    "  to tom.coggia@gmail.com. The same goes for reasons: don't link two facts",
+    "  with a cause (\"that dropped because…\") unless the sources give it.",
     "- This chat is about this project. For questions about the rest of your",
     "  career or other work, answer only if THE DOCUMENT covers it; otherwise say",
     "  warmly that this chat is about this project, and that the Ask AI Tom on",
@@ -162,13 +180,25 @@ function buildSystemPrompt(title: string, doc: string, steps: StepCopy[], at: nu
     "- Questions about salary, availability, or why you left a role: don't",
     "  speculate. Point them to tom.coggia@gmail.com.",
     "- Always populate `text`. Plain prose; **bold** is the only formatting.",
-    "- STEP LINKS: set `step` ONLY when the visitor asks to see, find or go to",
-    "  something a specific step shows (\"where's the research?\", \"show me the",
-    "  results\"). Never add one to an answer they didn't ask to navigate from.",
-    "  Then `step` is { id: <the exact id from STEPS>, label: <short button text",
-    "  naming what that step shows, e.g. \"Go to the research\"> }. Only use an id",
-    "  that appears in STEPS, never the step they're already on. Don't cite step",
-    "  numbers in `text`; the button does the pointing.",
+    ...(links
+      ? [
+          "- STEP LINKS: set `step` ONLY when the visitor asks to see, find or go to",
+          "  something a specific step shows (\"where's the research?\", \"show me the",
+          "  results\"). Never add one to an answer they didn't ask to navigate from.",
+          "  Then `step` is { id: <the exact id from STEPS>, label: <short button text",
+          "  naming what that step shows, e.g. \"Go to the research\"> }. Only use an id",
+          "  that appears in STEPS, never the step they're already on. Don't cite step",
+          "  numbers in `text`; the button does the pointing.",
+        ]
+      : [
+          "- KEEP THEM IN SEQUENCE: the visitor is partway through a presentation",
+          "  that runs in order. Don't send them to other steps or tell them to skip",
+          "  ahead or go back. If they ask about something a later step covers,",
+          "  answer it here; you may say it comes up later on, but never say which",
+          "  step, how far ahead, or that it's the last one. If they ask to go",
+          "  somewhere, tell them the arrows at the lower left move back and",
+          "  forward through it.",
+        ]),
     "",
     "=== THE DOCUMENT (your own writing about this project) ===",
     doc || "(Nothing written yet. Answer from STEPS alone.)",
@@ -195,11 +225,13 @@ export async function answer(projectsDir: string, body: AskRequest, env: AskEnv)
   const messages = sanitizeMessages(body.messages);
   const steps = stepsOf(project);
   const at = typeof body.stepIndex === "number" && body.stepIndex >= 0 && body.stepIndex < steps.length ? body.stepIndex : null;
+  // Jumps only from the end of the presentation, or a step marked for them.
+  const links = at != null && (at === steps.length - 1 || steps[at].links);
 
-  const { object } = await generateObject({
+  const { object }: { object: AskReply } = await generateObject({
     model: resolveModel(env),
-    schema: responseSchema,
-    system: buildSystemPrompt(String(project.title || id), loadDoc(dir), steps, at),
+    schema: links ? withStep : textOnly,
+    system: buildSystemPrompt(String(project.title || id), loadDoc(dir), steps, at, links),
     messages,
   });
 

@@ -171,6 +171,10 @@ export interface WalkthroughStep {
   advance: StepAdvance;
   /** ms to wait before the panel offers a way past this step (default 12000). */
   nudgeAfter?: number;
+  /** Lets Ask AI Tom offer a jump to another step while the reader is on this
+   * one. Off everywhere else, so an answer can't pull a reader out of the
+   * sequence mid-presentation; the last step always allows it. */
+  askLinks?: boolean;
 }
 
 export interface WalkthroughContent {
