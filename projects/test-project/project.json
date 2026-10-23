@@ -2,6 +2,9 @@
   "schemaVersion": 6,
   "title": "SimpleScreen CRC",
   "draft": true,
+  "ask": {
+    "enabled": true
+  },
   "steps": [
     {
       "id": "step-mvj4xony-356",

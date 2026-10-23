@@ -22,6 +22,9 @@ import type { Driver } from "./driver.js";
 import { bootsApp, contentOf, stepMarks } from "./types.js";
 import type { Callout, StepAction, StepAdvance, WalkthroughContent } from "./types.js";
 import type { IngestedApp } from "../project.js";
+import { useCaseStudyConfig } from "../config.js";
+import { AskFab, FAB_CLEAR } from "../ask/AskFab.js";
+import { AskRail } from "../ask/AskRail.js";
 
 const PANEL_W = 400;
 const LINE = "#e6e4e1";
@@ -60,12 +63,15 @@ async function perform(driver: Driver, actions: StepAction[], live: () => boolea
   }
 }
 
-export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }: {
+export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectId, onExit }: {
   content: WalkthroughContent;
   /** The pool this walkthrough's steps draw from; a step stores an app's id,
    * and where that app is served from is the host's to say. */
   apps?: IngestedApp[];
   startIndex?: number;
+  /** The project's id, which Ask AI Tom asks about. With the host's `ask`
+   * endpoint and `content.ask.enabled`, the player shows the FAB. */
+  projectId?: string;
   onExit?: () => void;
 }) {
   const { steps } = content;
@@ -87,6 +93,14 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
   const shown = contentOf(step);
   const demo = useApp(app?.src, markIds, app);
   const { driver, measure } = demo;
+
+  // Ask AI Tom: on where the host and the project both say so.
+  const { ask } = useCaseStudyConfig();
+  const askOn = !!ask && !!projectId && !!content.ask?.enabled;
+  const [askOpen, setAskOpen] = useState(false);
+  const askOpenRef = useRef(false);
+  askOpenRef.current = askOpen;
+  const closeAsk = useCallback(() => setAskOpen(false), []);
 
   const next = useCallback(() => setI((n) => n + 1), []);
   const back = useCallback(() => setI((n) => Math.max(0, n - 1)), []);
@@ -135,6 +149,9 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
     // where the panel would offer it: a step waiting on the reader has no Next
     // button, so the arrow doesn't quietly skip it either.
     const onKey = (e: KeyboardEvent) => {
+      // While the rail is open the keys are its: Esc closes it, and the arrows
+      // move the caret in its field rather than the walkthrough.
+      if (askOpenRef.current) return;
       if (e.key === "Escape") onExit?.();
       if (e.key === "ArrowLeft") back();
       if (e.key === "ArrowRight" && canGoOn.current) next();
@@ -191,7 +208,8 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
           flexDirection: "column",
           // The toolbar sits over the panel's lower left when the panel is on
           // the left, so the panel keeps its foot clear of it.
-          padding: `26px 28px ${content.panelSide === "right" && !narrow ? 22 : 22 + TOOLBAR_CLEAR}px`,
+          // …and its head clear of the Ask AI Tom FAB when it's under it.
+          padding: `${askOn && (narrow || content.panelSide === "right") ? FAB_CLEAR : 26}px 28px ${content.panelSide === "right" && !narrow ? 22 : 22 + TOOLBAR_CLEAR}px`,
           overflowY: "auto",
         }}
       >
@@ -371,6 +389,26 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
           </Segment>
         </SegmentedControl>
       </Toolbar>
+
+      {askOn && (
+        <>
+          <AskFab onClick={() => setAskOpen(true)} hidden={askOpen} />
+          <AskRail
+            open={askOpen}
+            onClose={closeAsk}
+            title={content.title}
+            projectId={projectId!}
+            stepIds={steps.map((s) => s.id)}
+            stepIndex={Math.min(i, steps.length - 1)}
+            suggestions={content.ask?.suggestions}
+            // Going to a step means seeing it: the rail steps aside.
+            onStep={(to) => {
+              setAskOpen(false);
+              setI(to);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

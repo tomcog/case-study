@@ -587,7 +587,13 @@ function PlayProject({ id }: { id: string }) {
   if (!state) return null;
   if ("error" in state) return <Status>{state.error}</Status>;
   const { project } = state;
-  return <ProjectPlayer content={project} apps={apps} onExit={() => go("#/")} />;
+  return (
+    // Ask AI Tom's endpoint is the dev server's (app/ask-plugin.ts); the
+    // read-only build has none yet, so it shows no FAB.
+    <CaseStudyProvider ask={canEdit ? { endpoint: "/api/ask" } : undefined}>
+      <ProjectPlayer content={project} apps={apps} projectId={id} onExit={() => go("#/")} />
+    </CaseStudyProvider>
+  );
 }
 
 // ─── Edit ──────────────────────────────────────────────────────────

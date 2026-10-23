@@ -28,6 +28,13 @@ export { renderStyledText } from "./ui/renderStyledText.js";
 export { WalkthroughPlayer as ProjectPlayer } from "./walkthrough/WalkthroughPlayer.js";
 export { WalkthroughBuilder as ProjectBuilder } from "./walkthrough/WalkthroughBuilder.js";
 export { sameOriginDriver } from "./walkthrough/driver.js";
+
+// Ask AI Tom: the player mounts these itself; exported so a host can use the same pieces.
+export { AskFab } from "./ask/AskFab.js";
+export { AskRail } from "./ask/AskRail.js";
+export { AskChat, ASK_SUGGESTIONS } from "./ask/AskChat.js";
+export type { AskChatProps } from "./ask/AskChat.js";
+export { AskMark } from "./ask/AskMark.js";
 export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, isLive, slideOf, stepLabel, stepMarks } from "./walkthrough/types.js";
 export type { Driver, MarkRect, MarkRects, PickHit } from "./walkthrough/driver.js";
 export type {

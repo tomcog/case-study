@@ -180,6 +180,14 @@ export interface WalkthroughContent {
   preview?: ProjectPreview;
   /** Which side the copy sits on (default "left"). */
   panelSide?: "left" | "right";
+  /** Ask AI Tom about this project. What it answers from is the project's
+   * ask.md beside project.json, read by the host's endpoint, never shipped. */
+  ask?: {
+    /** Shows the FAB, where the host has given an endpoint and an id. */
+    enabled?: boolean;
+    /** The suggestion pills before the first question (ASK_SUGGESTIONS by default). */
+    suggestions?: string[];
+  };
   steps: WalkthroughStep[];
 }
 

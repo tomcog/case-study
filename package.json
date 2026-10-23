@@ -35,16 +35,20 @@
     "react-dom": ">=18"
   },
   "devDependencies": {
+    "@ai-sdk/anthropic": "^3.0.135",
+    "@ai-sdk/google": "^3.0.137",
     "@tomcoggia/ui": "github:tomcog/component-library#v0.86.0",
     "@types/node": "^22.20.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.4.1",
+    "ai": "^6.0.314",
     "motion": "12.23.24",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.6.0",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "zod": "^4.6.7"
   },
   "allowScripts": {
     "github:tomcog/component-library#6c1fcdd9d36233838a3569d59ef815dafb1d9348": true

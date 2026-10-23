@@ -336,7 +336,8 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
       const drafts = new Set(ids().filter(isDraft).map((id) => join(dir, id)));
       cpSync(dir, join(outDir, "projects"), {
         recursive: true,
-        filter: (src) => basename(src) !== ".DS_Store" && !drafts.has(src),
+        // ask.md is Ask AI Tom's document, read by the endpoint and never served.
+        filter: (src) => basename(src) !== ".DS_Store" && basename(src) !== "ask.md" && !drafts.has(src),
       });
       writeFileSync(join(outDir, "projects", "index.json"), `${JSON.stringify(index({ drafts: false }), null, 2)}\n`);
 
