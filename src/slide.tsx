@@ -10,9 +10,10 @@ import {
   screenTheme, bleedBg, backdropFor, Stage, ScreenView,
 } from "./core.js";
 import type { ScreenLayout, Theme, Screen } from "./core.js";
+import { Segment, SegmentedControl } from "@tomcoggia/ui";
 import {
   MetricsEditor, ImageField, OverviewEditor, GalleryEditor, StatEditor, Field, ColorInput,
-  inputStyle,
+  CopyInput, inputStyle,
 } from "./editors.js";
 
 const LAYOUTS: { value: ScreenLayout; label: string }[] = [
@@ -64,7 +65,7 @@ export function newScreen(): Screen {
  * `play` runs the entrance; a builder leaves it off, because the slide is
  * being edited rather than arrived at. `reduced` picks the reduced-motion
  * variants. */
-export function SlideView({ screen, play = false, reduced = false, logoSrc, onAnnotationMove }: {
+export function SlideView({ screen, play = false, reduced = false, logoSrc, onAnnotationMove, footnote, onNext }: {
   screen: Screen;
   play?: boolean;
   reduced?: boolean;
@@ -73,10 +74,14 @@ export function SlideView({ screen, play = false, reduced = false, logoSrc, onAn
    * annotated layout has any, and ScreenView hands it to that layout alone,
    * so a caller doesn't have to know which one that is. */
   onAnnotationMove?: (id: string, x: number, y: number) => void;
+  /** A line the host sets at the foot of the content area, after the build. */
+  footnote?: string;
+  /** What a next button on the slide does: the player moves on a step. */
+  onNext?: () => void;
 }) {
   return (
     <Stage key={screen.id} background={bleedBg(screen)} backdrop={backdropFor(screen)}>
-      <ScreenView screen={screen} play={play} reduced={reduced} logoSrc={logoSrc} onAnnotationMove={onAnnotationMove} />
+      <ScreenView screen={screen} play={play} reduced={reduced} logoSrc={logoSrc} onAnnotationMove={onAnnotationMove} footnote={footnote} onNext={onNext} />
     </Stage>
   );
 }
@@ -105,17 +110,21 @@ export function SlideFields({ screen, update, logoSrc }: {
         </Field>
 
         <Field label="Eyebrow">
-          <textarea value={screen.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} rows={1} style={{ ...inputStyle, resize: "vertical" }} />
+          <CopyInput value={screen.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} rows={1} style={{ ...inputStyle, resize: "vertical" }} />
         </Field>
 
         <Field label="Title">
-          <textarea value={screen.title ?? ""} onChange={(e) => update({ title: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
+          <CopyInput value={screen.title ?? ""} onChange={(e) => update({ title: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
         </Field>
 
         {!["metrics", "gallery", "showcase"].includes(screen.layout) && (
           <Field label={screen.layout === "bento" ? "Body (text cell)" : "Body"}>
-            <textarea value={screen.body ?? ""} onChange={(e) => update({ body: e.target.value })} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+            <CopyInput value={screen.body ?? ""} onChange={(e) => update({ body: e.target.value })} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
           </Field>
+        )}
+
+        {["cover", "overview", "basic1", "basic2"].includes(screen.layout) && (
+          <ImageField label="Image under the body" value={screen.bodyImage ?? ""} onChange={(v) => update({ bodyImage: v || undefined })} />
         )}
 
         {screen.layout === "video" && (
@@ -222,9 +231,20 @@ export function SlideFields({ screen, update, logoSrc }: {
           </>
         )}
 
-        <Field label="Link button (opens in new tab)" collapsible>
-          <input value={screen.linkUrl ?? ""} onChange={(e) => update({ linkUrl: e.target.value })} placeholder="https://… (e.g. Figma prototype)" style={inputStyle} />
-          <input value={screen.linkLabel ?? ""} onChange={(e) => update({ linkLabel: e.target.value })} placeholder="Button label (default: View prototype)" style={{ ...inputStyle, marginTop: 6 }} />
+        <Field label="Button" collapsible>
+          <SegmentedControl size="md" aria-label="What the button does" style={{ maxWidth: "100%", marginBottom: 6 }}>
+            <Segment selected={screen.linkAction !== "next"} onClick={() => update({ linkAction: undefined })}>Link</Segment>
+            <Segment selected={screen.linkAction === "next"} onClick={() => update({ linkAction: "next" })}>Next step</Segment>
+          </SegmentedControl>
+          {screen.linkAction !== "next" && (
+            <input value={screen.linkUrl ?? ""} onChange={(e) => update({ linkUrl: e.target.value })} placeholder="https://… (opens in a new tab)" style={inputStyle} />
+          )}
+          <input value={screen.linkLabel ?? ""} onChange={(e) => update({ linkLabel: e.target.value })}
+            placeholder={screen.linkAction === "next" ? "Button label (default: Next)" : "Button label (default: View prototype)"} style={{ ...inputStyle, marginTop: 6 }} />
+          <SegmentedControl size="md" aria-label="How the button looks" style={{ maxWidth: "100%", marginTop: 6 }}>
+            <Segment selected={screen.linkStyle !== "ghost"} onClick={() => update({ linkStyle: undefined })}>Default</Segment>
+            <Segment selected={screen.linkStyle === "ghost"} onClick={() => update({ linkStyle: "ghost" })}>Ghost</Segment>
+          </SegmentedControl>
         </Field>
 
         <Field label="Logo">

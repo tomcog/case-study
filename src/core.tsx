@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { Fragment, createContext, useContext, useState, useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import { Lightbox, LightboxTrigger } from "./ui/Lightbox.js";
-import { motion, Variants } from "motion/react";
-import { ExternalLink } from "lucide-react";
+import { motion, useAnimate, useReducedMotion, Variants } from "motion/react";
+import { ArrowRight, ExternalLink } from "lucide-react";
 import { CaseStudyThumb } from "./ui/CaseStudyThumb.js";
 import { CaseStudyLink } from "./ui/CaseStudyLink.js";
 import { LogoMark } from "./ui/LogoMark.js";
 import { getVideoEmbedUrl, isVideoSrc } from "./video.js";
 import { RED, INK, DEFAULT_ACCENT, OVERLAY_GRADIENT, MONO_FILTER } from "./theme.js";
+import { renderStyledText, splitPauses } from "./ui/renderStyledText.js";
 
 // ─── Data model ────────────────────────────────────────────────────
 // A Screen is one composed slide: a layout and one flat bag of optional
@@ -53,11 +54,14 @@ export interface Screen {
   body?: string;
   imageUrl?: string;
   imageUrl2?: string;
+  bodyImage?: string;  // an image under the body, in the text column (Intro, Title Card, Basic 1 & 2)
   overlay?: boolean;   // Image-theme gradient toggle (Basic / Title Card / Intro)
   mono?: boolean;      // Grayscale and 25% darker; independent of `overlay`
   videoUrl?: string;   // "video" layout: YouTube/Vimeo/mp4 to embed
   linkUrl?: string;    // optional outbound CTA (e.g. a Figma prototype) — opens in a new tab
-  linkLabel?: string;  // CTA button label (defaults to "View prototype")
+  linkLabel?: string;  // CTA button label (defaults to "View prototype", or "Next" for a next button)
+  linkAction?: "next"; // the button moves on to the next step instead of opening linkUrl; absent is a link
+  linkStyle?: "ghost"; // the button is a 1px white outline with no fill; absent is the filled default
   basicTheme?: "light" | "dark" | "red" | "image"; // Basic templates (image = basic1 only)
   basicTextSide?: "left" | "right"; // Basic 2-column: which half the text sits in
   basicImage?: "off" | "fit" | "fill" | "bleed" | "desktop" | "mobile"; // Basic 2-column image on the opposite half
@@ -230,23 +234,146 @@ export const buildContainer: Variants = {
   show: { transition: { staggerChildren: 0.13, delayChildren: 0.22 } },
 };
 
+// An item's `custom` is the time of each pause inside it (see built), and its
+// copy's paused runs are its variant children, so `delayChildren` holds each
+// one back until its beat. The item itself keeps the stagger it is given.
+const pausing = (ats: number[] = []) => ({ delayChildren: (i: number) => ats[i] ?? 0 });
+
 export const buildItem: Variants = {
   hidden: { opacity: 0, y: 30 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: EASE } },
+  show: (ats?: number[]) => ({ opacity: 1, y: 0, transition: { duration: 0.65, ease: EASE, ...pausing(ats) } }),
 };
 
 export const reducedItem: Variants = {
   hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { duration: 0.3 } },
+  show: (ats?: number[]) => ({ opacity: 1, transition: { duration: 0.3, ...pausing(ats) } }),
 };
 
-// Space between body paragraphs = 75% of the font size. Applied by rendering
-// each newline-separated paragraph as its own <p> inside a flex column whose
-// `gap` is set to PARA_GAP (em = the container's font size).
+/** The build container for a slide whose copy may pause. Each item still
+ * arrives on the stagger, plus every pause in the items before it, so a pause
+ * holds up the rest of the build rather than only its own text. Motion hands
+ * `delayChildren` an index in document order, so the pauses are read off the
+ * items' `data-build` in that same order. If the count doesn't match, it falls
+ * back to the plain stagger rather than guess. */
+export function pausedContainer(root: React.RefObject<HTMLElement | null>): Variants {
+  return {
+    hidden: {},
+    show: {
+      transition: {
+        delayChildren: (i: number, n: number) => {
+          const items = root.current?.querySelectorAll<HTMLElement>("[data-build]");
+          let held = 0;
+          if (items?.length === n) for (let j = 0; j < i; j++) held += Number(items[j].dataset.build) || 0;
+          return 0.22 + 0.13 * i + held;
+        },
+      },
+    },
+  };
+}
+
+/** Seconds until a pausedContainer's build has started its last item: the
+ * stagger across every item, plus every pause in them. */
+function buildLength(root: HTMLElement | null): number {
+  const items = [...(root?.querySelectorAll<HTMLElement>("[data-build]") ?? [])];
+  return 0.22 + 0.13 * Math.max(items.length - 1, 0) + items.reduce((t, el) => t + (Number(el.dataset.build) || 0), 0);
+}
+
+// A paused run arrives on its own once its beat comes: a whole paragraph rises
+// as an item does; a run inside a line can only fade, since an inline box
+// won't take a transform.
+const revealBlock: Variants = buildItem;
+const revealInline: Variants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.65, ease: EASE } } };
+
+/** Whether copy is being drawn inside a slide's build, where its pauses play.
+ * Anywhere else (a panel, a preview card, an eyebrow, which makes no entrance)
+ * they are only stripped. */
+const BuildContext = createContext(false);
+
+// Every copy field holds two kinds of break. A blank line ends a paragraph
+// (Return in the editor, see CopyInput); a single newline is a line break
+// inside one (⌘Return), which keeps the tighter spacing of a line. Stored copy
+// relies on this, so changing it breaks existing projects.
+
+/** Space between paragraphs: 75% of the font size. */
 export const PARA_GAP = "0.75em";
-export function Paragraphs({ text }: { text?: string }) {
-  const paras = (text ?? "").split("\n").filter((l) => l.trim() !== "");
-  return <>{paras.map((p, i) => <p key={i} style={{ margin: 0 }}>{p}</p>)}</>;
+
+/** A copy field's paragraphs, in order, each still holding its line breaks.
+ * Runs of blank lines count as one break, and empty paragraphs are dropped. */
+export function splitParagraphs(text?: string): string[] {
+  return (text ?? "").split(/\n[^\S\n]*\n/).map((p) => p.replace(/^\n+|\n+$/g, "")).filter((p) => p.trim() !== "");
+}
+
+/** A copy field's paragraphs, each cut into runs at its pauses, with the
+ * seconds the build waits before each run. A pause with nothing after it in
+ * its paragraph carries over to the next; one at the very end is `trail`, a
+ * wait before whatever builds after this copy. */
+export function pausedParagraphs(text?: string): { paras: { wait: number; text: string }[][]; trail: number } {
+  const paras: { wait: number; text: string }[][] = [];
+  let carry = 0;
+  for (const p of splitParagraphs(text)) {
+    const runs: { wait: number; text: string }[] = [];
+    for (const run of splitPauses(p)) {
+      const wait = carry + run.wait;
+      if (run.text.trim() === "") { carry = wait; continue; }
+      carry = 0;
+      runs.push({ wait, text: run.text });
+    }
+    if (runs.length) paras.push(runs);
+  }
+  return { paras, trail: carry };
+}
+
+/** What a build item needs to know about the copy in it, spread onto the
+ * item: `custom`, the time of each pause from the item's start in the order
+ * its runs are drawn, and `data-build`, how long it holds up the rest of the
+ * slide. Pass every copy field the item draws, in drawing order; an item with
+ * none still takes `built()`, so pausedContainer can count it. */
+export function built(...texts: (string | undefined)[]): { custom: number[]; "data-build": number } {
+  const ats: number[] = [];
+  let t = 0;
+  for (const text of texts) {
+    const { paras, trail } = pausedParagraphs(text);
+    for (const runs of paras) for (const run of runs) if (run.wait > 0) ats.push(t += run.wait);
+    t += trail;
+  }
+  return { custom: ats, "data-build": t };
+}
+
+/** Copy as it was typed: a block per paragraph, PARA_GAP apart, and its line
+ * breaks kept. Spans rather than <p>, so it can sit inside a heading or a
+ * blockquote. `styled` runs the inline markup (renderStyledText); `nowrap`
+ * breaks only where the author did; `lead` goes in front of the first
+ * paragraph, inline with it. Inside a slide's build, a run after a pause is
+ * a variant child of its item, which times it (built); elsewhere the pause is
+ * just dropped. Every place copy is drawn goes through here. */
+export function Paragraphs({ text, styled = false, nowrap = false, lead }: { text?: string; styled?: boolean; nowrap?: boolean; lead?: React.ReactNode }) {
+  const building = useContext(BuildContext);
+  const reduced = useReducedMotion();
+  const draw = (s: string) => (styled ? renderStyledText(s) : s);
+  return (
+    <>
+      {pausedParagraphs(text).paras.map((runs, i) => {
+        const style: React.CSSProperties = { display: "block", marginTop: i ? PARA_GAP : 0, whiteSpace: nowrap ? "pre" : "pre-line" };
+        // A paragraph that is one paused run arrives whole.
+        if (building && runs.length === 1 && runs[0].wait > 0) {
+          return (
+            <motion.span key={i} variants={reduced ? reducedItem : revealBlock} style={style}>
+              {i === 0 && lead}
+              {draw(runs[0].text)}
+            </motion.span>
+          );
+        }
+        return (
+          <span key={i} style={style}>
+            {i === 0 && lead}
+            {runs.map((run, j) => building && run.wait > 0
+              ? <motion.span key={j} variants={reduced ? reducedItem : revealInline}>{draw(run.text)}</motion.span>
+              : <Fragment key={j}>{draw(run.text)}</Fragment>)}
+          </span>
+        );
+      })}
+    </>
+  );
 }
 
 /** Numbered annotation dots overlaid on the Annotated (showcase) image, matching
@@ -335,49 +462,77 @@ export function basicColors(theme: "light" | "dark" | "red" | "image", imageText
 
 /** CTA pill for the Basic templates. Red/white by default (black on hover);
  * inverts to white/red on the Red theme where a red pill would vanish. */
-export function BasicCtaButton({ href, label, theme }: { href?: string; label?: string; theme: "light" | "dark" | "red" | "image" }) {
+/** The slide's button, or null for none. A link opens its URL in a new tab; a
+ * next button moves the player on a step, and shows whether or not a URL was
+ * ever typed. Either way a click on it is the button's alone — the player
+ * also moves on for a click anywhere on a slide, and must not do it twice, or
+ * at all for a link. */
+export function slideButton(screen: Screen, onNext?: () => void): { href?: string; label: string; next: boolean; onClick: (e: React.MouseEvent) => void } | null {
+  if (screen.linkAction === "next") {
+    return { label: screen.linkLabel || "Next", next: true, onClick: (e) => { e.stopPropagation(); onNext?.(); } };
+  }
+  if (!screen.linkUrl && !screen.linkLabel) return null;
+  return { href: screen.linkUrl, label: screen.linkLabel || "View prototype", next: false, onClick: (e) => e.stopPropagation() };
+}
+
+export function BasicCtaButton({ href, label, theme, onClick, ghost = false }: { href?: string; label?: string; theme: "light" | "dark" | "red" | "image"; onClick?: (e: React.MouseEvent) => void; ghost?: boolean }) {
   const [hover, setHover] = useState(false);
   const onRed = theme === "red";
+  // Ghost is the same pill as a white 1px outline with no fill; the border
+  // comes out of the padding, so the two are the same size.
   const style: React.CSSProperties = {
     display: "inline-flex", alignItems: "center", gap: 8,
-    background: onRed ? (hover ? "#f0e6e6" : "#ffffff") : (hover ? "#000000" : B_RED),
-    color: onRed ? B_RED : "#ffffff",
-    textDecoration: "none", border: "none", borderRadius: 999, padding: "13px 26px",
+    background: ghost ? (hover ? "rgba(255,255,255,0.14)" : "transparent") : onRed ? (hover ? "#f0e6e6" : "#ffffff") : (hover ? "#000000" : B_RED),
+    color: !ghost && onRed ? B_RED : "#ffffff",
+    textDecoration: "none", border: ghost ? "1px solid #ffffff" : "none", borderRadius: 999, padding: ghost ? "12px 25px" : "13px 26px",
     fontSize: 16, fontWeight: 600, cursor: "pointer", width: "fit-content", transition: "background 0.15s ease",
   };
   const hoverProps = { onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) };
   const external = href ? /^https?:\/\//i.test(href) : false;
   const text = label || "View prototype";
   return href
-    ? <a href={href} style={style} {...hoverProps} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{text}</a>
-    : <span style={style} {...hoverProps}>{text}</span>;
+    ? <a href={href} style={style} onClick={onClick} {...hoverProps} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{text}</a>
+    : <button type="button" style={style} onClick={onClick} {...hoverProps}>{text}</button>;
 }
 
 /** Eyebrow / Title / Body (+ optional CTA) for the Basic templates, per the
  * iconAtomic type ramp. Title/body sizes are overridable (Title Card runs
  * larger); the eyebrow is always the same size across all layouts. */
-export function BasicText({ screen, colors, item, theme, titleSize = 51, bodySize = 19, gap = B_GAP, bodyColor, bodyLetterSpacing = "-0.01em", titleLetterSpacing = "0" }: { screen: Screen; colors: { eyebrow: string; title: string; body: string }; item: Variants; theme: "light" | "dark" | "red" | "image"; titleSize?: number; bodySize?: number; gap?: number; bodyColor?: string; bodyLetterSpacing?: string; titleLetterSpacing?: string }) {
+export function BasicText({ screen, colors, item, theme, titleSize = 51, bodySize = 19, gap = B_GAP, bodyColor, bodyLetterSpacing = "-0.01em", titleLetterSpacing = "0", onNext, onImage }: { screen: Screen; colors: { eyebrow: string; title: string; body: string }; item: Variants; theme: "light" | "dark" | "red" | "image"; titleSize?: number; bodySize?: number; gap?: number; bodyColor?: string; bodyLetterSpacing?: string; titleLetterSpacing?: string; onNext?: () => void; onImage?: (src: string) => void }) {
+  const button = slideButton(screen, onNext);
+  // The block fills its column's height, so an image under the body takes
+  // what's left of it and shrinks rather than running off the slide.
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap }}>
+    <div style={{ display: "flex", flexDirection: "column", gap, height: "100%", flex: "0 1 auto", minHeight: 0 }}>
       {/* No entrance: the eyebrow is anchored (see eyebrowEl in ScreenView). */}
       {screen.eyebrow && (
         <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", lineHeight: 1, color: colors.eyebrow, whiteSpace: "pre-line", marginBottom: -10 }}>
-          {screen.eyebrow}
+          <BuildContext.Provider value={false}><Paragraphs text={screen.eyebrow} /></BuildContext.Provider>
         </div>
       )}
       {screen.title && (
-        <motion.div variants={item} style={{ fontSize: titleSize, fontWeight: 700, letterSpacing: titleLetterSpacing, lineHeight: 1.3, color: colors.title, whiteSpace: "pre-line" }}>
-          {screen.title}
+        <motion.div variants={item} {...built(screen.title)} style={{ fontSize: titleSize, fontWeight: 700, letterSpacing: titleLetterSpacing, lineHeight: 1.3, color: colors.title, whiteSpace: "pre-line" }}>
+          <Paragraphs text={screen.title} />
         </motion.div>
       )}
       {screen.body && (
-        <motion.div variants={item} style={{ fontSize: bodySize, fontWeight: 400, letterSpacing: bodyLetterSpacing, lineHeight: 1.6, color: bodyColor ?? colors.body, display: "flex", flexDirection: "column", gap: PARA_GAP }}>
+        <motion.div variants={item} {...built(screen.body)} style={{ fontSize: bodySize, fontWeight: 400, letterSpacing: bodyLetterSpacing, lineHeight: 1.6, color: bodyColor ?? colors.body }}>
           <Paragraphs text={screen.body} />
         </motion.div>
       )}
-      {(screen.linkUrl || screen.linkLabel) && (
-        <motion.div variants={item} style={{ width: "fit-content", marginTop: 8 }}>
-          <BasicCtaButton href={screen.linkUrl} label={screen.linkLabel} theme={theme} />
+      {/* The box takes the column's remaining height, a definite size, so the
+          image can fit inside it at its own aspect: as large as it can be,
+          never past its natural size, from the top left. */}
+      {screen.bodyImage && (
+        <motion.div variants={item} {...built()} style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <LightboxTrigger onOpen={() => onImage?.(screen.bodyImage!)} style={{ display: "flex", flexDirection: "column", minHeight: 0, maxWidth: "100%", maxHeight: "100%" }}>
+            <img src={screen.bodyImage} alt="" style={{ display: "block", maxWidth: "100%", maxHeight: "100%", minHeight: 0, objectFit: "contain", borderRadius: B_RADIUS }} />
+          </LightboxTrigger>
+        </motion.div>
+      )}
+      {button && (
+        <motion.div variants={item} {...built()} style={{ width: "fit-content", marginTop: 8 }}>
+          <BasicCtaButton href={button.href} label={button.label} theme={theme} onClick={button.onClick} ghost={screen.linkStyle === "ghost"} />
         </motion.div>
       )}
     </div>
@@ -386,7 +541,7 @@ export function BasicText({ screen, colors, item, theme, titleSize = 51, bodySiz
 
 // ─── A single rendered screen ──────────────────────────────────────
 
-export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = false, onAnnotationMove, logoSrc }: { screen: Screen; play: boolean; reduced: boolean; cta?: React.ReactNode; textScale?: number; card?: boolean; onAnnotationMove?: (id: string, x: number, y: number) => void; logoSrc?: string }) {
+export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = false, onAnnotationMove, logoSrc, footnote, onNext }: { screen: Screen; play: boolean; reduced: boolean; cta?: React.ReactNode; textScale?: number; card?: boolean; onAnnotationMove?: (id: string, x: number, y: number) => void; logoSrc?: string; footnote?: string; onNext?: () => void }) {
   const item = reduced ? reducedItem : buildItem;
   // Full-bleed text layouts that manage their own margins (root uses no padding).
   const isBasic = screen.layout === "basic1" || screen.layout === "basic2" || screen.layout === "cover" || screen.layout === "quote";
@@ -414,6 +569,7 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
   // scrollHeight is a layout measurement (unaffected by the CSS transform), so
   // this is stable and won't feedback-loop.
   const fitRef = useRef<HTMLDivElement>(null);
+  const container = useMemo(() => pausedContainer(fitRef), []);
   const [fitScale, setFitScale] = useState(1);
   // The centered layouts share the Basic templates' margin, so their eyebrow
   // lands exactly where an Intro's does.
@@ -458,7 +614,7 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
           transform: fitScale < 1 ? `scale(${1 / fitScale})` : undefined, transformOrigin: "left top",
         }}
       >
-        {screen.eyebrow}
+        <BuildContext.Provider value={false}><Paragraphs text={screen.eyebrow} /></BuildContext.Provider>
       </div>
     </div>
   ) : null;
@@ -466,35 +622,39 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
   const titleEl = screen.title ? (
     <motion.h1
       variants={item}
+      {...built(screen.title)}
       style={{
         fontSize: titleSize,
         lineHeight: 1.25, fontWeight: 700, letterSpacing: 0,
         margin: 0, maxWidth: titleMaxWidth, whiteSpace: "pre-line",
       }}
     >
-      {screen.title}
+      <Paragraphs text={screen.title} />
     </motion.h1>
   ) : null;
 
   const bodyEl = screen.body ? (
     <motion.div
       variants={item}
+      {...built(screen.body)}
       style={{
         fontSize: 19 * textScale, lineHeight: 1.5, marginTop: 28, letterSpacing: card ? 0.5 : undefined,
         maxWidth: 640, opacity: 0.82, fontWeight: 400,
-        display: "flex", flexDirection: "column", gap: PARA_GAP,
       }}
     >
       <Paragraphs text={screen.body} />
     </motion.div>
   ) : null;
 
-  // Optional outbound CTA (e.g. a Figma prototype). Uses the shared CaseStudyLink
-  // pill (red → black on hover); wrapped in motion.div to keep the entrance stagger.
-  const ctaEl = screen.linkUrl ? (
-    <motion.div variants={item} style={{ marginTop: 32, width: "fit-content" }}>
-      <CaseStudyLink href={screen.linkUrl} style={{ fontSize: 17 * textScale, padding: "14px 26px", gap: 8 }}>
-        {screen.linkLabel || "View prototype"} <ExternalLink size={18 * textScale} />
+  // Optional button: an outbound link (e.g. a Figma prototype) or a next
+  // button (see slideButton). Uses the shared CaseStudyLink pill (red → black
+  // on hover); wrapped in motion.div to keep the entrance stagger. A link
+  // with no URL has nowhere to go, so these layouts leave it out.
+  const button = slideButton(screen, onNext);
+  const ctaEl = button && (button.next || button.href) ? (
+    <motion.div variants={item} {...built()} style={{ marginTop: 32, width: "fit-content" }}>
+      <CaseStudyLink href={button.href} onClick={button.onClick} ghost={screen.linkStyle === "ghost"} style={{ fontSize: 17 * textScale, padding: screen.linkStyle === "ghost" ? "13px 25px" : "14px 26px", gap: 8 }}>
+        {button.label} {button.next ? <ArrowRight size={18 * textScale} /> : <ExternalLink size={18 * textScale} />}
       </CaseStudyLink>
     </motion.div>
   ) : null;
@@ -502,6 +662,9 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
   // Top space the corner logo reserves (its box height + a gap), so a slide's
   // top-left content clears the logo the Stage pins to the viewport corner.
   const logoClear = screen.showLogo && logoSrc ? 104 : 0;
+  // Bottom space the first slide's hint reserves (13px type + a gap), so an
+  // image under the body, which runs to the column's foot, stops above it.
+  const noteClear = footnote ? 37 : 0;
 
   // ── Layout-specific composition ──
   let inner: React.ReactNode;
@@ -512,11 +675,11 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
         {eyebrowEl}{titleEl}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 56, marginTop: 56 }}>
           {(screen.metrics ?? []).map((m) => (
-            <motion.div key={m.id} variants={item} style={{ minWidth: 160 }}>
+            <motion.div key={m.id} variants={item} {...built(m.label)} style={{ minWidth: 160 }}>
               <div style={{ fontSize: 76, fontWeight: 700, letterSpacing: "-0.03em", color: screen.accent, lineHeight: 1 }}>
                 {m.value}
               </div>
-              <div style={{ fontSize: 18, marginTop: 12, opacity: 0.7 }}>{m.label}</div>
+              <div style={{ fontSize: 18, marginTop: 12, opacity: 0.7 }}><Paragraphs text={m.label} /></div>
             </motion.div>
           ))}
         </div>
@@ -533,7 +696,7 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
         {eyebrowEl}{titleEl}
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 32, marginTop: 48 }}>
           {imgs.map((img, i) => (
-            <motion.div key={img.id} variants={item} style={{ minWidth: 0 }}>
+            <motion.div key={img.id} variants={item} {...built(img.caption)} style={{ minWidth: 0 }}>
               <LightboxTrigger
                 onOpen={() => img.url && setLightbox({ src: img.url, caption: img.caption })}
                 disabled={!img.url}
@@ -549,7 +712,7 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
                 {(() => { const num = img.number ?? String(i + 1).padStart(2, "0"); return num.trim() !== "" ? (
                   <span style={{ color: screen.accent, fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{num}</span>
                 ) : null; })()}
-                <span style={{ fontSize: 14, opacity: 0.72, lineHeight: 1.4, whiteSpace: "pre-line" }}>{img.caption}</span>
+                <span style={{ fontSize: 14, opacity: 0.72, lineHeight: 1.4, whiteSpace: "pre-line" }}><Paragraphs text={img.caption} /></span>
               </div>
             </motion.div>
           ))}
@@ -565,7 +728,7 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
         {/* Left: eyebrow above the image */}
         <div style={{ minWidth: 0 }}>
           {eyebrowEl}
-          <motion.div variants={item} style={{ position: "relative", aspectRatio: "4 / 3", borderRadius: 12, overflow: "hidden", background: placeholder }}>
+          <motion.div variants={item} {...built()} style={{ position: "relative", aspectRatio: "4 / 3", borderRadius: 12, overflow: "hidden", background: placeholder }}>
             {screen.imageUrl && <img src={screen.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
             <ShowcaseDots notes={notes} accent={screen.accent} onMove={onAnnotationMove} />
           </motion.div>
@@ -573,17 +736,17 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
         {/* Right: title + annotations */}
         <div style={{ minWidth: 0 }}>
           {screen.title && (
-            <motion.h2 variants={item} style={{ fontSize: 36, lineHeight: 1.1, fontWeight: 700, margin: "0 0 28px", whiteSpace: "pre-line" }}>
-              {screen.title}
+            <motion.h2 variants={item} {...built(screen.title)} style={{ fontSize: 36, lineHeight: 1.1, fontWeight: 700, margin: "0 0 28px", whiteSpace: "pre-line" }}>
+              <Paragraphs text={screen.title} />
             </motion.h2>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
             {notes.map((it, i) => (
-              <motion.div key={it.id} variants={item} style={{ display: "grid", gridTemplateColumns: "32px 1fr", gap: 16, alignItems: "start" }}>
+              <motion.div key={it.id} variants={item} {...built(it.label, it.body)} style={{ display: "grid", gridTemplateColumns: "32px 1fr", gap: 16, alignItems: "start" }}>
                 <span style={{ width: 30, height: 30, borderRadius: 999, background: screen.accent, color: "#fff", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", fontVariantNumeric: "tabular-nums" }}>{i + 1}</span>
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.01em", whiteSpace: "pre-line" }}>{it.label}</div>
-                  <div style={{ fontSize: 14, opacity: 0.75, marginTop: 4, lineHeight: 1.5, display: "flex", flexDirection: "column", gap: PARA_GAP }}><Paragraphs text={it.body} /></div>
+                  <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.01em", whiteSpace: "pre-line" }}><Paragraphs text={it.label} /></div>
+                  <div style={{ fontSize: 14, opacity: 0.75, marginTop: 4, lineHeight: 1.5 }}><Paragraphs text={it.body} /></div>
                 </div>
               </motion.div>
             ))}
@@ -601,23 +764,23 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
       <div style={{ width: "100%", maxWidth: 1160 }}>
         {eyebrowEl}
         {screen.title && (
-          <motion.h2 variants={item} style={{ fontSize: 36, lineHeight: 1.1, fontWeight: 700, margin: "0 0 28px", whiteSpace: "pre-line" }}>
-            {screen.title}
+          <motion.h2 variants={item} {...built(screen.title)} style={{ fontSize: 36, lineHeight: 1.1, fontWeight: 700, margin: "0 0 28px", whiteSpace: "pre-line" }}>
+            <Paragraphs text={screen.title} />
           </motion.h2>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gridTemplateRows: "1fr 1fr", gap: 18, height: 360 }}>
-          <motion.div variants={item} style={{ gridColumn: "1", gridRow: "1 / 3", borderRadius: cellRadius, overflow: "hidden", background: placeholder }}>
+          <motion.div variants={item} {...built()} style={{ gridColumn: "1", gridRow: "1 / 3", borderRadius: cellRadius, overflow: "hidden", background: placeholder }}>
             {screen.imageUrl && <img src={screen.imageUrl} alt="" style={imgStyle} />}
           </motion.div>
-          <motion.div variants={item} style={{ gridColumn: "2 / 4", gridRow: "1", borderRadius: cellRadius, background: screen.accent, color: "#fff", padding: 28, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <motion.div variants={item} {...built(stat?.label)} style={{ gridColumn: "2 / 4", gridRow: "1", borderRadius: cellRadius, background: screen.accent, color: "#fff", padding: 28, display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <div style={{ fontSize: 48, fontWeight: 700, letterSpacing: 0, lineHeight: 1 }}>{stat?.value}</div>
-            <div style={{ fontSize: 16, marginTop: 10, opacity: 0.85 }}>{stat?.label}</div>
+            <div style={{ fontSize: 16, marginTop: 10, opacity: 0.85 }}><Paragraphs text={stat?.label} /></div>
           </motion.div>
-          <motion.div variants={item} style={{ gridColumn: "2", gridRow: "2", borderRadius: cellRadius, overflow: "hidden", background: placeholder }}>
+          <motion.div variants={item} {...built()} style={{ gridColumn: "2", gridRow: "2", borderRadius: cellRadius, overflow: "hidden", background: placeholder }}>
             {screen.imageUrl2 && <img src={screen.imageUrl2} alt="" style={imgStyle} />}
           </motion.div>
-          <motion.div variants={item} style={{ gridColumn: "3", gridRow: "2", borderRadius: cellRadius, background: bg, padding: 22, display: "flex", alignItems: "center" }}>
-            <div style={{ fontSize: 15, lineHeight: 1.5, opacity: 0.85, display: "flex", flexDirection: "column", gap: PARA_GAP }}><Paragraphs text={screen.body} /></div>
+          <motion.div variants={item} {...built(screen.body)} style={{ gridColumn: "3", gridRow: "2", borderRadius: cellRadius, background: bg, padding: 22, display: "flex", alignItems: "center" }}>
+            <div style={{ fontSize: 15, lineHeight: 1.5, opacity: 0.85 }}><Paragraphs text={screen.body} /></div>
           </motion.div>
         </div>
       </div>
@@ -631,10 +794,10 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
       <div style={{ position: "absolute", inset: 0, background: c.bg, overflow: "hidden" }}>
         {/* Image-theme background bleeds the whole viewport via a Stage backdrop (see backdropFor). */}
         {/* When a logo is shown it sits at the top margin; push the text below it. */}
-        <div style={{ position: "absolute", left: B_M, top: B_M + logoClear, right: B_M, bottom: B_M, zIndex: 1 }}>
+        <div style={{ position: "absolute", left: B_M, top: B_M + logoClear, right: B_M, bottom: B_M + noteClear, zIndex: 1 }}>
           {/* Title 88 / body 44 at design scale (×0.8 into the stage); larger than Basic.
               Body is medium-dark gray on light theme (stays white on dark/red/image), tracking 0. */}
-          <BasicText screen={screen} colors={c} item={item} theme={theme} titleSize={88 * 0.8} bodySize={44 * 0.8} gap={40}
+          <BasicText screen={screen} colors={c} item={item} onNext={onNext} onImage={(src) => setLightbox({ src })} theme={theme} titleSize={88 * 0.8} bodySize={44 * 0.8} gap={40}
             bodyColor={theme === "light" ? "#808080" : undefined} bodyLetterSpacing="0.01em" titleLetterSpacing="1px" />
         </div>
       </div>
@@ -652,18 +815,18 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
         {/* Left half — themed; the Image theme bleeds the viewport via a Stage backdrop (see backdropFor) */}
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: B_HALF, background: c.bg }} />
         {/* Left text — the Basic 1-column content block */}
-        <div style={{ position: "absolute", left: B_M, top: B_M + logoClear, width: B_COL, zIndex: 1 }}>
-          <BasicText screen={screen} colors={c} item={item} theme={theme} titleLetterSpacing="1px" />
-          {cta && <motion.div variants={item} style={{ marginTop: 32, width: "fit-content" }}>{cta}</motion.div>}
+        <div style={{ position: "absolute", left: B_M, top: B_M + logoClear, bottom: B_M + noteClear, width: B_COL, zIndex: 1, display: "flex", flexDirection: "column" }}>
+          <BasicText screen={screen} colors={c} item={item} onNext={onNext} onImage={(src) => setLightbox({ src })} theme={theme} titleLetterSpacing="1px" />
+          {cta && <motion.div variants={item} {...built()} style={{ marginTop: 32, width: "fit-content" }}>{cta}</motion.div>}
         </div>
         {/* Right data points */}
         <div style={{ position: "absolute", left: STAGE_W - B_M - B_COL, top: B_M, width: B_COL, zIndex: 1, display: "flex", flexDirection: "column" }}>
           {points.map((it, i) => (
             <div key={it.id}>
               {i > 0 && <div style={{ height: 1, background: "#e5e3df", margin: "18px 0" }} />}
-              <motion.div variants={item} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase", lineHeight: 1.6, color: B_RED, whiteSpace: "nowrap", flexShrink: 0 }}>{it.label}</div>
-                <div style={{ width: "68%", flexShrink: 0, fontSize: 16, fontWeight: 400, letterSpacing: "0", lineHeight: 1.6, color: B_BLACK, display: "flex", flexDirection: "column", gap: PARA_GAP }}>
+              <motion.div variants={item} {...built(it.label, it.body)} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase", lineHeight: 1.6, color: B_RED, whiteSpace: "nowrap", flexShrink: 0 }}><Paragraphs text={it.label} nowrap /></div>
+                <div style={{ width: "68%", flexShrink: 0, fontSize: 16, fontWeight: 400, letterSpacing: "0", lineHeight: 1.6, color: B_BLACK }}>
                   <Paragraphs text={it.body} />
                 </div>
               </motion.div>
@@ -684,20 +847,20 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
           {/* No entrance: the eyebrow is anchored (see eyebrowEl). */}
           {screen.eyebrow && (
             <div style={{ fontSize: 20, lineHeight: 1, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600, color: c.eyebrow, marginBottom: 30, whiteSpace: "pre-line" }}>
-              {screen.eyebrow}
+              <BuildContext.Provider value={false}><Paragraphs text={screen.eyebrow} /></BuildContext.Provider>
             </div>
           )}
-          <motion.div variants={item} aria-hidden="true" style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 128, lineHeight: 0.85, fontWeight: 700, color: c.eyebrow, marginBottom: 8 }}>
+          <motion.div variants={item} {...built()} aria-hidden="true" style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 128, lineHeight: 0.85, fontWeight: 700, color: c.eyebrow, marginBottom: 8 }}>
             &ldquo;
           </motion.div>
           {screen.title && (
-            <motion.blockquote variants={item} style={{ fontSize: 46, lineHeight: 1.32, fontWeight: 700, letterSpacing: 0, margin: "-30px 0 0", maxWidth: 920, color: c.title, whiteSpace: "pre-line" }}>
-              {screen.title}
+            <motion.blockquote variants={item} {...built(screen.title)} style={{ fontSize: 46, lineHeight: 1.32, fontWeight: 700, letterSpacing: 0, margin: "-30px 0 0", maxWidth: 920, color: c.title, whiteSpace: "pre-line" }}>
+              <Paragraphs text={screen.title} />
             </motion.blockquote>
           )}
           {screen.body && (
-            <motion.div variants={item} style={{ fontSize: 19, marginTop: 32, fontWeight: 500, fontStyle: "italic", color: c.body, whiteSpace: "pre-line" }}>
-              <span style={{ color: c.eyebrow }}>&mdash; </span>{screen.body}
+            <motion.div variants={item} {...built(screen.body)} style={{ fontSize: 19, marginTop: 32, fontWeight: 500, fontStyle: "italic", color: c.body, whiteSpace: "pre-line" }}>
+              <Paragraphs text={screen.body} lead={<span style={{ color: c.eyebrow }}>&mdash; </span>} />
             </motion.div>
           )}
         </div>
@@ -711,8 +874,8 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
     inner = (
       <div style={{ position: "absolute", inset: 0, background: c.bg, overflow: "hidden" }}>
         {/* Image-theme background bleeds the whole viewport via a Stage backdrop (see backdropFor). */}
-        <div style={{ position: "absolute", left: B_M, top: B_M + logoClear, right: B_M, bottom: B_M, zIndex: 1 }}>
-          <BasicText screen={screen} colors={c} item={item} theme={theme} />
+        <div style={{ position: "absolute", left: B_M, top: B_M + logoClear, right: B_M, bottom: B_M + noteClear, zIndex: 1 }}>
+          <BasicText screen={screen} colors={c} item={item} onNext={onNext} onImage={(src) => setLightbox({ src })} theme={theme} />
         </div>
       </div>
     );
@@ -756,8 +919,8 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
           <div style={{ position: "absolute", top: 0, bottom: 0, width: B_HALF, left: textLeft ? 0 : undefined, right: textLeft ? undefined : 0, background: c.bg }} />
         )}
         {imageEl}
-        <div style={{ position: "absolute", left: textX, top: textLeft ? B_M + logoClear : B_M, width: B_COL, zIndex: 2 }}>
-          <BasicText screen={screen} colors={c} item={item} theme={theme} />
+        <div style={{ position: "absolute", left: textX, top: textLeft ? B_M + logoClear : B_M, bottom: B_M + noteClear, width: B_COL, zIndex: 2 }}>
+          <BasicText screen={screen} colors={c} item={item} onNext={onNext} onImage={(src) => setLightbox({ src })} theme={theme} />
         </div>
       </div>
     );
@@ -768,7 +931,7 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
     inner = (
       <div style={{ width: "100%", maxWidth: 1160 }}>
         {eyebrowEl}{titleEl}
-        <motion.div variants={item} style={{ marginTop: screen.eyebrow || screen.title ? 40 : 0, width: "100%", aspectRatio: "16 / 9", borderRadius: 12, overflow: "hidden", background: "#000" }}>
+        <motion.div variants={item} {...built()} style={{ marginTop: screen.eyebrow || screen.title ? 40 : 0, width: "100%", aspectRatio: "16 / 9", borderRadius: 12, overflow: "hidden", background: "#000" }}>
           {embedUrl ? (
             <iframe src={embedUrl} style={{ width: "100%", height: "100%", border: "none" }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
           ) : rawVideo ? (
@@ -793,6 +956,26 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
   // as the text, at the same left margin, so the two always share a left edge.
   const fullBleed = isBasic || screen.layout === "overview";
   const logoLeft = fullBleed ? B_M : pad;
+  // A line from the host at the foot of the content area (the player's "how
+  // to move on" on its first slide). It isn't the slide's, so it isn't one of
+  // its build items: it waits out the whole build, pauses included, and then
+  // fades in. It sits on the copy's column, in the copy's color at a whisper.
+  const [noteRef, animateNote] = useAnimate<HTMLDivElement>();
+  useEffect(() => {
+    if (!footnote || !play || !noteRef.current) return;
+    const run = animateNote(noteRef.current, { opacity: 1 }, { delay: buildLength(fitRef.current) + 0.5, duration: reduced ? 0.3 : 0.65 });
+    return () => run.stop();
+  }, [footnote, play, reduced, screen]);
+  const noteLeft = screen.layout === "basic2" && screen.basicTextSide === "right" ? STAGE_W - B_M - B_COL : fullBleed ? B_M : pad;
+  const noteColor = fullBleed
+    ? basicColors(screen.layout === "basic2" && screen.basicTheme === "image" ? "light" : (screen.basicTheme ?? "light"), screen.imageTextDark).body
+    : fg;
+  const noteEl = footnote ? (
+    <div ref={noteRef} style={{ position: "absolute", left: noteLeft, bottom: fullBleed ? B_M : pad, zIndex: 3, fontSize: 13, lineHeight: 1, color: noteColor, opacity: play ? 0 : 1, pointerEvents: "none" }}>
+      <span style={{ opacity: 0.8 }}>{footnote}</span>
+    </div>
+  ) : null;
+
   const logoEl = screen.showLogo && logoSrc ? (
     <div style={{ position: "absolute", left: logoLeft, top: 12, width: 300, height: 80, zIndex: 3, pointerEvents: "none" }}>
       <LogoMark src={logoSrc} position="left top" style={{ width: "100%", height: "100%" }} />
@@ -825,15 +1008,16 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
         }}
       >
         <motion.div
-          variants={buildContainer}
+          variants={container}
           initial={play ? "hidden" : "show"}
           animate="show"
           style={{ position: "relative", zIndex: 1, width: "100%", height: screen.layout === "overview" || isBasic ? "100%" : undefined, display: "flex", justifyContent: "flex-start" }}
         >
-          {inner}
+          <BuildContext.Provider value={true}>{inner}</BuildContext.Provider>
         </motion.div>
       </div>
       {logoEl}
+      {noteEl}
       {lightbox && <Lightbox src={lightbox.src} caption={lightbox.caption} onClose={() => setLightbox(null)} />}
     </div>
   );

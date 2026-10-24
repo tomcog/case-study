@@ -7,6 +7,34 @@ import { ImageLibraryModal } from "./ui/ImageLibraryModal.js";
 import { ProjectPreviewCard } from "./ui/ProjectPreviewCard.js";
 import type { Metric, OverviewItem, GalleryImage, ProjectPreview } from "./core.js";
 
+/** A field of copy: a textarea where Return starts a new paragraph and
+ * ⌘Return (Ctrl or Shift on other keyboards) breaks the line inside one,
+ * keeping the tighter spacing. Paragraphs in core says how the two are stored
+ * and drawn. Every copy field in the builders is one of these, so they all
+ * break the same way; ids, URLs and numbers stay plain inputs. */
+export function CopyInput(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    props.onKeyDown?.(e);
+    if (e.defaultPrevented || e.key !== "Enter" || e.altKey || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    // Return after a line break turns it into a paragraph break rather than
+    // leaving an empty line inside one.
+    const line = e.metaKey || e.ctrlKey || e.shiftKey || el.value[el.selectionStart - 1] === "\n";
+    insertText(el, line ? "\n" : "\n\n");
+  };
+  return <textarea title="Return: new paragraph · ⌘Return: line break" {...props} onKeyDown={onKeyDown} />;
+}
+
+/** Types into a field the way the keyboard would, so it lands on the undo
+ * stack and the field's onChange fires. setRangeText is the fallback where
+ * insertText isn't supported; it skips the undo stack. */
+function insertText(el: HTMLTextAreaElement, text: string) {
+  if (el.ownerDocument.execCommand("insertText", false, text)) return;
+  el.setRangeText(text, el.selectionStart, el.selectionEnd, "end");
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 export function MetricsEditor({ metrics, onChange }: { metrics: Metric[]; onChange: (m: Metric[]) => void }) {
   return (
     <Field label="Metrics">
@@ -14,7 +42,7 @@ export function MetricsEditor({ metrics, onChange }: { metrics: Metric[]; onChan
         {metrics.map((m, i) => (
           <div key={m.id} style={{ display: "flex", gap: 6 }}>
             <input value={m.value} onChange={(e) => onChange(metrics.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} placeholder="−63%" style={{ ...inputStyle, width: 70 }} />
-            <input value={m.label} onChange={(e) => onChange(metrics.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Label" style={inputStyle} />
+            <CopyInput value={m.label} onChange={(e) => onChange(metrics.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Label" rows={1} style={{ ...inputStyle, resize: "vertical" }} />
             <ButtonRound size="sm" variant="tertiary" tone="danger" icon={<Trash2 size={14} />} onClick={() => onChange(metrics.filter((_, j) => j !== i))} aria-label="Remove metric" />
           </div>
         ))}
@@ -156,12 +184,12 @@ export function OverviewEditor({ items, onChange, label = "Index items" }: { ite
           <div key={it.id} style={{ display: "flex", flexDirection: "column", gap: 6, border: "1px solid #e3e0db", borderRadius: 8, padding: 8 }}>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <span style={{ fontSize: 11, color: "#8a857d", fontVariantNumeric: "tabular-nums" }}>{String(i + 1).padStart(2, "0")}</span>
-              <textarea value={it.label} onChange={(e) => onChange(items.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Label" rows={1} style={{ ...inputStyle, resize: "vertical" }} />
+              <CopyInput value={it.label} onChange={(e) => onChange(items.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Label" rows={1} style={{ ...inputStyle, resize: "vertical" }} />
               <ButtonRound size="sm" variant="tertiary" icon={<ChevronUp size={14} />} onClick={() => move(i, -1)} disabled={i === 0} title="Move up" aria-label="Move up" />
               <ButtonRound size="sm" variant="tertiary" icon={<ChevronDown size={14} />} onClick={() => move(i, 1)} disabled={i === items.length - 1} title="Move down" aria-label="Move down" />
               <ButtonRound size="sm" variant="tertiary" tone="danger" icon={<Trash2 size={14} />} onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label="Remove item" />
             </div>
-            <textarea value={it.body} onChange={(e) => onChange(items.map((x, j) => j === i ? { ...x, body: e.target.value } : x))} rows={2} placeholder="Description" style={{ ...inputStyle, resize: "vertical" }} />
+            <CopyInput value={it.body} onChange={(e) => onChange(items.map((x, j) => j === i ? { ...x, body: e.target.value } : x))} rows={2} placeholder="Description" style={{ ...inputStyle, resize: "vertical" }} />
           </div>
         ))}
         <Button variant="ghost" size="sm" icon={<Plus size={14} />} onClick={() => onChange([...items, { id: `o-${Date.now()}`, label: "Section", body: "Describe this section." }])} style={addStyle}>
@@ -189,7 +217,7 @@ export function GalleryEditor({ images, onChange }: { images: GalleryImage[]; on
               <ButtonRound size="sm" variant="tertiary" tone="danger" icon={<Trash2 size={14} />} onClick={() => onChange(images.filter((_, j) => j !== i))} aria-label="Remove image" />
             </div>
             <ImageField value={img.url} onChange={(url) => set(i, { url })} />
-            <textarea value={img.caption} onChange={(e) => set(i, { caption: e.target.value })} rows={1} placeholder="Caption" style={{ ...inputStyle, resize: "vertical" }} />
+            <CopyInput value={img.caption} onChange={(e) => set(i, { caption: e.target.value })} rows={1} placeholder="Caption" style={{ ...inputStyle, resize: "vertical" }} />
           </div>
         ))}
         <Button variant="ghost" size="sm" icon={<Plus size={14} />} onClick={() => onChange([...images, { id: `g-${Date.now()}`, url: "", caption: "Caption" }])} style={addStyle}>
@@ -206,7 +234,7 @@ export function StatEditor({ stat, onChange }: { stat?: Metric; onChange: (m: Me
     <Field label="Stat">
       <div style={{ display: "flex", gap: 6 }}>
         <input value={s.value} onChange={(e) => onChange({ ...s, value: e.target.value })} placeholder="−63%" style={{ ...inputStyle, width: 80 }} />
-        <input value={s.label} onChange={(e) => onChange({ ...s, label: e.target.value })} placeholder="Label" style={inputStyle} />
+        <CopyInput value={s.label} onChange={(e) => onChange({ ...s, label: e.target.value })} placeholder="Label" rows={1} style={{ ...inputStyle, resize: "vertical" }} />
       </div>
     </Field>
   );
@@ -307,13 +335,13 @@ export function PreviewCardSettings({ preview, onChange, onClose, isCaseStudy, o
           mono={preview.imageMono === true} onMonoChange={(v) => onChange({ imageMono: v || undefined })} />
 
         <Field label="Eyebrow">
-          <input value={preview.eyebrow ?? ""} onChange={(e) => onChange({ eyebrow: e.target.value })} placeholder="e.g. Case Study" style={inputStyle} />
+          <CopyInput value={preview.eyebrow ?? ""} onChange={(e) => onChange({ eyebrow: e.target.value })} placeholder="e.g. Case Study" rows={1} style={{ ...inputStyle, resize: "vertical" }} />
         </Field>
         <Field label="Title">
-          <input value={preview.title ?? ""} onChange={(e) => onChange({ title: e.target.value })} placeholder="Project title" style={inputStyle} />
+          <CopyInput value={preview.title ?? ""} onChange={(e) => onChange({ title: e.target.value })} placeholder="Project title" rows={1} style={{ ...inputStyle, resize: "vertical" }} />
         </Field>
         <Field label="Body">
-          <textarea value={preview.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} rows={3} placeholder="Short description" style={{ ...inputStyle, resize: "vertical" }} />
+          <CopyInput value={preview.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} rows={3} placeholder="Short description" style={{ ...inputStyle, resize: "vertical" }} />
         </Field>
         <ImageField label="Slide logo (Intro / Title Card, top-left)" value={preview.logo ?? ""} onChange={(v) => onChange({ logo: v })} />
         <ImageField label="Card logo (Projects page card — falls back to slide logo)" value={preview.cardLogo ?? ""} onChange={(v) => onChange({ cardLogo: v })} />
