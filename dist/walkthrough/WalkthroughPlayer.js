@@ -1,4 +1,4 @@
-import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
 // ─── Walkthrough player ────────────────────────────────────────────
 // Full-viewport, two panes: stepped copy beside whatever the step is about.
 // A driveable stage is an iframe reached through a Driver, and the spotlight is
@@ -14,10 +14,13 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
 import { Segment, SegmentedControl, Toolbar } from "@tomcoggia/ui";
 import { INK, RED } from "../theme.js";
-import { renderStyledText } from "../ui/renderStyledText.js";
 import { SlideView } from "../slide.js";
+import { Paragraphs } from "../core.js";
 import { Callouts, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, spotlightBox, toBox, useApp } from "./stage.js";
 import { bootsApp, contentOf, stepMarks } from "./types.js";
+import { useCaseStudyConfig } from "../config.js";
+import { AskFab, FAB_CLEAR } from "../ask/AskFab.js";
+import { AskRail } from "../ask/AskRail.js";
 const PANEL_W = 400;
 const LINE = "#e6e4e1";
 const MUTED = "#6f6a66";
@@ -54,10 +57,15 @@ async function perform(driver, actions, live) {
             driver.type(action.mark, action.text);
     }
 }
-export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }) {
+export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectId, onExit }) {
     const { steps } = content;
     const reduced = useReducedMotion();
     const [i, setI] = useState(startIndex);
+    // Whether the player has drawn anything yet. A slide it opens on fades in
+    // and builds like any other; one it crosses to from an app rides the
+    // crossfade between the two chromes instead (SlideLayer).
+    const opened = useRef(false);
+    useEffect(() => { opened.current = true; }, []);
     const [nudge, setNudge] = useState(false);
     const step = steps[i];
     const finished = i >= steps.length;
@@ -70,6 +78,13 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
     const shown = contentOf(step);
     const demo = useApp(app?.src, markIds, app);
     const { driver, measure } = demo;
+    // Ask AI Tom: on where the host and the project both say so.
+    const { ask } = useCaseStudyConfig();
+    const askOn = !!ask && !!projectId && !!content.ask?.enabled;
+    const [askOpen, setAskOpen] = useState(false);
+    const askOpenRef = useRef(false);
+    askOpenRef.current = askOpen;
+    const closeAsk = useCallback(() => setAskOpen(false), []);
     const next = useCallback(() => setI((n) => n + 1), []);
     const back = useCallback(() => setI((n) => Math.max(0, n - 1)), []);
     // Read by the key handler, which is bound once; `manual` is recomputed every
@@ -117,6 +132,10 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
         // where the panel would offer it: a step waiting on the reader has no Next
         // button, so the arrow doesn't quietly skip it either.
         const onKey = (e) => {
+            // While the rail is open the keys are its: Esc closes it, and the arrows
+            // move the caret in its field rather than the walkthrough.
+            if (askOpenRef.current)
+                return;
             if (e.key === "Escape")
                 onExit?.();
             if (e.key === "ArrowLeft")
@@ -167,13 +186,16 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, onExit }
                     flexDirection: "column",
                     // The toolbar sits over the panel's lower left when the panel is on
                     // the left, so the panel keeps its foot clear of it.
-                    padding: `26px 28px ${content.panelSide === "right" && !narrow ? 22 : 22 + TOOLBAR_CLEAR}px`,
+                    // So does the Ask AI Tom FAB at its lower right, on a panel on the
+                    // right or one taking the whole width.
+                    padding: `26px 28px ${22 + Math.max(content.panelSide === "right" && !narrow ? 0 : TOOLBAR_CLEAR, askOn && (narrow || content.panelSide === "right") ? FAB_CLEAR : 0)}px`,
                     overflowY: "auto",
-                }, children: [_jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }, children: [_jsx("span", { style: { fontSize: 13, fontWeight: 600, color: INK, letterSpacing: "-0.01em" }, children: content.title }), _jsx("span", { style: { fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }, children: finished ? `${steps.length} of ${steps.length}` : `${i + 1} of ${steps.length}` })] }), _jsx("div", { style: { height: 3, background: LINE, borderRadius: 2, margin: "14px 0 26px", overflow: "hidden" }, children: _jsx(motion.div, { initial: { width: 0 }, animate: { width: `${((finished ? steps.length : i) / Math.max(1, steps.length)) * 100}%` }, transition: reduced ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 30 }, style: { height: "100%", background: RED } }) }), _jsx("div", { style: { flex: 1, minHeight: 0 }, children: _jsx(AnimatePresence, { mode: "wait", initial: false, children: _jsx(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: reduced ? { opacity: 0 } : { opacity: 0, y: -8 }, transition: { duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }, children: step ? (_jsxs(_Fragment, { children: [step.eyebrow && (_jsx("div", { style: { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: RED, marginBottom: 10 }, children: step.eyebrow })), step.title && (_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: step.title })), step.body && (_jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: renderStyledText(step.body) })), step.imageUrl && (_jsx("img", { src: step.imageUrl, alt: "", style: { display: "block", width: "100%", borderRadius: 10, marginTop: 18, border: `1px solid ${LINE}` } }))] })) : (_jsxs(_Fragment, { children: [_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: "That's the walkthrough." }), _jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: "The product stays where you left it \u2014 keep clicking around, or start again from the top." })] })) }, step?.id ?? "__done") }) }), _jsxs("div", { style: { paddingTop: 22 }, children: [step && manual && (_jsx("button", { type: "button", onClick: next, style: primary, children: manualLabel })), step && !manual && (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: MUTED, minHeight: 38 }, children: [_jsx(motion.span, { animate: reduced ? {} : { opacity: [1, 0.25, 1] }, transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" }, style: { width: 7, height: 7, borderRadius: "50%", background: RED, flex: "none" } }), "Your turn \u2014 do it in the app"] })), !step && (_jsx("button", { type: "button", onClick: restart, style: primary, children: "Start again" }))] })] }), (demo.live || shown.kind !== "app") && !narrow && (_jsxs("div", { ref: demo.stageRef, style: { flex: 1, position: "relative", overflowX: "auto", overflowY: "hidden", background: STAGE_BG }, children: [demo.live && app && _jsx("iframe", { ref: demo.frameRef, title: app.label, style: demo.frameStyle }, app.src), shown.kind === "image" && _jsx(StageStill, { image: shown }), shown.kind === "embed" && (_jsx("iframe", { src: shown.url, title: content.title ?? "Embedded page", allowFullScreen: true, style: { position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 } }, shown.url)), _jsx(Spotlight, { box: box, shape: step?.spotlight?.shape, spread: step?.spotlight?.spread, strength: step?.spotlight?.strength, pulse: step?.spotlight?.pulse, dim: step?.spotlight?.dim, lock: step?.spotlight?.lock, stageW: demo.contentW }), step?.callouts?.length ? _jsx(Callouts, { items: step.callouts, boxFor: calloutBox, bounds: demo.bounds, scrollX: demo.scrollX }) : null] })), shown.kind === "app" && !demo.live && !narrow && _jsx(StageNotice, { blocked: demo.blocked, src: app?.src }), _jsx(AnimatePresence, { initial: false, children: slide && (_jsxs(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, scale: 1.01 }, animate: { opacity: 1, scale: 1 }, exit: reduced ? { opacity: 0 } : { opacity: 0, scale: 0.995 }, transition: { duration: reduced ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }, onClick: next, style: { position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }, children: [_jsx(AnimatePresence, { initial: false, children: _jsx(motion.div, { initial: { opacity: 0, zIndex: 1 }, animate: { opacity: 1, zIndex: 1 }, 
-                                // Leaving is a wait, not a fade: the old slide has to stay up
-                                // for as long as the new one takes to cover it. Its opacity
-                                // only drops once the incoming one is fully opaque.
-                                exit: { opacity: 0, zIndex: 0, transition: { delay: reduced ? 0 : SLIDE_FADE, duration: 0.01 } }, transition: { duration: reduced ? 0 : SLIDE_FADE, ease: "linear" }, style: { position: "absolute", inset: 0 }, children: _jsx(SlideView, { screen: slide, play: true, reduced: !!reduced, logoSrc: content.preview?.logo }) }, slide.id) }), _jsxs("span", { style: slideCount, children: [i + 1, " of ", steps.length] })] }, "slide")) }), _jsxs(Toolbar, { "aria-label": "Walkthrough", style: toolbarAt, children: [onExit && (_jsx(SegmentedControl, { size: "sm", tone: "white", actions: true, "aria-label": "Leave", children: _jsx(Segment, { icon: _jsx(ExternalLink, {}), onClick: onExit, children: "Exit" }) })), _jsx(SegmentedControl, { size: "sm", tone: "white", actions: true, "aria-label": "Back", children: _jsx(Segment, { icon: _jsx(ArrowLeft, {}), hideLabel: true, disabled: i === 0, onClick: back, children: "Previous step" }) }), _jsx(SegmentedControl, { size: "sm", tone: "white", actions: true, "aria-label": "Next", children: _jsx(Segment, { icon: _jsx(ArrowRight, {}), hideLabel: true, disabled: !canNext, onClick: next, children: "Next step" }) })] })] }));
+                }, children: [_jsx("div", { style: { flex: 1, minHeight: 0 }, children: _jsx(AnimatePresence, { mode: "wait", initial: false, children: _jsx(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: reduced ? { opacity: 0 } : { opacity: 0, y: -8 }, transition: { duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }, children: step ? (_jsxs(_Fragment, { children: [step.eyebrow && (_jsx("div", { style: { fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: RED, marginBottom: 10 }, children: _jsx(Paragraphs, { text: step.eyebrow }) })), step.title && (_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: _jsx(Paragraphs, { text: step.title }) })), step.body && (_jsx("div", { style: { fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: _jsx(Paragraphs, { text: step.body, styled: true }) })), step.imageUrl && (_jsx("img", { src: step.imageUrl, alt: "", style: { display: "block", width: "100%", borderRadius: 10, marginTop: 18, border: `1px solid ${LINE}` } }))] })) : (_jsxs(_Fragment, { children: [_jsx("h2", { style: { margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }, children: "That's the walkthrough." }), _jsx("p", { style: { margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }, children: "The product stays where you left it \u2014 keep clicking around, or start again from the top." })] })) }, step?.id ?? "__done") }) }), _jsxs("div", { style: { paddingTop: 22 }, children: [step && manual && (_jsx("button", { type: "button", onClick: next, style: primary, children: manualLabel })), step && !manual && (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: MUTED, minHeight: 38 }, children: [_jsx(motion.span, { animate: reduced ? {} : { opacity: [1, 0.25, 1] }, transition: { duration: 1.6, repeat: Infinity, ease: "easeInOut" }, style: { width: 7, height: 7, borderRadius: "50%", background: RED, flex: "none" } }), "Your turn \u2014 do it in the app"] })), !step && (_jsx("button", { type: "button", onClick: restart, style: primary, children: "Start again" }))] })] }), (demo.live || shown.kind !== "app") && !narrow && (_jsxs("div", { ref: demo.stageRef, style: { flex: 1, position: "relative", overflowX: "auto", overflowY: "hidden", background: STAGE_BG }, children: [demo.live && app && _jsx("iframe", { ref: demo.frameRef, title: app.label, style: demo.frameStyle }, app.src), shown.kind === "image" && _jsx(StageStill, { image: shown }), shown.kind === "embed" && (_jsx("iframe", { src: shown.url, title: content.title ?? "Embedded page", allowFullScreen: true, style: { position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 } }, shown.url)), _jsx(Spotlight, { box: box, shape: step?.spotlight?.shape, spread: step?.spotlight?.spread, strength: step?.spotlight?.strength, pulse: step?.spotlight?.pulse, dim: step?.spotlight?.dim, lock: step?.spotlight?.lock, stageW: demo.contentW }), step?.callouts?.length ? _jsx(Callouts, { items: step.callouts, boxFor: calloutBox, bounds: demo.bounds, scrollX: demo.scrollX }) : null] })), shown.kind === "app" && !demo.live && !narrow && _jsx(StageNotice, { blocked: demo.blocked, src: app?.src }), _jsx(AnimatePresence, { initial: false, children: slide && (_jsxs(motion.div, { initial: reduced ? { opacity: 0 } : { opacity: 0, scale: 1.01 }, animate: { opacity: 1, scale: 1 }, exit: reduced ? { opacity: 0 } : { opacity: 0, scale: 0.995 }, transition: { duration: reduced ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }, onClick: next, style: { position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }, children: [_jsx(SlideLayer, { slide: slide, crossing: opened.current, reduced: !!reduced, logoSrc: content.preview?.logo, footnote: i === 0 ? NAV_HINT : undefined, onNext: next }), _jsxs("span", { style: slideCount, children: [i + 1, " of ", steps.length] })] }, "slide")) }), _jsxs(Toolbar, { "aria-label": "Walkthrough", style: toolbarAt, children: [onExit && (_jsx(SegmentedControl, { size: "sm", tone: "white", actions: true, "aria-label": "Leave", children: _jsx(Segment, { icon: _jsx(ExternalLink, {}), onClick: onExit, children: "Exit" }) })), _jsx(SegmentedControl, { size: "sm", tone: "white", actions: true, "aria-label": "Back", children: _jsx(Segment, { icon: _jsx(ArrowLeft, {}), hideLabel: true, disabled: i === 0, onClick: back, children: "Previous step" }) }), _jsx(SegmentedControl, { size: "sm", tone: "white", actions: true, "aria-label": "Next", children: _jsx(Segment, { icon: _jsx(ArrowRight, {}), hideLabel: true, disabled: !canNext, onClick: next, children: "Next step" }) })] }), askOn && (_jsxs(_Fragment, { children: [_jsx(AskFab, { onClick: () => setAskOpen(true), hidden: askOpen }), _jsx(AskRail, { open: askOpen, onClose: closeAsk, title: content.title, projectId: projectId, stepIds: steps.map((s) => s.id), stepIndex: Math.min(i, steps.length - 1), suggestions: content.ask?.suggestions, 
+                        // Going to a step means seeing it: the rail steps aside.
+                        onStep: (to) => {
+                            setAskOpen(false);
+                            setI(to);
+                        } })] }))] }));
 }
 const primary = {
     appearance: "none",
@@ -198,8 +220,29 @@ const toolbarAt = {
     bottom: TOOLBAR_INSET,
     zIndex: 1,
 };
+/** What the first slide says at its foot, since a deck gives no other sign of
+ * how to move through it. */
+const NAV_HINT = "Use on-screen or keyboard arrow keys to navigate";
 /** Seconds one slide's background takes to crossfade into the next's. */
 const SLIDE_FADE = 1;
+/** The slides, one over the next. One slide to the next crossfades over
+ * SLIDE_FADE: the incoming slide is laid over the outgoing one and fades in
+ * while the old one stays opaque beneath it, so the backgrounds blend without
+ * the backdrop showing through between them. The content makes its own
+ * entrance on top of that, every time — the slide the player opens on
+ * included, which fades in from the backdrop. The one exception is the slide
+ * the layer opens on when `crossing` from an app: the layer's own crossfade
+ * already brings it in, so it only builds. */
+function SlideLayer({ slide, crossing, reduced, logoSrc, footnote, onNext }) {
+    const [crossedTo] = useState(crossing ? slide.id : null);
+    return (
+    // Never `initial={false}` here: it would hold back the build inside too.
+    _jsx(AnimatePresence, { children: _jsx(motion.div, { initial: slide.id === crossedTo ? false : { opacity: 0, zIndex: 1 }, animate: { opacity: 1, zIndex: 1 }, 
+            // Leaving is a wait, not a fade: the old slide has to stay up
+            // for as long as the new one takes to cover it. Its opacity
+            // only drops once the incoming one is fully opaque.
+            exit: { opacity: 0, zIndex: 0, transition: { delay: reduced ? 0 : SLIDE_FADE, duration: 0.01 } }, transition: { duration: reduced ? 0 : SLIDE_FADE, ease: "linear" }, style: { position: "absolute", inset: 0 }, children: _jsx(SlideView, { screen: slide, play: true, reduced: reduced, logoSrc: logoSrc, footnote: footnote, onNext: onNext }) }, slide.id) }));
+}
 const slideCount = {
     position: "absolute",
     zIndex: 2,

@@ -3,7 +3,8 @@
   "title": "SimpleScreen CRC",
   "draft": true,
   "ask": {
-    "enabled": true
+    "enabled": true,
+    "source": "https://docs.google.com/document/d/1aqni773qvcrCaYQKR_h6ykvF-SoIo99mIRxw1OEbGqI/edit?usp=sharing"
   },
   "steps": [
     {
@@ -52,9 +53,11 @@
             }
           ],
           "showLogo": false,
-          "imageUrl": "/projects/test-project/images/Lab-testing-scaled.jpg",
+          "imageUrl": "/projects/simplescreen-crc/images/Lab-testing-scaled.jpg",
           "overlay": true,
-          "mono": true
+          "mono": true,
+          "linkLabel": "BEGIN",
+          "linkAction": "next"
         }
       }
     },
@@ -74,17 +77,17 @@
           "accent": "#E51A38",
           "eyebrow": "Case Study",
           "title": "SimpleScreen CRC",
-          "body": "Bringing an FDA-Approved Blood-Based Cancer Screening Test to Market",
+          "body": "Bringing an FDA-approved blood-based cancer screening test to market",
           "items": [
-            {
-              "id": "o1",
-              "label": "Role",
-              "body": "Founding Product Designer & UX Researcher"
-            },
             {
               "id": "o2",
               "label": "Company",
               "body": "Freenome"
+            },
+            {
+              "id": "o1",
+              "label": "Role",
+              "body": "Founding Product Designer\n& UX Researcher"
             },
             {
               "id": "o-1792728586470",
@@ -92,44 +95,43 @@
               "body": "2021 - 2026"
             },
             {
+              "id": "o-1792795955603",
+              "label": "Product",
+              "body": "SimpleScreen CRC, an FDA-approved screening test detecting molecular signals of colorectal cancer (CRC)"
+            },
+            {
               "id": "o3",
               "label": "Scope",
-              "body": "Digital Platforms (Provider Portal, Lab Operations) + Physical Touchpoints (Kits, Labeling, Reports)"
+              "body": "End-to-end ecosystem consisting of four digital applications and associated physical touchpoints"
             },
             {
               "id": "o4",
               "label": "Milestone",
-              "body": "FDA Approval Preparation & Commercial Launch"
+              "body": "FDA approval preparation & Early Access Period (EAP) commercial Launch"
             }
           ],
-          "basicTheme": "light"
+          "basicTheme": "light",
+          "bodyImage": "/projects/simplescreen-crc/images/bck-for-site.png"
         }
       }
     },
     {
-      "id": "s2",
+      "id": "step-mvm0x64e-70",
+      "eyebrow": "Eyebrow",
+      "title": "Title",
+      "body": "Body",
       "advance": {
         "on": "manual"
       },
+      "imageUrl": "/projects/simplescreen-crc/images/bck-for-site.png",
       "content": {
-        "kind": "slide",
-        "screen": {
-          "id": "s2",
-          "layout": "cover",
-          "basicTheme": "light",
-          "theme": "light",
-          "bg": "#ffffff",
-          "fg": "#1a1a1a",
-          "accent": "#E51A38",
-          "eyebrow": "The problem",
-          "title": "Nobody had ever ordered a test like this before.",
-          "body": "There was no precedent, no workflow, and no requirements — just a novel blood test and a thousand open questions about how it would actually reach a patient."
-        }
+        "kind": "image",
+        "src": ""
       }
     },
     {
       "id": "demo-step",
-      "eyebrow": "The product",
+      "eyebrow": "SimpleScreen CRC\n\n",
       "title": "Every order the practice has placed",
       "body": "One list, newest first. Try sorting it.",
       "app": "provider-portal",
@@ -138,44 +140,15 @@
         "on": "signal",
         "name": ""
       },
-      "callouts": [
-        {
-          "text": "Orders numbers are generated to match the report numbers just be changing the prefix to RE",
-          "mark": "open-order",
-          "placement": "top"
-        }
-      ],
-      "spotlight": {
-        "mark": "order-test",
-        "dim": false,
-        "spread": 25,
-        "strength": 0.24
-      }
+      "callouts": []
     },
     {
       "id": "s3",
       "advance": {
         "on": "manual"
       },
-      "content": {
-        "kind": "slide",
-        "screen": {
-          "id": "s3",
-          "layout": "basic2",
-          "basicTheme": "light",
-          "basicTextSide": "left",
-          "basicImage": "fill",
-          "theme": "light",
-          "bg": "#ffffff",
-          "fg": "#1a1a1a",
-          "accent": "#E51A38",
-          "eyebrow": "Research",
-          "title": "100+ conversations with the people in the loop",
-          "body": "Clinicians, lab techs, IT admins, and support agents. We mapped every hand-off from order to result and found where the workflow quietly broke.",
-          "imageUrl": "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1200&q=80"
-        }
-      },
-      "app": "provider-portal"
+      "app": "provider-portal",
+      "eyebrow": "SimpleScreen CRC\n\n"
     },
     {
       "id": "s-quote",
@@ -232,10 +205,31 @@
           ]
         }
       }
+    },
+    {
+      "id": "s2",
+      "advance": {
+        "on": "manual"
+      },
+      "content": {
+        "kind": "slide",
+        "screen": {
+          "id": "s2",
+          "layout": "cover",
+          "basicTheme": "light",
+          "theme": "light",
+          "bg": "#ffffff",
+          "fg": "#1a1a1a",
+          "accent": "#E51A38",
+          "eyebrow": "The problem",
+          "title": "Nobody had ever ordered a test like this before.",
+          "body": "There was no precedent, no workflow, and no requirements — just a novel blood test and a thousand open questions about how it would actually reach a patient."
+        }
+      }
     }
   ],
   "preview": {
-    "image": "/projects/test-project/images/Lab-testing-scaled.jpg",
+    "image": "/projects/simplescreen-crc/images/Lab-testing-scaled.jpg",
     "title": "SimpleScreen CRC"
   }
 }

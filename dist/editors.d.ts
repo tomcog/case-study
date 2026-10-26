@@ -1,4 +1,10 @@
 import type { Metric, OverviewItem, GalleryImage, ProjectPreview } from "./core.js";
+/** A field of copy: a textarea where Return starts a new paragraph and
+ * ⌘Return (Ctrl or Shift on other keyboards) breaks the line inside one,
+ * keeping the tighter spacing. Paragraphs in core says how the two are stored
+ * and drawn. Every copy field in the builders is one of these, so they all
+ * break the same way; ids, URLs and numbers stay plain inputs. */
+export declare function CopyInput(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>): import("react").JSX.Element;
 export declare function MetricsEditor({ metrics, onChange }: {
     metrics: Metric[];
     onChange: (m: Metric[]) => void;

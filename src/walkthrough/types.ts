@@ -33,6 +33,7 @@
 // leans on, since it survives a re-ingest that moves the element.
 
 import type { ProjectPreview, Screen } from "../core.js";
+import { stripPauses } from "../ui/renderStyledText.js";
 
 /** What a step shows. The app named by `WalkthroughStep.app` keeps running
  * whichever of these is on screen. */
@@ -226,7 +227,8 @@ export const slideOf = (step?: WalkthroughStep): Screen | undefined => {
  * it became a slide and can't be seen, so it doesn't get to name it. */
 export function stepLabel(step?: WalkthroughStep): { eyebrow?: string; title?: string } {
   const slide = slideOf(step);
-  return slide ? { eyebrow: slide.eyebrow, title: slide.title } : { eyebrow: step?.eyebrow, title: step?.title };
+  const plain = (text?: string) => text && stripPauses(text);
+  return slide ? { eyebrow: plain(slide.eyebrow), title: plain(slide.title) } : { eyebrow: step?.eyebrow, title: step?.title };
 }
 
 /** Whether what's on screen can be read into — marks, live geometry, advancing

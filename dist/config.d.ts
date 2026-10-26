@@ -13,6 +13,11 @@ export interface CaseStudyAssets {
 }
 export interface CaseStudyConfig {
     assets?: CaseStudyAssets;
+    /** Where the player's Ask AI Tom rail sends questions. Without it, no project
+     * shows the FAB. See src/ask/AskChat.tsx for the request it makes. */
+    ask?: {
+        endpoint: string;
+    };
     /** Caption lookup for the full-size image viewer when a slide gives none. Called
      * as a hook, so it must be the same function on every render. */
     useImageCaption?: (src: string) => ImageCaption;

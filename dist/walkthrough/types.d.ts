@@ -167,6 +167,10 @@ export interface WalkthroughStep {
     advance: StepAdvance;
     /** ms to wait before the panel offers a way past this step (default 12000). */
     nudgeAfter?: number;
+    /** Lets Ask AI Tom offer a jump to another step while the reader is on this
+     * one. Off everywhere else, so an answer can't pull a reader out of the
+     * sequence mid-presentation; the last step always allows it. */
+    askLinks?: boolean;
 }
 export interface WalkthroughContent {
     schemaVersion?: number;
@@ -175,6 +179,17 @@ export interface WalkthroughContent {
     preview?: ProjectPreview;
     /** Which side the copy sits on (default "left"). */
     panelSide?: "left" | "right";
+    /** Ask AI Tom about this project. What it answers from is the project's
+     * ask.md beside project.json, read by the host's endpoint, never shipped. */
+    ask?: {
+        /** Shows the FAB, where the host has given an endpoint and an id. */
+        enabled?: boolean;
+        /** The suggestion pills before the first question (ASK_SUGGESTIONS by default). */
+        suggestions?: string[];
+        /** The Google Doc ask.md is pulled from, in ProjectBuilder. Pulling
+         * replaces ask.md; nothing reads the Doc when a question is asked. */
+        source?: string;
+    };
     steps: WalkthroughStep[];
 }
 /** What a new project starts as: one step, running nothing. */

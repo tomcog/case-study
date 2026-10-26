@@ -9,7 +9,7 @@ export declare function newScreen(): Screen;
  * `play` runs the entrance; a builder leaves it off, because the slide is
  * being edited rather than arrived at. `reduced` picks the reduced-motion
  * variants. */
-export declare function SlideView({ screen, play, reduced, logoSrc, onAnnotationMove }: {
+export declare function SlideView({ screen, play, reduced, logoSrc, onAnnotationMove, footnote, onNext }: {
     screen: Screen;
     play?: boolean;
     reduced?: boolean;
@@ -18,6 +18,10 @@ export declare function SlideView({ screen, play, reduced, logoSrc, onAnnotation
      * annotated layout has any, and ScreenView hands it to that layout alone,
      * so a caller doesn't have to know which one that is. */
     onAnnotationMove?: (id: string, x: number, y: number) => void;
+    /** A line the host sets at the foot of the content area, after the build. */
+    footnote?: string;
+    /** What a next button on the slide does: the player moves on a step. */
+    onNext?: () => void;
 }): import("react").JSX.Element;
 /** Everything about one slide: its layout and the fields that layout uses.
  * Lifted out of the builder so a step displaying a slide edits it with exactly

@@ -31,6 +31,7 @@
 // data-walkthrough="<id>" when it has one, and its path in the page when it
 // doesn't (see driver.ts). A mark is still worth adding to anything a demo
 // leans on, since it survives a re-ingest that moves the element.
+import { stripPauses } from "../ui/renderStyledText.js";
 /** What a new project starts as: one step, running nothing. */
 export const DEFAULT_WALKTHROUGH = {
     steps: [
@@ -56,7 +57,8 @@ export const slideOf = (step) => {
  * it became a slide and can't be seen, so it doesn't get to name it. */
 export function stepLabel(step) {
     const slide = slideOf(step);
-    return slide ? { eyebrow: slide.eyebrow, title: slide.title } : { eyebrow: step?.eyebrow, title: step?.title };
+    const plain = (text) => text && stripPauses(text);
+    return slide ? { eyebrow: plain(slide.eyebrow), title: plain(slide.title) } : { eyebrow: step?.eyebrow, title: step?.title };
 }
 /** Whether what's on screen can be read into — marks, live geometry, advancing
  * on what the reader does. Only a running app can; an embed is another origin

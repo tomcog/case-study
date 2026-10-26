@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { LogoMark } from "./LogoMark.js";
-import { renderStyledText } from "./renderStyledText.js";
+import { Paragraphs } from "../core.js";
 
 import { RED, INK as BLACK, OVERLAY_GRADIENT, MONO_FILTER } from "../theme.js";
 
@@ -50,13 +50,13 @@ export function ProjectPreviewCard({ image, imageOverlay, imageMono, eyebrow, ti
           {/* Text half */}
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 12, padding: "40px 40px 40px 20px" }}>
             {eyebrow && (
-              <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: RED, lineHeight: 1, wordBreak: "break-word" }}>{renderStyledText(eyebrow)}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: RED, lineHeight: 1, wordBreak: "break-word" }}><Paragraphs text={eyebrow} styled /></div>
             )}
             {title && (
-              <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.25, color: BLACK, wordBreak: "break-word" }}>{renderStyledText(title)}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.25, color: BLACK, wordBreak: "break-word" }}><Paragraphs text={title} styled /></div>
             )}
             {body && (
-              <div style={{ fontSize: 14, fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 1.5, color: BLACK, wordBreak: "break-word" }}>{renderStyledText(body)}</div>
+              <div style={{ fontSize: 14, fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 1.5, color: BLACK, wordBreak: "break-word" }}><Paragraphs text={body} styled /></div>
             )}
           </div>
         </div>

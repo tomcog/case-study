@@ -21,7 +21,7 @@ import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-run
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
-import { renderStyledText } from "../ui/renderStyledText.js";
+import { Paragraphs } from "../core.js";
 import { sameOriginDriver } from "./driver.js";
 /** What shows behind the app: the margins beside one held to its max width,
  * and anything an app leaves transparent. White, since that is what most
@@ -444,6 +444,6 @@ export function Callouts({ items, boxFor, bounds, scrollX = 0 }) {
                     lineHeight: 1.45,
                     color: INK,
                     pointerEvents: "none",
-                }, children: renderStyledText(p.callout.text) }, p.key)))] }));
+                }, children: _jsx(Paragraphs, { text: p.callout.text, styled: true }) }, p.key)))] }));
 }
 //# sourceMappingURL=stage.js.map

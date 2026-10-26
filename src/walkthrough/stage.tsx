@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { INK, RED } from "../theme.js";
-import { renderStyledText } from "../ui/renderStyledText.js";
+import { Paragraphs } from "../core.js";
 import { sameOriginDriver } from "./driver.js";
 import type { Driver, MarkRect, MarkRects } from "./driver.js";
 import type { Area, Callout, Spotlight as SpotlightSpec } from "./types.js";
@@ -604,7 +604,7 @@ export function Callouts({ items, boxFor, bounds, scrollX = 0 }: {
             pointerEvents: "none",
           }}
         >
-          {renderStyledText(p.callout.text)}
+          <Paragraphs text={p.callout.text} styled />
         </div>
       ))}
     </>

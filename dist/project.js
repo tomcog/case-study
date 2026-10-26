@@ -129,6 +129,7 @@ const screenWithAssetBase = (base) => {
         ...s,
         imageUrl: abs(s.imageUrl),
         imageUrl2: abs(s.imageUrl2),
+        bodyImage: abs(s.bodyImage),
         videoUrl: abs(s.videoUrl),
         images: s.images?.map((img) => ({ ...img, url: abs(img.url) ?? "" })),
     });

@@ -21,7 +21,7 @@ import { ChevronDown, ChevronUp, Copy, Crosshair, Image as ImageIcon, LayoutGrid
 import { ACCENT } from "../core.js";
 import type { Screen } from "../core.js";
 import { SlideFields, SlideView, newScreen } from "../slide.js";
-import { Field, ImageField, PreviewCardSettings, inputStyle } from "../editors.js";
+import { CopyInput, Field, ImageField, PreviewCardSettings, inputStyle } from "../editors.js";
 import { Button, ButtonRound, Segment, SegmentedControl } from "@tomcoggia/ui";
 import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
 import { AreaDraw, Callouts, HoverOutline, SPOT_STRENGTH, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, spotlightBox, toBox, useApp } from "./stage.js";
@@ -40,10 +40,10 @@ const ADVANCE_KINDS: { value: StepAdvance["on"]; label: string; hint: string }[]
 ];
 
 const CONTENT_KINDS: { value: StepContent["kind"]; label: string; hint: string }[] = [
-  { value: "app", label: "The app", hint: "The app this step is running. The reader uses it, and the step can watch what they do." },
-  { value: "embed", label: "A URL", hint: "Any page in a frame — a Figma prototype, a live site. The reader can click inside it; nothing out here can see them do it." },
-  { value: "image", label: "An image", hint: "A still. Whatever the step is running keeps running behind it." },
-  { value: "slide", label: "A slide", hint: "A composed slide, full screen. It carries its own copy, so the panel steps aside for it." },
+  { value: "app", label: "App", hint: "The app this step is running. The reader uses it, and the step can watch what they do." },
+  { value: "embed", label: "URL", hint: "Any page in a frame — a Figma prototype, a live site. The reader can click inside it; nothing out here can see them do it." },
+  { value: "image", label: "Image", hint: "A still. Whatever the step is running keeps running behind it." },
+  { value: "slide", label: "Slide", hint: "A composed slide, full screen. It carries its own copy, so the panel steps aside for it." },
 ];
 
 const uid = () => `step-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`;
@@ -525,7 +525,8 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                   selected={shown.kind === k.value}
                   onClick={() =>
                     update({
-                      content: k.value === "app" ? undefined : blankContent(k.value, shown),
+                      ...carryCopy(k.value, step, shown),
+                      content: k.value === "app" ? undefined : blankContent(k.value, shown, step),
                       // Nothing can be seen through a URL or an image, so a
                       // step showing one can only be left by its button.
                       advance: k.value === "app" || step.advance.on === "manual" ? step.advance : { on: "manual" },
@@ -674,15 +675,15 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
           {!isSlide && (
             <>
               <Field label="Eyebrow">
-                <textarea value={step.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} rows={1} style={{ ...inputStyle, resize: "vertical" }} />
+                <CopyInput value={step.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} rows={1} style={{ ...inputStyle, resize: "vertical" }} />
               </Field>
 
               <Field label="Title">
-                <textarea value={step.title ?? ""} onChange={(e) => update({ title: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
+                <CopyInput value={step.title ?? ""} onChange={(e) => update({ title: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
               </Field>
 
               <Field label="Body">
-                <textarea value={step.body ?? ""} onChange={(e) => update({ body: e.target.value })} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+                <CopyInput value={step.body ?? ""} onChange={(e) => update({ body: e.target.value })} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
               </Field>
 
               <Field label="Panel image" collapsible>
@@ -827,7 +828,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                     busy={(picking?.field === "callout" && picking.at === at) || (drawing?.field === "callout" && drawing.at === at)}
                     disabled={!framed && !driveable}
                   />
-                  <textarea
+                  <CopyInput
                     value={callout.text}
                     onChange={(e) => patchCallout(at, { text: e.target.value })}
                     rows={2}
@@ -979,12 +980,32 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
   );
 }
 
-/** A fresh content of the given kind, keeping anything the old one can lend. */
-function blankContent(kind: StepContent["kind"], from: StepContent): StepContent {
+/** A fresh content of the given kind, keeping anything the old one can lend —
+ * a new slide takes the panel's copy, so it opens on what was written. */
+function blankContent(kind: StepContent["kind"], from: StepContent, step: WalkthroughStep): StepContent {
   if (kind === "app") return { kind: "app" };
   if (kind === "embed") return { kind: "embed", url: from.kind === "embed" ? from.url : "" };
-  if (kind === "slide") return { kind: "slide", screen: from.kind === "slide" ? from.screen : newScreen() };
+  if (kind === "slide") {
+    if (from.kind === "slide") return from;
+    const screen = newScreen();
+    return {
+      kind: "slide",
+      screen: { ...screen, eyebrow: step.eyebrow ?? screen.eyebrow, title: step.title ?? screen.title, body: step.body ?? screen.body },
+    };
+  }
   return { kind: "image", src: from.kind === "image" ? from.src : "", fit: from.kind === "image" ? from.fit : undefined };
+}
+
+/** The eyebrow, title and body move with the step when it crosses between
+ * the panel and a slide: a slide carries its own copy, so the panel's moves
+ * into it, and leaving a slide hands its copy back to the panel. */
+function carryCopy(kind: StepContent["kind"], step: WalkthroughStep, from: StepContent): Partial<WalkthroughStep> {
+  if ((kind === "slide") === (from.kind === "slide")) return {};
+  if (from.kind === "slide") {
+    const { eyebrow, title, body } = from.screen;
+    return { eyebrow, title, body };
+  }
+  return { eyebrow: undefined, title: undefined, body: undefined };
 }
 
 /** A fresh action of the given kind, keeping the mark the old one was on. */

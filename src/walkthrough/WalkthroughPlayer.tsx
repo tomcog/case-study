@@ -14,8 +14,9 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
 import { Segment, SegmentedControl, Toolbar } from "@tomcoggia/ui";
 import { INK, RED } from "../theme.js";
-import { renderStyledText } from "../ui/renderStyledText.js";
 import { SlideView } from "../slide.js";
+import { Paragraphs } from "../core.js";
+import type { Screen } from "../core.js";
 import { Callouts, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, spotlightBox, toBox, useApp } from "./stage.js";
 import type { Box } from "./stage.js";
 import type { Driver } from "./driver.js";
@@ -78,6 +79,11 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
   const reduced = useReducedMotion();
 
   const [i, setI] = useState(startIndex);
+  // Whether the player has drawn anything yet. A slide it opens on fades in
+  // and builds like any other; one it crosses to from an app rides the
+  // crossfade between the two chromes instead (SlideLayer).
+  const opened = useRef(false);
+  useEffect(() => { opened.current = true; }, []);
   const [nudge, setNudge] = useState(false);
 
   const step = steps[i];
@@ -217,22 +223,6 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
           overflowY: "auto",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: INK, letterSpacing: "-0.01em" }}>{content.title}</span>
-          <span style={{ fontSize: 12, color: MUTED, fontVariantNumeric: "tabular-nums" }}>
-            {finished ? `${steps.length} of ${steps.length}` : `${i + 1} of ${steps.length}`}
-          </span>
-        </div>
-
-        <div style={{ height: 3, background: LINE, borderRadius: 2, margin: "14px 0 26px", overflow: "hidden" }}>
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${((finished ? steps.length : i) / Math.max(1, steps.length)) * 100}%` }}
-            transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 30 }}
-            style={{ height: "100%", background: RED }}
-          />
-        </div>
-
         <div style={{ flex: 1, minHeight: 0 }}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
@@ -245,17 +235,17 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
               {step ? (
                 <>
                   {step.eyebrow && (
-                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: RED, marginBottom: 10 }}>
-                      {step.eyebrow}
+                    <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: RED, marginBottom: 10 }}>
+                      <Paragraphs text={step.eyebrow} />
                     </div>
                   )}
                   {step.title && (
                     <h2 style={{ margin: "0 0 12px", fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.02em", color: INK, fontWeight: 650 }}>
-                      {step.title}
+                      <Paragraphs text={step.title} />
                     </h2>
                   )}
                   {step.body && (
-                    <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "#45413d" }}>{renderStyledText(step.body)}</p>
+                    <div style={{ fontSize: 15, lineHeight: 1.6, color: "#45413d" }}><Paragraphs text={step.body} styled /></div>
                   )}
                   {step.imageUrl && (
                     <img src={step.imageUrl} alt="" style={{ display: "block", width: "100%", borderRadius: 10, marginTop: 18, border: `1px solid ${LINE}` }} />
@@ -343,26 +333,7 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
             onClick={next}
             style={{ position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }}
           >
-            {/* One slide to the next crossfades over a second. The incoming
-                slide is laid over the outgoing one and fades in while the old
-                one stays opaque beneath it, so the backgrounds blend without
-                the backdrop showing through between them. The content still
-                makes its own entrance on top of that. */}
-            <AnimatePresence initial={false}>
-              <motion.div
-                key={slide.id}
-                initial={{ opacity: 0, zIndex: 1 }}
-                animate={{ opacity: 1, zIndex: 1 }}
-                // Leaving is a wait, not a fade: the old slide has to stay up
-                // for as long as the new one takes to cover it. Its opacity
-                // only drops once the incoming one is fully opaque.
-                exit={{ opacity: 0, zIndex: 0, transition: { delay: reduced ? 0 : SLIDE_FADE, duration: 0.01 } }}
-                transition={{ duration: reduced ? 0 : SLIDE_FADE, ease: "linear" }}
-                style={{ position: "absolute", inset: 0 }}
-              >
-                <SlideView screen={slide} play reduced={!!reduced} logoSrc={content.preview?.logo} />
-              </motion.div>
-            </AnimatePresence>
+            <SlideLayer slide={slide} crossing={opened.current} reduced={!!reduced} logoSrc={content.preview?.logo} footnote={i === 0 ? NAV_HINT : undefined} onNext={next} />
 
             {/* A slide has no panel to carry the count, so it sits at the
                 foot of the slide; the toolbar does the moving. */}
@@ -443,8 +414,42 @@ const toolbarAt: React.CSSProperties = {
   zIndex: 1,
 };
 
+/** What the first slide says at its foot, since a deck gives no other sign of
+ * how to move through it. */
+const NAV_HINT = "Use on-screen or keyboard arrow keys to navigate";
+
 /** Seconds one slide's background takes to crossfade into the next's. */
 const SLIDE_FADE = 1;
+
+/** The slides, one over the next. One slide to the next crossfades over
+ * SLIDE_FADE: the incoming slide is laid over the outgoing one and fades in
+ * while the old one stays opaque beneath it, so the backgrounds blend without
+ * the backdrop showing through between them. The content makes its own
+ * entrance on top of that, every time — the slide the player opens on
+ * included, which fades in from the backdrop. The one exception is the slide
+ * the layer opens on when `crossing` from an app: the layer's own crossfade
+ * already brings it in, so it only builds. */
+function SlideLayer({ slide, crossing, reduced, logoSrc, footnote, onNext }: { slide: Screen; crossing: boolean; reduced: boolean; logoSrc?: string; footnote?: string; onNext: () => void }) {
+  const [crossedTo] = useState(crossing ? slide.id : null);
+  return (
+    // Never `initial={false}` here: it would hold back the build inside too.
+    <AnimatePresence>
+      <motion.div
+        key={slide.id}
+        initial={slide.id === crossedTo ? false : { opacity: 0, zIndex: 1 }}
+        animate={{ opacity: 1, zIndex: 1 }}
+        // Leaving is a wait, not a fade: the old slide has to stay up
+        // for as long as the new one takes to cover it. Its opacity
+        // only drops once the incoming one is fully opaque.
+        exit={{ opacity: 0, zIndex: 0, transition: { delay: reduced ? 0 : SLIDE_FADE, duration: 0.01 } }}
+        transition={{ duration: reduced ? 0 : SLIDE_FADE, ease: "linear" }}
+        style={{ position: "absolute", inset: 0 }}
+      >
+        <SlideView screen={slide} play reduced={reduced} logoSrc={logoSrc} footnote={footnote} onNext={onNext} />
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
 const slideCount: React.CSSProperties = {
   position: "absolute",

@@ -14,7 +14,7 @@ export type { ProjectSummary, ProjectSource, ProjectContent, IngestedApp } from 
 export { DEFAULT_ACCENT, DEFAULT_INK } from "./theme.js";
 
 // Building blocks the host app may reuse in its own screens (e.g. a project index editor).
-export { ImageField, Field, inputStyle } from "./editors.js";
+export { ImageField, Field, CopyInput, inputStyle } from "./editors.js";
 export { CaseStudyThumb } from "./ui/CaseStudyThumb.js";
 export type { ThumbFrame } from "./ui/CaseStudyThumb.js";
 export { CaseStudyLink } from "./ui/CaseStudyLink.js";
@@ -22,7 +22,8 @@ export { Lightbox, LightboxTrigger } from "./ui/Lightbox.js";
 export { LogoMark } from "./ui/LogoMark.js";
 export { PhoneMockup } from "./ui/PhoneMockup.js";
 export { ComputerFrame } from "./ui/ComputerFrame.js";
-export { renderStyledText } from "./ui/renderStyledText.js";
+export { renderStyledText, splitPauses, stripPauses } from "./ui/renderStyledText.js";
+export { Paragraphs, splitParagraphs, pausedParagraphs, built, pausedContainer, PARA_GAP } from "./core.js";
 
 // The player and the builder: one of each, for every kind of step.
 export { WalkthroughPlayer as ProjectPlayer } from "./walkthrough/WalkthroughPlayer.js";

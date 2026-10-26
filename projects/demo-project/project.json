@@ -1,0 +1,33 @@
+{
+  "steps": [
+    {
+      "id": "step-1",
+      "eyebrow": "Eyebrow Text 123456",
+      "title": "This is the title text",
+      "body": "Pick an app for this step to run, then describe what the reader should do first.",
+      "advance": {
+        "on": "manual"
+      },
+      "app": "provider-portal",
+      "content": {
+        "kind": "slide",
+        "screen": {
+          "id": "s-1793048839142-870",
+          "layout": "basic1",
+          "basicTheme": "light",
+          "theme": "light",
+          "bg": "#ffffff",
+          "fg": "#1a1a1a",
+          "accent": "#E51A38",
+          "eyebrow": "Section",
+          "title": "New screen",
+          "body": "Describe this step of the story.",
+          "linkAction": "next"
+        }
+      }
+    }
+  ],
+  "schemaVersion": 6,
+  "title": "Demo Project",
+  "draft": true
+}
