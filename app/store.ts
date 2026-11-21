@@ -49,6 +49,11 @@ export async function getAsk(id: string): Promise<AskInfo> {
 export const setAsk = (id: string, patch: { enabled?: boolean; source?: string }) => post<AskInfo>("ask", { id, ...patch });
 export const pullAsk = (id: string) => post<AskInfo>("ask-pull", { id });
 export const publishProject = (id: string, published: boolean) => post("publish", { id, published });
+
+/** What a publish is for: marking a project published only clears its draft
+ * flag here, and the sites that load projects read the deployed build. */
+export type PushResult = { ok: true; changed: boolean; files: string[]; sha?: string };
+export const pushLive = () => post<PushResult>("push-live", {});
 export const duplicateProject = (id: string, title: string) => post<{ id: string }>("duplicate", { id, title });
 export const deleteProject = (id: string) => post("delete", { id });
 

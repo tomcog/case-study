@@ -270,6 +270,12 @@ code {
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.2);
 }
 
+/* A push that worked. Not the accent: that is the brand red, which on a bar
+   like this one reads as something having gone wrong. */
+.toast--ok {
+  background: #1c7c4a;
+}
+
 .toast button {
   border: none;
   background: none;
@@ -277,6 +283,19 @@ code {
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
+}
+
+/* The spinner on a button that is waiting on the network. */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation-duration: 3s; }
 }
 
 .status {

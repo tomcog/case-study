@@ -29,6 +29,8 @@ import { exec } from "node:child_process";
 //   GET  /__projects/ask?id=<id>                    Ask AI Tom: on or off, the Google Doc, and ask.md's size and age
 //   POST /__projects/ask        { id, enabled?, source? } → the same, after setting them
 //   POST /__projects/ask-pull   { id }              → the same, after replacing ask.md with the Doc as markdown
+//   POST /__projects/push-live  {}                  → commits projects/ and apps/ and pushes, which is what
+//                                                     actually puts published projects on the live site
 //
 //   GET  /apps/index.json                           one row per ingested app
 //   GET  /apps/<id>/…                               an app's files, straight from disk
@@ -68,7 +70,13 @@ const MIME: Record<string, string> = {
 const ID = /^[a-z0-9][a-z0-9-]*$/;
 const IMAGE = /\.(png|jpe?g|gif|webp|svg|avif|mp4)$/i;
 
+/** The branch Vercel builds the published site from. */
+const DEPLOY_BRANCH = "main";
+
 export function projectsPlugin(dir: string, appsDir: string): Plugin {
+  // `dir` is projects/ and `appsDir` is apps/, both at the repository root.
+  const repoRoot = dirname(resolve(dir));
+
   // ── Ingested apps ──
   const appFile = (id: string) => join(appsDir, id, "app.json");
   /** An app.json in the current shape. Before an app had a floor and a
@@ -186,6 +194,52 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
         done(fresh ? undefined : `The build in ${project} ran but didn't write to ${from}. Point Re-ingest at the folder it builds into`);
       });
     });
+  }
+
+  // ── Going live ──
+
+  /** Run a command at the repository root and hand back what it said. */
+  function sh(command: string): Promise<{ ok: boolean; out: string }> {
+    return new Promise((done) => {
+      exec(command, { cwd: repoRoot, timeout: 2 * 60_000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => {
+        done({ ok: !err, out: `${stdout}${stderr}`.trim() });
+      });
+    });
+  }
+
+  /** Publish for real. Marking a project published only clears its draft flag
+   * on disk; the site other apps read is this repository's build, so nothing
+   * reaches them until it is pushed. That left the last step as something to
+   * remember, and a project could sit "published" for days without being.
+   *
+   * Only `projects/` and `apps/` are committed, so content never carries code
+   * along with it, and only from the branch the site deploys from — pushing a
+   * feature branch would publish its code too, which is never what pressing
+   * Publish meant. */
+  async function pushLive(): Promise<[number, unknown]> {
+    const branch = await sh("git rev-parse --abbrev-ref HEAD");
+    if (!branch.ok) return [500, { error: `Not a git repository: ${branch.out}` }];
+    if (branch.out !== DEPLOY_BRANCH) {
+      return [409, { error: `On ${branch.out}, and the site deploys from ${DEPLOY_BRANCH}. Merge there first — publishing from here would push this branch's code too.` }];
+    }
+
+    const staged = await sh("git add -- projects apps && git diff --cached --name-only -- projects apps");
+    if (!staged.ok) return [500, { error: `Couldn't stage the content: ${staged.out}` }];
+
+    const files = staged.out ? staged.out.split("\n").filter(Boolean) : [];
+    if (files.length) {
+      const summary = files.length === 1 ? files[0] : `${files.length} files`;
+      const commit = await sh(`git commit -m ${JSON.stringify(`Publish ${summary}`)} -- projects apps`);
+      if (!commit.ok) return [500, { error: `Couldn't commit: ${commit.out}` }];
+    }
+
+    const ahead = await sh(`git rev-list --count origin/${DEPLOY_BRANCH}..HEAD`);
+    if (ahead.ok && ahead.out === "0") return [200, { ok: true, changed: false, files: [] }];
+
+    const pushed = await sh(`git push origin ${DEPLOY_BRANCH}`);
+    if (!pushed.ok) return [502, { error: `Couldn't push: ${pushed.out}` }];
+    const sha = await sh("git rev-parse --short HEAD");
+    return [200, { ok: true, changed: true, files, sha: sha.ok ? sha.out : undefined }];
   }
 
   /** Build the app, then swap its files for the fresh copy, keeping its id
@@ -501,6 +555,13 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
             if (path === "/__apps/reingest") {
               if (!ID.test(input.id ?? "") || !existsSync(appFile(input.id))) return reply(404, { error: "No such app" });
               reingest(input.id, input).then(
+                (result) => reply(...result),
+                (err) => reply(500, { error: (err as Error).message }),
+              );
+              return;
+            }
+            if (path === "/__projects/push-live") {
+              pushLive().then(
                 (result) => reply(...result),
                 (err) => reply(500, { error: (err as Error).message }),
               );

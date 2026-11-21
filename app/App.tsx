@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BotMessageSquare, Copy, Eye, EyeOff, Globe, Layers, LayoutGrid, Pencil, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { BotMessageSquare, Check, CloudUpload, Copy, Eye, EyeOff, Globe, Layers, LayoutGrid, Loader2, Pencil, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button, ButtonRound, Card, Checkbox, InputText, Modal, Tag } from "@tomcoggia/ui";
 import {
   CaseStudyProvider, ProjectBuilder, ProjectPlayer, SlideView,
@@ -7,7 +7,7 @@ import {
 } from "../src/index.js";
 import {
   appsUsage, beaconProject, canEdit, createProject, deleteApp, deleteProject, duplicateProject, getProject, ingestApp,
-  getAsk, listApps, listProjects, moveProject, patchApp, projectAssets, publishProject, pullAsk, reingestApp, renameProject, saveProject, setAsk,
+  getAsk, listApps, listProjects, moveProject, patchApp, projectAssets, publishProject, pullAsk, pushLive, reingestApp, renameProject, saveProject, setAsk,
   type AppUse, type AskInfo, type ProjectRow,
 } from "./store";
 import type { IngestedApp } from "../src/index.js";
@@ -77,6 +77,8 @@ function ProjectList() {
   const [rows, setRows] = useState<ProjectRow[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pushing, setPushing] = useState(false);
+  const [pushed, setPushed] = useState<string | null>(null);
 
   const refresh = () => listProjects().then(setRows).catch(() => setRows([]));
   useEffect(() => {
@@ -92,6 +94,26 @@ function ProjectList() {
       setError((err as Error).message);
     }
     await refresh();
+  }
+
+  /** Commit the content and push, which is what a deploy reads. The build
+   * takes a minute or two afterwards, so this says it has gone rather than
+   * that it has arrived. */
+  async function push() {
+    setPushing(true);
+    setError(null);
+    setPushed(null);
+    try {
+      const result = await pushLive();
+      setPushed(
+        !result.changed
+          ? "Already live — nothing to push."
+          : `Pushed${result.sha ? ` (${result.sha})` : ""} — live in a minute or two.`,
+      );
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    setPushing(false);
   }
 
   async function create(title: string, id: string) {
@@ -113,6 +135,15 @@ function ProjectList() {
           <div className="list__actions">
             <Button asChild variant="tertiary" icon={<Layers size={16} />}>
               <a href="#/apps" title="The apps every project's steps can run">Apps</a>
+            </Button>
+            <Button
+              variant="tertiary"
+              icon={pushing ? <Loader2 size={16} className="spin" /> : <CloudUpload size={16} />}
+              disabled={pushing}
+              title="Put every published project on the live site"
+              onClick={push}
+            >
+              {pushing ? "Going live…" : "Push live"}
             </Button>
             {!creating && (
               <Button variant="primary" icon={<Plus size={16} />} onClick={() => setCreating(true)}>
@@ -146,6 +177,13 @@ function ProjectList() {
           />
         ))}
       </div>
+
+      {pushed && (
+        <div className="toast toast--ok" role="status">
+          <Check size={14} /> {pushed}
+          <button onClick={() => setPushed(null)} aria-label="Dismiss">×</button>
+        </div>
+      )}
 
       {error && (
         <div className="toast" role="alert">
