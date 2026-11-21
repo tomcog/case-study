@@ -3,3 +3,7 @@ node_modules
 app-dist
 .vercel
 .env
+
+# Where each ingested app was ingested from: paths on the author's machine,
+# and this repository is public. See app/projects-plugin.ts.
+apps/.sources.json

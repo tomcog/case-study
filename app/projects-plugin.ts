@@ -91,6 +91,29 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
   }
   const appIds = () => (existsSync(appsDir) ? readdirSync(appsDir).filter((f) => ID.test(f) && existsSync(appFile(f))) : []);
 
+  /** Where each app was ingested from, by id. These are paths on the author's
+   * machine and this repository is public, so they are kept here, beside the
+   * pool and out of git, rather than in each `app.json` — which is committed,
+   * and from which they would have to be remembered out again every time.
+   * Losing this file costs the Re-ingest field its starting value, nothing
+   * more: the path can always be given again. */
+  const sourcesFile = join(appsDir, ".sources.json");
+  const readSources = (): Record<string, string> => {
+    try {
+      return JSON.parse(readFileSync(sourcesFile, "utf8"));
+    } catch {
+      return {};
+    }
+  };
+  const sourceOf = (id: string) => readSources()[id];
+  function setSource(id: string, from: string | undefined) {
+    const all = readSources();
+    if (from) all[id] = from;
+    else delete all[id];
+    mkdirSync(appsDir, { recursive: true });
+    writeFileSync(sourcesFile, `${JSON.stringify(all, null, 2)}\n`);
+  }
+
   /** One row per ingested app. The entry is whatever the build calls its
    * HTML, which is index.html everywhere so far but is recorded rather than
    * assumed. `source` is a path on the author's machine, so only the dev
@@ -108,7 +131,7 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
           minWindow: meta.minWindow,
           hidden: meta.hidden === true ? true : undefined,
           ingestedAt: meta.ingestedAt ?? statSync(appFile(id)).mtimeMs,
-          source: source ? meta.source : undefined,
+          source: source ? sourceOf(id) : undefined,
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
@@ -144,7 +167,8 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
     const label = String(input.label ?? basename(built.from)).trim() || basename(built.from);
     const id = freeAppId(label);
     copyIn(built.from, id);
-    writeFileSync(appFile(id), `${JSON.stringify({ label, entry: built.entry, source: built.from, ingestedAt: Date.now() }, null, 2)}\n`);
+    writeFileSync(appFile(id), `${JSON.stringify({ label, entry: built.entry, ingestedAt: Date.now() }, null, 2)}\n`);
+    setSource(id, built.from);
     return [200, { id }];
   }
 
@@ -248,7 +272,8 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
    * or the old build's hashed assets would pile up beside the new ones. */
   async function reingest(id: string, input: any): Promise<[number, unknown]> {
     const meta = readApp(id);
-    const built = builtFolder(input.path || meta.source);
+    // `meta.source` only for an app.json written before the paths moved out.
+    const built = builtFolder(input.path || sourceOf(id) || meta.source);
     if ("error" in built) return [400, built];
     const failed = await buildApp(built.from, built.entry);
     if (failed) return [422, { error: failed }];
@@ -256,7 +281,9 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
       if (name !== "app.json") rmSync(join(appsDir, id, name), { recursive: true, force: true });
     }
     copyIn(built.from, id);
-    writeFileSync(appFile(id), `${JSON.stringify({ ...meta, entry: built.entry, source: built.from, ingestedAt: Date.now() }, null, 2)}\n`);
+    const { source: _legacy, ...keep } = meta;
+    writeFileSync(appFile(id), `${JSON.stringify({ ...keep, entry: built.entry, ingestedAt: Date.now() }, null, 2)}\n`);
+    setSource(id, built.from);
     return [200, { ok: true }];
   }
 
@@ -595,8 +622,13 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
       writeFileSync(join(outDir, "projects", "index.json"), `${JSON.stringify(index({ drafts: false }), null, 2)}\n`);
 
       if (!existsSync(appsDir)) return;
-      cpSync(appsDir, join(outDir, "apps"), { recursive: true, filter: (src) => basename(src) !== ".DS_Store" });
-      // Where an app was ingested from is a path on the author's machine.
+      // `.sources.json` holds paths on the author's machine: it is kept out of
+      // git, and out of the build, which is served to anyone.
+      cpSync(appsDir, join(outDir, "apps"), {
+        recursive: true,
+        filter: (src) => basename(src) !== ".DS_Store" && basename(src) !== basename(sourcesFile),
+      });
+      // An app.json written before those paths moved out still carries one.
       for (const id of appIds()) {
         const { source, ...meta } = readApp(id);
         if (source) writeFileSync(join(outDir, "apps", id, "app.json"), `${JSON.stringify(meta, null, 2)}\n`);
