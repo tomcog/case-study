@@ -29,7 +29,7 @@
       "id": "step-1",
       "eyebrow": "Helios",
       "title": "Genomics / Daily operations",
-      "body": "This is a fully interactive prototype, so please click around and check it out.",
+      "body": "Genomics is the study of an organism's entire set of DNA - its genome - including how all of its genes interact with each other and the environment to shape traits, health, and disease.\n\nThis is a fully interactive prototype, so please click around and check it out.",
       "advance": {
         "on": "manual",
         "button": false
@@ -50,7 +50,8 @@
       "app": "helios",
       "start": "#/genomics-methyl-qc",
       "listed": true,
-      "showContents": true
+      "showContents": true,
+      "body": "A methylation QC failure means a DNA test didn’t pass basic quality checks - usually because the DNA sample was damaged, the chemical prep didn't work properly, or the machine didn't read enough of it - so the results aren't reliable enough to use."
     },
     {
       "id": "step-mvrbstn7-916",
@@ -63,7 +64,8 @@
       "app": "helios",
       "start": "#/proteomics-daily",
       "listed": true,
-      "showContents": true
+      "showContents": true,
+      "body": "Proteomics is the large-scale study of the entire set of proteins produced by a cell, tissue, or organism - including their structures, functions, modifications, and interactions - to understand how biological systems operate in real time."
     },
     {
       "id": "step-mvrn2h5q-401",
@@ -76,7 +78,8 @@
       },
       "start": "#/proteomics-bead-count",
       "listed": true,
-      "showContents": true
+      "showContents": true,
+      "body": "A bead count failure happens when a lab test that uses microscopic beads to measure DNA or proteins doesn't detect enough of those beads to produce a trustworthy result."
     },
     {
       "id": "step-mvrn356z-111",
@@ -89,7 +92,8 @@
       },
       "start": "#/proteomics-longitudinal",
       "listed": true,
-      "showContents": true
+      "showContents": true,
+      "body": "Longitudinal monitoring is the repeated tracking of the same biological samples over an extended period to observe changes, detect emerging patterns or disease progression, and evaluate outcomes over time."
     }
   ],
   "schemaVersion": 6,
