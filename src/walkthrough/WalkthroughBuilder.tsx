@@ -27,7 +27,7 @@ import { WalkthroughPlayer, marksOf } from "./WalkthroughPlayer.js";
 import { AreaDraw, Callouts, HoverOutline, SPOT_STRENGTH, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, spotlightBox, toBox, useApp } from "./stage.js";
 import type { Box } from "./stage.js";
 import type { PickHit } from "./driver.js";
-import { appRuns, bootsApp, contentOf, stepLabel, stepMarks } from "./types.js";
+import { appRuns, bootsApp, contentOf, contentsOf, stepLabel, stepMarks } from "./types.js";
 import type { Area, Callout, StepAction, StepAdvance, StepContent, WalkthroughContent, WalkthroughStep } from "./types.js";
 import type { IngestedApp } from "../project.js";
 
@@ -48,11 +48,13 @@ const CONTENT_KINDS: { value: StepContent["kind"]; label: string; hint: string }
 
 const uid = () => `step-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`;
 
-const newStep = (): WalkthroughStep => ({
+/** A step inserted after `after` starts out running the same app, so it carries on in it
+ * rather than stopping it. It's a starting value: the step stores it and owns it from here.
+ * It has no copy: a field the author hasn't filled is left out of the panel, so stand-in
+ * text would only be something to find and delete. The inputs say what goes in them. */
+const newStep = (after?: WalkthroughStep): WalkthroughStep => ({
   id: uid(),
-  eyebrow: "Step",
-  title: "New step",
-  body: "What should the reader do here?",
+  app: after?.app,
   advance: { on: "manual" },
 });
 
@@ -77,7 +79,8 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
    * one keeps running it and still says so. */
   apps?: IngestedApp[];
   projectName?: string;
-  /** Adds a "Done" button to the toolbar (e.g. back to a project list). */
+  /** Adds a "Done" button to the toolbar (e.g. back to a project list), and
+   * makes the "ProjectBuilder" title go there too. */
   onClose?: () => void;
 }) {
   const [selected, setSelected] = useState(0);
@@ -105,6 +108,10 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
   const runs = useMemo(() => appRuns(steps), [steps]);
   const runStarts = useMemo(() => new Map(runs.map((r) => [r.from, r])), [runs]);
   const boots = bootsApp(steps, index);
+  // What the contents would call this step without a label of its own, and how
+  // many steps it lists.
+  const contentsLabel = stepLabel(step).title?.replace(/\s+/g, " ").trim();
+  const listedCount = useMemo(() => contentsOf(steps).length, [steps]);
 
   // What is on screen decides what can be pointed at, and there are three
   // answers rather than two. A running app can be read into, so a mark follows
@@ -136,14 +143,14 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
     update({ actions: (step.actions ?? []).map((a, i) => (i === at ? action : a)) });
 
   const addCallout = () =>
-    update({ callouts: [...(step.callouts ?? []), { text: "Describe this element." }] });
+    update({ callouts: [...(step.callouts ?? []), { text: "" }] });
 
   const removeCallout = (at: number) => update({ callouts: (step.callouts ?? []).filter((_, i) => i !== at) });
 
   const addStep = () => {
     setContent((prev) => {
       const next = [...prev.steps];
-      next.splice(index + 1, 0, newStep());
+      next.splice(index + 1, 0, newStep(prev.steps[index]));
       return { ...prev, steps: next };
     });
     setSelected(index + 1);
@@ -176,7 +183,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
     setSelected(to);
   };
 
-  // A starting screen is a hash route inside the app: "#/orders". An address
+  // A step's screen is a hash route inside the app: "#/orders". An address
   // pasted here still applies — as a hash on the app the step is already
   // running — so nothing throws and the app never changes. Catch the shapes an
   // address takes: a file, a full URL, or a hash that isn't rooted at "/".
@@ -311,7 +318,17 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
       {/* Toolbar */}
       <div style={toolbar}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 15 }}>
-          <LayoutGrid size={18} style={{ color: ACCENT }} /> Walkthrough Builder
+          {onClose ? (
+            <button
+              onClick={onClose}
+              title="All projects"
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: 0, border: 0, background: "none", font: "inherit", color: "inherit", cursor: "pointer" }}
+            >
+              <LayoutGrid size={18} style={{ color: ACCENT }} /> ProjectBuilder
+            </button>
+          ) : (
+            <><LayoutGrid size={18} style={{ color: ACCENT }} /> ProjectBuilder</>
+          )}
           {projectName && (
             <>
               <span style={{ color: "#cfcbc4", fontWeight: 400 }}>/</span>
@@ -403,7 +420,7 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
               {demo.live && app && <iframe key={app.src} ref={demo.frameRef} title={app.label} style={demo.frameStyle} />}
 
               {shown.kind === "slide" && (
-                <div style={{ position: "absolute", inset: 0, background: "#f4f3f1" }}>
+                <div style={{ position: "absolute", inset: 0, background: "var(--ui-surface-pale, #f5f5f5)" }}>
                   {/* No entrance here: the slide is being edited, not arrived at. */}
                   <SlideView
                     screen={shown.screen}
@@ -480,17 +497,18 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
             )}
             {!step.app && <p style={hint}>Nothing runs behind this step. It can still display a URL or an image.</p>}
 
-            {/* Only the step that boots the app decides where it opens. On the
-                rest it is already open and the reader may have moved around in
-                it; sending them back would undo their work. */}
-            {boots && (
+            {/* The step that boots the app decides where it opens. On the rest
+                it is already open and the reader may have moved around in it,
+                so a blank screen leaves them there and only a named one moves
+                the app. */}
+            {!!step.app && (
               <>
-                <label style={{ ...hint, display: "block", marginTop: 12 }}>Starting screen</label>
+                <label style={{ ...hint, display: "block", marginTop: 12 }}>Screen</label>
                 <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                   <input
                     value={step.start ?? ""}
                     onChange={(e) => update({ start: e.target.value || undefined })}
-                    placeholder="#/orders"
+                    placeholder={boots ? "#/orders" : "Where the reader left it"}
                     style={inputStyle}
                   />
                   <Button
@@ -512,7 +530,11 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                     </span>
                   </div>
                 )}
-                <p style={hint}>Where the app opens. Navigate it on the left and press Use current rather than typing one.</p>
+                <p style={hint}>
+                  {boots
+                    ? "Where the app opens. Navigate it on the left and press Use current rather than typing one."
+                    : "Leave it blank to keep the app wherever the reader left it, or name a screen to take it there. Navigate it on the left and press Use current rather than typing one."}
+                </p>
               </>
             )}
           </Field>
@@ -675,15 +697,15 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
           {!isSlide && (
             <>
               <Field label="Eyebrow">
-                <CopyInput value={step.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} rows={1} style={{ ...inputStyle, resize: "vertical" }} />
+                <CopyInput value={step.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} placeholder="Where the reader is (none)" rows={1} style={{ ...inputStyle, resize: "vertical" }} />
               </Field>
 
               <Field label="Title">
-                <CopyInput value={step.title ?? ""} onChange={(e) => update({ title: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
+                <CopyInput value={step.title ?? ""} onChange={(e) => update({ title: e.target.value })} placeholder="What this step is about (none)" rows={2} style={{ ...inputStyle, resize: "vertical" }} />
               </Field>
 
               <Field label="Body">
-                <CopyInput value={step.body ?? ""} onChange={(e) => update({ body: e.target.value })} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+                <CopyInput value={step.body ?? ""} onChange={(e) => update({ body: e.target.value })} placeholder="What the reader should do here (none)" rows={4} style={{ ...inputStyle, resize: "vertical" }} />
               </Field>
 
               <Field label="Panel image" collapsible>
@@ -691,6 +713,64 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
               </Field>
             </>
           )}
+
+          {/* The contents is drawn from the steps that say they're listed, so
+              it is set here, step by step, rather than kept as a list. */}
+          <Field label="Contents" collapsible>
+            <label style={checkRow}>
+              <input
+                type="checkbox"
+                checked={!!step.listed}
+                onChange={(e) => update({ listed: e.target.checked || undefined })}
+                style={{ accentColor: ACCENT }}
+              />
+              List this step in the contents
+            </label>
+            {step.listed && (
+              <input
+                value={step.listLabel ?? ""}
+                onChange={(e) => update({ listLabel: e.target.value || undefined })}
+                placeholder={contentsLabel || "Its name in the list"}
+                style={inputStyle}
+              />
+            )}
+            {step.listed && !contentsLabel && !step.listLabel?.trim() && (
+              <p style={hint}>It has no title to list it by, so it's left out until it has a name here.</p>
+            )}
+            {/* A jump skips the steps before this one, and whatever they did
+                to the app with them. */}
+            {step.listed && step.app && !boots && !step.start && (
+              <p style={hint}>A jump here skips the steps before it, so give it a Screen above, or it opens wherever the reader was.</p>
+            )}
+            {!isSlide && (
+              <label style={{ ...checkRow, marginTop: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={!!step.showContents}
+                  onChange={(e) => update({ showContents: e.target.checked || undefined })}
+                  style={{ accentColor: ACCENT }}
+                />
+                Show the contents in this step's panel
+              </label>
+            )}
+            {/* The project's, not this step's: every step shows the same list. */}
+            <input
+              value={content.contentsTitle ?? ""}
+              onChange={(e) => {
+                const contentsTitle = e.target.value || undefined;
+                setContent((prev) => ({ ...prev, contentsTitle }));
+              }}
+              placeholder="Title over the list (none)"
+              aria-label="Contents title"
+              style={{ ...inputStyle, marginTop: 6 }}
+            />
+            <p style={hint}>
+              {"The title is the same on every step that shows the contents. "}
+              {listedCount === 0
+                ? "No step is listed yet."
+                : `${listedCount} ${listedCount === 1 ? "step is" : "steps are"} listed. Each is a jump to its step, and the reader's section is marked.`}
+            </p>
+          </Field>
 
           {/* Everything drawn over the stage, and the rule for leaving the
               step. A slide covers the stage, so a spotlight or a callout
@@ -884,14 +964,33 @@ export function WalkthroughBuilder({ content, setContent, apps = [], projectName
                   : ADVANCE_KINDS.find((k) => k.value === step.advance.on)?.hint}
               </p>
 
-              {step.advance.on === "manual" && (
-                <input
-                  value={step.advance.label ?? ""}
-                  onChange={(e) => update({ advance: { on: "manual", label: e.target.value || undefined } })}
-                  placeholder="Button label (Next)"
-                  style={inputStyle}
-                />
-              )}
+              {step.advance.on === "manual" && (() => {
+                const advance = step.advance;
+                const shown = advance.button !== false;
+                return (
+                  <>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#1a1a1a", cursor: "pointer", margin: "4px 0 8px" }}>
+                      <input
+                        type="checkbox"
+                        checked={shown}
+                        onChange={(e) => update({ advance: { ...advance, button: e.target.checked ? undefined : false } })}
+                        style={{ accentColor: ACCENT }}
+                      />
+                      Show the button in the panel
+                    </label>
+                    {shown ? (
+                      <input
+                        value={advance.label ?? ""}
+                        onChange={(e) => update({ advance: { ...advance, label: e.target.value || undefined } })}
+                        placeholder="Button label (Next)"
+                        style={inputStyle}
+                      />
+                    ) : (
+                      <p style={hint}>The reader moves on with the toolbar's arrow or the → key.</p>
+                    )}
+                  </>
+                );
+              })()}
 
               {framed && step.advance.on !== "manual" && (
                 <div style={warn}>
@@ -1193,6 +1292,9 @@ const runBand: React.CSSProperties = {
 };
 
 const hint: React.CSSProperties = { fontSize: 11, color: "#8a857d", margin: "7px 0 0", lineHeight: 1.5 };
+
+/** A checkbox and its sentence, as the advance's button switch has. */
+const checkRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#1a1a1a", cursor: "pointer", margin: "4px 0 8px" };
 
 const warn: React.CSSProperties = {
   display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, lineHeight: 1.5,

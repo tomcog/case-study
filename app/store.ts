@@ -90,6 +90,7 @@ async function postApp<T = { ok: true }>(action: string, body: unknown): Promise
  * holding an index.html — the output of someone's build, not its source. */
 export const ingestApp = (path: string, label: string) => postApp<{ id: string }>("ingest", { path, label });
 export const patchApp = (id: string, patch: Partial<IngestedApp>) => postApp("rename", { id, ...patch });
+export const reingestApp = (id: string, path?: string) => postApp("reingest", { id, path });
 export const deleteApp = (id: string) => postApp("delete", { id });
 
 /** Send a pending save even while the page is closing. */

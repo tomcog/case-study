@@ -23,6 +23,12 @@ export declare function OverviewEditor({ items, onChange, label }: {
     onChange: (m: OverviewItem[]) => void;
     label?: string;
 }): import("react").JSX.Element;
+/** A numbered list, one input per item. The number is the item's position, so
+ * it follows a move rather than the item. */
+export declare function ListEditor({ items, onChange }: {
+    items: string[];
+    onChange: (m: string[]) => void;
+}): import("react").JSX.Element;
 export declare function GalleryEditor({ images, onChange }: {
     images: GalleryImage[];
     onChange: (m: GalleryImage[]) => void;

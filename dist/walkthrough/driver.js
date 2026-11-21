@@ -314,7 +314,13 @@ export function sameOriginDriver(frame, src) {
         frame.addEventListener("load", go, { once: true });
         frame.src = "about:blank";
     });
-    const loaded = () => !!doc() && doc().readyState !== "loading";
+    // An empty frame still holds a document, about:blank, and it reports
+    // itself complete; counting that as loaded leaves a player that opens on a
+    // step partway through a run with no app at all.
+    const loaded = () => {
+        const d = doc();
+        return !!d && d.URL !== "about:blank" && d.readyState !== "loading";
+    };
     /** The element a target names, by mark id or by path. A path that no longer
      * parses finds nothing rather than throwing. */
     const query = (target) => {

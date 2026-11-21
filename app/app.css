@@ -364,6 +364,19 @@ code {
   min-width: 0;
 }
 
+.app__reingest {
+  margin-bottom: 14px;
+}
+
+.app__reingest .new__hint {
+  margin: 8px 0 10px;
+}
+
+.app__reingest-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .app__usage {
   margin-bottom: 14px;
   font-size: 12px;

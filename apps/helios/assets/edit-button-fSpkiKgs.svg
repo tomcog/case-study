@@ -1,0 +1,15 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Button Icon">
+<g id="Holder" opacity="0">
+</g>
+<path id="Button Icon bg" opacity="0" d="M7 7H13V13H7V7Z" fill="#BCBCE8"/>
+<g id="Icon - Edit" clip-path="url(#clip0_0_110)">
+<path id="Icon" d="M18 2H17.0533L10.58 8.47333L8.67333 6.56667L13.24 2H11.3333L7.72 5.61333L2 18L14.3933 12.28L18 8.67333V6.76667L13.4333 11.32L11.5333 9.42L18 2.96V2ZM12.0733 11.8667L6.87333 14.2667L5.78667 13.02L8.14 7.92667L12.08 11.8667H12.0733Z" fill-rule="evenodd" clip-rule="evenodd" fill="#959CA4"/>
+</g>
+</g>
+<defs>
+<clipPath id="clip0_0_110">
+<rect width="16" height="16" fill="white" transform="translate(2 2)"/>
+</clipPath>
+</defs>
+</svg>

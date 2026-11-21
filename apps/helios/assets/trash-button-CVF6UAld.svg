@@ -1,0 +1,16 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Button Icon">
+<g id="Holder" opacity="0">
+</g>
+<path id="Button Icon bg" opacity="0" d="M10 10H20V20H10V10Z" fill="#BCBCE8"/>
+<g id="Icon - Trash">
+<g id="Icon">
+<path d="M18 3H12V5H5V7H25V5H18V3Z" fill="#1613B7"/>
+<path d="M11 13L12 23H10L9 13H11Z" fill="#1613B7"/>
+<path d="M16 13H14V23H16V13Z" fill="#1613B7"/>
+<path d="M20 23L21 13H19L18 23H20Z" fill="#1613B7"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M5 9L7 27H23L25 9H5ZM7.23453 11L8.79009 25H21.2099L22.7655 11H7.23453Z" fill="#1613B7"/>
+</g>
+</g>
+</g>
+</svg>

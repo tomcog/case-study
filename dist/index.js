@@ -25,5 +25,5 @@ export { AskFab } from "./ask/AskFab.js";
 export { AskRail } from "./ask/AskRail.js";
 export { AskChat, ASK_SUGGESTIONS } from "./ask/AskChat.js";
 export { AskMark } from "./ask/AskMark.js";
-export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, isLive, slideOf, stepLabel, stepMarks } from "./walkthrough/types.js";
+export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, contentsOf, currentEntry, isLive, slideOf, stepLabel, stepMarks } from "./walkthrough/types.js";
 //# sourceMappingURL=index.js.map

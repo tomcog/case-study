@@ -54,7 +54,8 @@ export interface Screen {
   body?: string;
   imageUrl?: string;
   imageUrl2?: string;
-  bodyImage?: string;  // an image under the body, in the text column (Intro, Title Card, Basic 1 & 2)
+  bodyImage?: string;  // an image under the body, in the text column (Intro, Title Card, Basic 1 & 2); "" is on with none picked yet
+  list?: string[];     // a numbered list under the body, above its image (same layouts); absent is off
   overlay?: boolean;   // Image-theme gradient toggle (Basic / Title Card / Intro)
   mono?: boolean;      // Grayscale and 25% darker; independent of `overlay`
   videoUrl?: string;   // "video" layout: YouTube/Vimeo/mp4 to embed
@@ -123,30 +124,6 @@ export function bleedBg(screen: Screen): string {
   }
   return themeColors(screen).bg;
 }
-
-// Seed rows used when a screen is first switched to the "overview" layout, so
-// the builder shows a fully-composed title slide instead of an empty shell.
-export const DEFAULT_OVERVIEW_ITEMS: OverviewItem[] = [
-  { id: "o1", label: "The Problem", body: "What problem did you set out to solve, and for whom?" },
-  { id: "o2", label: "The Solution", body: "What did you design, and what changed as a result?" },
-  { id: "o3", label: "My Role", body: "Research, Interaction Design, Prototyping" },
-  { id: "o4", label: "Timeline", body: "6 months · 2024" },
-  { id: "o5", label: "Tools", body: "Figma, Miro, FigJam, Jira" },
-];
-
-export const DEFAULT_GALLERY: GalleryImage[] = [
-  { id: "g1", url: "", caption: "First exploration" },
-  { id: "g2", url: "", caption: "Refined direction" },
-  { id: "g3", url: "", caption: "Final design" },
-];
-
-export const DEFAULT_ANNOTATIONS: OverviewItem[] = [
-  { id: "a1", label: "Clear hierarchy", body: "The most important action sits where the eye lands first." },
-  { id: "a2", label: "Inline validation", body: "Errors surface at the field, before the order is ever submitted." },
-  { id: "a3", label: "One source of truth", body: "Order, sample, and result status all live on a single screen." },
-];
-
-export const DEFAULT_STAT: Metric = { id: "b1", value: "−63%", label: "Order entry errors" };
 
 // ─── Animation variants ────────────────────────────────────────────
 
@@ -520,6 +497,18 @@ export function BasicText({ screen, colors, item, theme, titleSize = 51, bodySiz
           <Paragraphs text={screen.body} />
         </motion.div>
       )}
+      {/* Each item builds on its own, like the copy above it. The numbers
+          take the eyebrow's red; the text keeps the title's color. */}
+      {screen.list && screen.list.some(Boolean) && (
+        <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+          {screen.list.map((text, i) => text && (
+            <motion.li key={i} variants={item} {...built(text)} style={{ display: "flex", gap: 16, fontSize: bodySize, lineHeight: 1.6, letterSpacing: bodyLetterSpacing }}>
+              <span style={{ flex: "none", minWidth: "1.4em", fontWeight: 700, color: colors.eyebrow, fontVariantNumeric: "tabular-nums" }}>{i + 1}.</span>
+              <span style={{ minWidth: 0, color: colors.title }}><Paragraphs text={text} /></span>
+            </motion.li>
+          ))}
+        </ol>
+      )}
       {/* The box takes the column's remaining height, a definite size, so the
           image can fit inside it at its own aspect: as large as it can be,
           never past its natural size, from the top left. */}
@@ -687,8 +676,8 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
     );
   } else if (screen.layout === "gallery") {
     // Triptych: header + a row of captioned images, each with a red index number.
-    const placeholder = `color-mix(in srgb, ${fg} 8%, transparent)`;
-    const imgs = screen.images ?? [];
+    // An entry with neither an image nor a caption has nothing to show.
+    const imgs = (screen.images ?? []).filter((img) => img.url || img.caption?.trim());
     // One row for up to 5 images; wrap at 5 per row once there are 6+.
     const cols = imgs.length >= 6 ? 5 : Math.max(imgs.length, 1);
     inner = (
@@ -697,18 +686,18 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 32, marginTop: 48 }}>
           {imgs.map((img, i) => (
             <motion.div key={img.id} variants={item} {...built(img.caption)} style={{ minWidth: 0 }}>
-              <LightboxTrigger
-                onOpen={() => img.url && setLightbox({ src: img.url, caption: img.caption })}
-                disabled={!img.url}
-                style={{
-                  display: "block", width: "100%",
-                  aspectRatio: "4 / 3", borderRadius: 10, overflow: "hidden",
-                  background: placeholder,
-                }}
-              >
-                {img.url && <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-              </LightboxTrigger>
-              <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+              {img.url && (
+                <LightboxTrigger
+                  onOpen={() => setLightbox({ src: img.url, caption: img.caption })}
+                  style={{
+                    display: "block", width: "100%",
+                    aspectRatio: "4 / 3", borderRadius: 10, overflow: "hidden",
+                  }}
+                >
+                  <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </LightboxTrigger>
+              )}
+              <div style={{ display: "flex", gap: 10, marginTop: img.url ? 14 : 0 }}>
                 {(() => { const num = img.number ?? String(i + 1).padStart(2, "0"); return num.trim() !== "" ? (
                   <span style={{ color: screen.accent, fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{num}</span>
                 ) : null; })()}
@@ -721,17 +710,18 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
     );
   } else if (screen.layout === "showcase") {
     // Annotated showcase: large hero image + numbered callouts down the side.
-    const placeholder = `color-mix(in srgb, ${fg} 10%, transparent)`;
     const notes = screen.items ?? [];
     inner = (
       <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 64, alignItems: "start", width: "100%", maxWidth: 1200 }}>
         {/* Left: eyebrow above the image */}
         <div style={{ minWidth: 0 }}>
           {eyebrowEl}
-          <motion.div variants={item} {...built()} style={{ position: "relative", aspectRatio: "4 / 3", borderRadius: 12, overflow: "hidden", background: placeholder }}>
-            {screen.imageUrl && <img src={screen.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-            <ShowcaseDots notes={notes} accent={screen.accent} onMove={onAnnotationMove} />
-          </motion.div>
+          {screen.imageUrl && (
+            <motion.div variants={item} {...built()} style={{ position: "relative", aspectRatio: "4 / 3", borderRadius: 12, overflow: "hidden" }}>
+              <img src={screen.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <ShowcaseDots notes={notes} accent={screen.accent} onMove={onAnnotationMove} />
+            </motion.div>
+          )}
         </div>
         {/* Right: title + annotations */}
         <div style={{ minWidth: 0 }}>
@@ -756,8 +746,10 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
     );
   } else if (screen.layout === "bento") {
     // Bento mosaic: big image, accent stat block, text cell, and a small image.
-    const placeholder = `color-mix(in srgb, ${fg} 10%, transparent)`;
+    // Each cell is drawn only when it has something in it; the grid keeps the
+    // filled ones in their places rather than closing up around a gap.
     const stat = screen.metrics?.[0];
+    const hasStat = !!(stat?.value?.trim() || stat?.label?.trim());
     const cellRadius = 12;
     const imgStyle: React.CSSProperties = { width: "100%", height: "100%", objectFit: "cover" };
     inner = (
@@ -769,19 +761,27 @@ export function ScreenView({ screen, play, reduced, cta, textScale = 1, card = f
           </motion.h2>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gridTemplateRows: "1fr 1fr", gap: 18, height: 360 }}>
-          <motion.div variants={item} {...built()} style={{ gridColumn: "1", gridRow: "1 / 3", borderRadius: cellRadius, overflow: "hidden", background: placeholder }}>
-            {screen.imageUrl && <img src={screen.imageUrl} alt="" style={imgStyle} />}
-          </motion.div>
-          <motion.div variants={item} {...built(stat?.label)} style={{ gridColumn: "2 / 4", gridRow: "1", borderRadius: cellRadius, background: screen.accent, color: "#fff", padding: 28, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <div style={{ fontSize: 48, fontWeight: 700, letterSpacing: 0, lineHeight: 1 }}>{stat?.value}</div>
-            <div style={{ fontSize: 16, marginTop: 10, opacity: 0.85 }}><Paragraphs text={stat?.label} /></div>
-          </motion.div>
-          <motion.div variants={item} {...built()} style={{ gridColumn: "2", gridRow: "2", borderRadius: cellRadius, overflow: "hidden", background: placeholder }}>
-            {screen.imageUrl2 && <img src={screen.imageUrl2} alt="" style={imgStyle} />}
-          </motion.div>
-          <motion.div variants={item} {...built(screen.body)} style={{ gridColumn: "3", gridRow: "2", borderRadius: cellRadius, background: bg, padding: 22, display: "flex", alignItems: "center" }}>
-            <div style={{ fontSize: 15, lineHeight: 1.5, opacity: 0.85 }}><Paragraphs text={screen.body} /></div>
-          </motion.div>
+          {screen.imageUrl && (
+            <motion.div variants={item} {...built()} style={{ gridColumn: "1", gridRow: "1 / 3", borderRadius: cellRadius, overflow: "hidden" }}>
+              <img src={screen.imageUrl} alt="" style={imgStyle} />
+            </motion.div>
+          )}
+          {hasStat && (
+            <motion.div variants={item} {...built(stat?.label)} style={{ gridColumn: "2 / 4", gridRow: "1", borderRadius: cellRadius, background: screen.accent, color: "#fff", padding: 28, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              {stat?.value?.trim() && <div style={{ fontSize: 48, fontWeight: 700, letterSpacing: 0, lineHeight: 1 }}>{stat.value}</div>}
+              {stat?.label?.trim() && <div style={{ fontSize: 16, marginTop: stat.value?.trim() ? 10 : 0, opacity: 0.85 }}><Paragraphs text={stat.label} /></div>}
+            </motion.div>
+          )}
+          {screen.imageUrl2 && (
+            <motion.div variants={item} {...built()} style={{ gridColumn: "2", gridRow: "2", borderRadius: cellRadius, overflow: "hidden" }}>
+              <img src={screen.imageUrl2} alt="" style={imgStyle} />
+            </motion.div>
+          )}
+          {screen.body?.trim() && (
+            <motion.div variants={item} {...built(screen.body)} style={{ gridColumn: "3", gridRow: "2", borderRadius: cellRadius, background: bg, padding: 22, display: "flex", alignItems: "center" }}>
+              <div style={{ fontSize: 15, lineHeight: 1.5, opacity: 0.85 }}><Paragraphs text={screen.body} /></div>
+            </motion.div>
+          )}
         </div>
       </div>
     );

@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon - Cancelled order" clip-path="url(#clip0_0_1291)">
+<path id="Icon" fill-rule="evenodd" clip-rule="evenodd" d="M11.4142 1H4V22H20V9.58579L11.4142 1ZM6 20V3H10V11H18V20H6ZM16.5858 9L12 4.41421V9H16.5858Z" fill="#959CA4"/>
+<rect id="Rectangle 93" y="21.8838" width="30.9483" height="3" transform="rotate(-45 0 21.8838)" fill="#252A36"/>
+</g>
+<defs>
+<clipPath id="clip0_0_1291">
+<rect width="24" height="24" fill="white"/>
+</clipPath>
+</defs>
+</svg>

@@ -200,6 +200,32 @@ export function OverviewEditor({ items, onChange, label = "Index items" }: { ite
   );
 }
 
+/** A numbered list, one input per item. The number is the item's position, so
+ * it follows a move rather than the item. */
+export function ListEditor({ items, onChange }: { items: string[]; onChange: (m: string[]) => void }) {
+  const move = (i: number, by: -1 | 1) => {
+    const next = [...items];
+    [next[i], next[i + by]] = [next[i + by], next[i]];
+    onChange(next);
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+      {items.map((text, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: "#8a857d", fontVariantNumeric: "tabular-nums", minWidth: 16 }}>{i + 1}.</span>
+          <CopyInput value={text} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} placeholder={`Item ${i + 1}`} rows={1} style={{ ...inputStyle, resize: "vertical" }} />
+          <ButtonRound size="sm" variant="tertiary" icon={<ChevronUp size={14} />} onClick={() => move(i, -1)} disabled={i === 0} title="Move up" aria-label="Move up" />
+          <ButtonRound size="sm" variant="tertiary" icon={<ChevronDown size={14} />} onClick={() => move(i, 1)} disabled={i === items.length - 1} title="Move down" aria-label="Move down" />
+          <ButtonRound size="sm" variant="tertiary" tone="danger" icon={<Trash2 size={14} />} onClick={() => onChange(items.filter((_, j) => j !== i))} disabled={items.length === 1} aria-label="Remove item" />
+        </div>
+      ))}
+      <Button variant="ghost" size="sm" icon={<Plus size={14} />} onClick={() => onChange([...items, ""])} style={addStyle}>
+        Add item
+      </Button>
+    </div>
+  );
+}
+
 export function GalleryEditor({ images, onChange }: { images: GalleryImage[]; onChange: (m: GalleryImage[]) => void }) {
   const set = (i: number, patch: Partial<GalleryImage>) => onChange(images.map((x, j) => j === i ? { ...x, ...patch } : x));
   return (
@@ -257,7 +283,7 @@ export function Field({ label, children, collapsible = false }: { label: string;
   }
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={labelStyle}>{label}</div>
+      {label && <div style={labelStyle}>{label}</div>}
       {children}
     </div>
   );

@@ -6,14 +6,14 @@
 
 import { RED, DEFAULT_ACCENT } from "./theme.js";
 import {
-  ACCENT, THEMES, DEFAULT_OVERVIEW_ITEMS, DEFAULT_GALLERY, DEFAULT_ANNOTATIONS, DEFAULT_STAT,
+  ACCENT, THEMES,
   screenTheme, bleedBg, backdropFor, Stage, ScreenView,
 } from "./core.js";
 import type { ScreenLayout, Theme, Screen } from "./core.js";
-import { Segment, SegmentedControl } from "@tomcoggia/ui";
+import { Checkbox, Segment, SegmentedControl } from "@tomcoggia/ui";
 import {
   MetricsEditor, ImageField, OverviewEditor, GalleryEditor, StatEditor, Field, ColorInput,
-  CopyInput, inputStyle,
+  ListEditor, CopyInput, inputStyle,
 } from "./editors.js";
 
 const LAYOUTS: { value: ScreenLayout; label: string }[] = [
@@ -29,17 +29,6 @@ const LAYOUTS: { value: ScreenLayout; label: string }[] = [
   { value: "video", label: "Video" },
 ];
 
-// Patch applied when switching layouts — seeds a layout's list content on first
-// use so the canvas shows a fully-composed example instead of an empty shell.
-function layoutPatch(layout: ScreenLayout, screen: Screen): Partial<Screen> {
-  const patch: Partial<Screen> = { layout };
-  if (layout === "overview" && !screen.items) patch.items = DEFAULT_OVERVIEW_ITEMS;
-  if (layout === "showcase" && !screen.items) patch.items = DEFAULT_ANNOTATIONS;
-  if (layout === "gallery" && !screen.images) patch.images = DEFAULT_GALLERY;
-  if (layout === "bento" && !screen.metrics?.length) patch.metrics = [DEFAULT_STAT];
-  return patch;
-}
-
 export function newScreen(): Screen {
   return {
     id: `s-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -49,9 +38,6 @@ export function newScreen(): Screen {
     bg: THEMES.light.bg,
     fg: THEMES.light.fg,
     accent: DEFAULT_ACCENT,
-    eyebrow: "Section",
-    title: "New screen",
-    body: "Describe this step of the story.",
   };
 }
 
@@ -99,7 +85,7 @@ export function SlideFields({ screen, update, logoSrc }: {
         <Field label="Layout" collapsible>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
             {LAYOUTS.map((l) => (
-              <button key={l.value} onClick={() => update(layoutPatch(l.value, screen))}
+              <button key={l.value} onClick={() => update({ layout: l.value })}
                 style={{
                   fontSize: 12, padding: "8px 6px", borderRadius: 6, cursor: "pointer",
                   border: screen.layout === l.value ? `1.5px solid ${ACCENT}` : "1px solid #dcd8d2",
@@ -110,21 +96,30 @@ export function SlideFields({ screen, update, logoSrc }: {
         </Field>
 
         <Field label="Eyebrow">
-          <CopyInput value={screen.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} rows={1} style={{ ...inputStyle, resize: "vertical" }} />
+          <CopyInput value={screen.eyebrow ?? ""} onChange={(e) => update({ eyebrow: e.target.value })} placeholder="(none)" rows={1} style={{ ...inputStyle, resize: "vertical" }} />
         </Field>
 
         <Field label="Title">
-          <CopyInput value={screen.title ?? ""} onChange={(e) => update({ title: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
+          <CopyInput value={screen.title ?? ""} onChange={(e) => update({ title: e.target.value })} placeholder="(none)" rows={2} style={{ ...inputStyle, resize: "vertical" }} />
         </Field>
 
         {!["metrics", "gallery", "showcase"].includes(screen.layout) && (
           <Field label={screen.layout === "bento" ? "Body (text cell)" : "Body"}>
-            <CopyInput value={screen.body ?? ""} onChange={(e) => update({ body: e.target.value })} rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+            <CopyInput value={screen.body ?? ""} onChange={(e) => update({ body: e.target.value })} placeholder="(none)" rows={4} style={{ ...inputStyle, resize: "vertical" }} />
           </Field>
         )}
 
         {["cover", "overview", "basic1", "basic2"].includes(screen.layout) && (
-          <ImageField label="Image under the body" value={screen.bodyImage ?? ""} onChange={(v) => update({ bodyImage: v || undefined })} />
+          <>
+            <Field label="">
+              <Checkbox size="md" label="List" checked={screen.list !== undefined} onChange={(e) => update({ list: e.target.checked ? [""] : undefined })} />
+            </Field>
+            {screen.list && <ListEditor items={screen.list} onChange={(list) => update({ list })} />}
+            <Field label="">
+              <Checkbox size="md" label="Image" checked={screen.bodyImage !== undefined} onChange={(e) => update({ bodyImage: e.target.checked ? "" : undefined })} />
+            </Field>
+            {screen.bodyImage !== undefined && <ImageField label="" value={screen.bodyImage} onChange={(v) => update({ bodyImage: v })} />}
+          </>
         )}
 
         {screen.layout === "video" && (

@@ -10,6 +10,7 @@ export declare function WalkthroughBuilder({ content, setContent, apps, projectN
      * one keeps running it and still says so. */
     apps?: IngestedApp[];
     projectName?: string;
-    /** Adds a "Done" button to the toolbar (e.g. back to a project list). */
+    /** Adds a "Done" button to the toolbar (e.g. back to a project list), and
+     * makes the "ProjectBuilder" title go there too. */
     onClose?: () => void;
 }): import("react").JSX.Element;

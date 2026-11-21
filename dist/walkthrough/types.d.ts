@@ -104,10 +104,12 @@ export interface Spotlight {
 export interface Callout {
     mark?: string;
     area?: Area;
-    /** The copy, in the same inline markup as the panel's. */
+    /** The copy, in the same inline markup as the panel's. The bubble is as
+     * wide as it, up to a limit, and a callout with none isn't drawn. */
     text: string;
-    /** Which side of the element it sits on. Flipped when it won't fit, and
-     * chosen by whichever side has room when it isn't given. */
+    /** Which side of the element it sits on. Given, it is kept, and the bubble
+     * is held inside the stage where that side has no room; absent, it goes on
+     * whichever side has room. */
     placement?: "top" | "right" | "bottom" | "left";
     /** Nudge from that position, in frame pixels. */
     offset?: {
@@ -115,9 +117,14 @@ export interface Callout {
         y?: number;
     };
 }
-export type StepAdvance = {
+export type StepAdvance = 
+/** The reader moves on themselves. `button: false` leaves the panel's
+ * button out, as a slide can, so the toolbar's arrow and the arrow key are
+ * the way on; absent shows it. */
+{
     on: "manual";
     label?: string;
+    button?: false;
 } | {
     on: "click";
     mark: string;
@@ -147,10 +154,12 @@ export interface WalkthroughStep {
     /** The ingested app running behind this step, by id. Absent is "none": no
      * app at all, which is a choice rather than a fallback. */
     app?: string;
-    /** Which screen the app opens on, as a hash route ("#/orders"). Only means
-     * anything on a step that boots the app — one whose `app` differs from the
-     * step before it. On the rest the app is already open and the reader may
-     * have moved around in it, so sending them back would undo their work. */
+    /** Which screen the app shows, as a hash route ("#/orders"). On a step that
+     * boots the app — one whose `app` differs from the step before it — it is
+     * where the app opens, and absent is the app's default screen. On the rest
+     * the app is already open and the reader may have moved around in it, so
+     * absent leaves them where they are; set, it routes the app there without
+     * reloading it, so anything the route doesn't name carries forward. */
     start?: string;
     /** What this step shows. Defaults to the running app. */
     content?: StepContent;
@@ -171,6 +180,17 @@ export interface WalkthroughStep {
      * one. Off everywhere else, so an answer can't pull a reader out of the
      * sequence mid-presentation; the last step always allows it. */
     askLinks?: boolean;
+    /** Lists this step in the project's contents, a jump to it. Which steps are
+     * listed is the author's choice, not every step: the contents names the
+     * sections, and the steps inside one aren't sections. The flag lives on the
+     * step so reordering or deleting one can't leave the list pointing wrong. */
+    listed?: boolean;
+    /** What the contents calls this step, where its title reads too long in a
+     * list. Absent is its title (`stepLabel`). */
+    listLabel?: string;
+    /** Shows the contents in this step's panel, under its copy. A slide has no
+     * panel, so it means nothing on one. */
+    showContents?: boolean;
 }
 export interface WalkthroughContent {
     schemaVersion?: number;
@@ -179,6 +199,9 @@ export interface WalkthroughContent {
     preview?: ProjectPreview;
     /** Which side the copy sits on (default "left"). */
     panelSide?: "left" | "right";
+    /** The heading over the contents, wherever a step shows it. One for the
+     * project, since every step shows the same list. Absent is no heading. */
+    contentsTitle?: string;
     /** Ask AI Tom about this project. What it answers from is the project's
      * ask.md beside project.json, read by the host's endpoint, never shipped. */
     ask?: {
@@ -192,7 +215,8 @@ export interface WalkthroughContent {
     };
     steps: WalkthroughStep[];
 }
-/** What a new project starts as: one step, running nothing. */
+/** What a new project starts as: one step, running nothing, with no copy —
+ * an unfilled field is left out of the layout rather than shown as a stand-in. */
 export declare const DEFAULT_WALKTHROUGH: WalkthroughContent;
 /** What a step shows, defaulted. */
 export declare const contentOf: (step?: WalkthroughStep) => StepContent;
@@ -206,6 +230,19 @@ export declare function stepLabel(step?: WalkthroughStep): {
     eyebrow?: string;
     title?: string;
 };
+export interface ContentsEntry {
+    /** The listed step's index in `steps`. */
+    index: number;
+    label: string;
+}
+/** The project's contents: its listed steps, in order, each named by its list
+ * label or else its title. Derived every time, like `appRuns`, so it can't fall
+ * out of step with the steps. A listed step with nothing to call it is left out
+ * rather than drawn as a blank line. */
+export declare function contentsOf(steps: WalkthroughStep[]): ContentsEntry[];
+/** Which entry the reader is in: the last listed step at or before where they
+ * are, or -1 before the first. */
+export declare function currentEntry(contents: ContentsEntry[], at: number): number;
 /** Whether what's on screen can be read into — marks, live geometry, advancing
  * on what the reader does. Only a running app can; an embed is another origin
  * and an image is a picture. */

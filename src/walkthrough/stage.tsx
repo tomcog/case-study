@@ -495,13 +495,18 @@ export function StageNotice({ blocked, src }: { blocked: Blocked; src?: string }
 // is drawn at the stage's own size, which is the app's, since nothing here is
 // scaled.
 
+/** The widest a bubble gets; a shorter callout is only as wide as its text. */
 const BUBBLE_W = 236;
 const GAP = 24;
 
 type Side = NonNullable<Callout["placement"]>;
 
-/** The side with room for the bubble, preferring the one that was asked for. */
+/** The side the bubble goes on. A side the author chose is where it goes:
+ * the bubble is clamped inside the stage, so it can't be lost off an edge, and
+ * second-guessing the choice is what made the side buttons look broken. Left
+ * to "auto", it is the first side with room for the widest bubble. */
 function sideFor(box: Box, bounds: { w: number; h: number }, wanted?: Side): Side {
+  if (wanted) return wanted;
   const room: Record<Side, number> = {
     right: bounds.w - (box.x + box.w),
     left: box.x,
@@ -509,8 +514,7 @@ function sideFor(box: Box, bounds: { w: number; h: number }, wanted?: Side): Sid
     top: box.y,
   };
   const fits = (s: Side) => room[s] >= (s === "left" || s === "right" ? BUBBLE_W + GAP : 90 + GAP);
-  if (wanted && fits(wanted)) return wanted;
-  return (["right", "left", "bottom", "top"] as Side[]).find(fits) ?? wanted ?? "right";
+  return (["right", "left", "bottom", "top"] as Side[]).find(fits) ?? "right";
 }
 
 export function Callouts({ items, boxFor, bounds, scrollX = 0 }: {
@@ -528,6 +532,8 @@ export function Callouts({ items, boxFor, bounds, scrollX = 0 }: {
 }) {
   const placed = items
     .map((callout, i) => {
+      // A callout with nothing written in it isn't drawn.
+      if (!callout.text?.trim()) return null;
       const found = boxFor(callout);
       if (!found) return null;
       const box = { ...found, x: found.x - scrollX };
@@ -549,11 +555,6 @@ export function Callouts({ items, boxFor, bounds, scrollX = 0 }: {
         : side === "left" ? { x: edge.x - GAP, y: edge.y }
         : side === "bottom" ? { x: edge.x, y: edge.y + GAP }
         : { x: edge.x, y: edge.y - GAP };
-      const shift =
-        side === "right" ? "translate(0, -50%)"
-        : side === "left" ? "translate(-100%, -50%)"
-        : side === "bottom" ? "translate(-50%, 0)"
-        : "translate(-50%, -100%)";
 
       // Flipping sides isn't enough on its own: a bubble centred on an element
       // near an edge still hangs off it. Clamp it inside the stage and let the
@@ -567,6 +568,15 @@ export function Callouts({ items, boxFor, bounds, scrollX = 0 }: {
         side === "top" || side === "bottom"
           ? { x: clamp(x, half + PAD, bounds.w - half - PAD), y }
           : { x, y: clamp(y, 44 + PAD, bounds.h - 44 - PAD) };
+      // Beside the element, a bubble chosen for a side without room is held
+      // inside the stage, over the element if need be, rather than flipped.
+      // How far depends on its own width, which only CSS knows — a percentage
+      // in a translate is one of the bubble — so the clamp is done there.
+      const across =
+        side === "right" ? `min(0px, calc(${bounds.w - PAD - placedAt.x}px - 100%))`
+        : side === "left" ? `max(-100%, ${PAD - placedAt.x}px)`
+        : null;
+      const shift = across ? `translate(${across}, -50%)` : side === "bottom" ? "translate(-50%, 0)" : "translate(-50%, -100%)";
 
       const back = (p: { x: number; y: number }) => ({ x: p.x + scrollX, y: p.y });
       return { key: `${callout.mark ?? "area"}-${i}`, callout, edge: back(edge), anchor: back(placedAt), shift };
@@ -593,7 +603,9 @@ export function Callouts({ items, boxFor, bounds, scrollX = 0 }: {
             left: p.anchor.x,
             top: p.anchor.y,
             transform: p.shift,
-            width: BUBBLE_W,
+            width: "max-content",
+            maxWidth: BUBBLE_W,
+            boxSizing: "border-box",
             background: "#fff",
             borderRadius: 9,
             border: `2px solid ${RED}`,

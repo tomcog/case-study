@@ -16,20 +16,24 @@ import { Segment, SegmentedControl, Toolbar } from "@tomcoggia/ui";
 import { INK, RED } from "../theme.js";
 import { SlideView } from "../slide.js";
 import { Paragraphs } from "../core.js";
+import { CaseStudyLink } from "../ui/CaseStudyLink.js";
 import type { Screen } from "../core.js";
 import { Callouts, STAGE_BG, Spotlight, StageNotice, StageStill, areaBox, spotlightBox, toBox, useApp } from "./stage.js";
 import type { Box } from "./stage.js";
 import type { Driver } from "./driver.js";
-import { bootsApp, contentOf, stepMarks } from "./types.js";
-import type { Callout, StepAction, StepAdvance, WalkthroughContent } from "./types.js";
+import { bootsApp, contentOf, contentsOf, currentEntry, stepMarks } from "./types.js";
+import type { Callout, ContentsEntry, StepAction, StepAdvance, WalkthroughContent } from "./types.js";
 import type { IngestedApp } from "../project.js";
 import { useCaseStudyConfig } from "../config.js";
 import { AskFab, FAB_CLEAR } from "../ask/AskFab.js";
 import { AskRail } from "../ask/AskRail.js";
 
-const PANEL_W = 400;
+const PANEL_W = 360;
 const LINE = "#e6e4e1";
 const MUTED = "#6f6a66";
+/** The player's page, which the copy panel sits on rather than over: the library's
+ * page under a rail or panel. */
+const PAGE_BG = "var(--ui-surface-pale, #f5f5f5)";
 
 const norm = (path: string) => `#${path.replace(/^#\/?/, "").replace(/\/$/, "")}`;
 
@@ -123,11 +127,12 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
     let off = () => {};
     if (driver) {
       // A step that names a different app than the one before it boots that
-      // app at its starting screen. Within a run nothing reloads, so whatever
-      // the reader did on the last step is still there on this one.
+      // app at its screen. Within a run nothing reloads, so whatever the reader
+      // did on the last step is still there on this one; a step there that
+      // names a screen routes the app to it, and one that doesn't leaves it be.
       const boots = bootsApp(steps, i);
       void (async () => {
-        await driver.open(boots ? step.start : undefined, { reload: boots });
+        await driver.open(step.start, { reload: boots });
         if (!live) return;
         if (step.actions?.length) await perform(driver, step.actions, () => live);
         if (!live) return;
@@ -178,6 +183,9 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
 
   const restart = () => setI(0);
 
+  // The project's contents, for a step that shows it.
+  const contents = useMemo(() => contentsOf(steps), [steps]);
+
   const narrow = demo.blocked === "small";
   // A slide is the whole viewport: it is composed copy, so a panel beside it
   // would be saying the same thing twice.
@@ -199,7 +207,7 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
         inset: 0,
         display: "flex",
         flexDirection: content.panelSide === "right" ? "row-reverse" : "row",
-        background: "#f4f3f1",
+        background: PAGE_BG,
         zIndex: 50,
       }}
     >
@@ -207,23 +215,25 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
         style={{
           width: narrow ? "100%" : PANEL_W,
           flex: "none",
-          background: "#fff",
-          borderRight: narrow || content.panelSide === "right" ? undefined : `1px solid ${LINE}`,
-          borderLeft: content.panelSide === "right" && !narrow ? `1px solid ${LINE}` : undefined,
+          background: PAGE_BG,
           display: "flex",
           flexDirection: "column",
-          // The toolbar sits over the panel's lower left when the panel is on
-          // the left, so the panel keeps its foot clear of it.
-          // So does the Ask AI Tom FAB at its lower right, on a panel on the
-          // right or one taking the whole width.
-          padding: `26px 28px ${22 + Math.max(
-            content.panelSide === "right" && !narrow ? 0 : TOOLBAR_CLEAR,
-            askOn && (narrow || content.panelSide === "right") ? FAB_CLEAR : 0,
-          )}px`,
+          // The panel's foot is the toolbar's row: its button sits level with
+          // the toolbar, at the other end. Where the Ask AI Tom FAB takes the
+          // lower right instead — a panel on the right or one taking the whole
+          // width — the foot stays clear of it.
+          padding: `26px 28px ${askOn && (narrow || content.panelSide === "right") ? 22 + FAB_CLEAR : TOOLBAR_INSET}px`,
           overflowY: "auto",
         }}
       >
         <div style={{ flex: 1, minHeight: 0 }}>
+          {/* Over a running app the eyebrow holds still while the copy under
+              it changes: it names where the reader is, which stays put. */}
+          {step?.eyebrow && shown.kind === "app" && (
+            <div style={eyebrow}>
+              <Paragraphs text={step.eyebrow} />
+            </div>
+          )}
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={step?.id ?? "__done"}
@@ -234,8 +244,8 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
             >
               {step ? (
                 <>
-                  {step.eyebrow && (
-                    <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: RED, marginBottom: 10 }}>
+                  {step.eyebrow && shown.kind !== "app" && (
+                    <div style={eyebrow}>
                       <Paragraphs text={step.eyebrow} />
                     </div>
                   )}
@@ -265,15 +275,22 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
           </AnimatePresence>
         </div>
 
-        <div style={{ paddingTop: 22 }}>
-          {step && manual && (
-            <button type="button" onClick={next} style={primary}>
+        {/* Below the copy rather than in it, so it holds still from one step
+            that shows it to the next, as the eyebrow does. */}
+        {step?.showContents && !slide && contents.length > 0 && (
+          <Contents title={content.contentsTitle} entries={contents} current={currentEntry(contents, i)} onJump={setI} />
+        )}
+
+        <div style={foot}>
+          {/* The same pill as a slide's Next, and as optional as one. */}
+          {step && manual && step.advance.on === "manual" && step.advance.button !== false && (
+            <CaseStudyLink onClick={next} style={pill}>
               {manualLabel}
-            </button>
+            </CaseStudyLink>
           )}
 
           {step && !manual && (
-            <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: MUTED, minHeight: 38 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, color: MUTED }}>
               <motion.span
                 animate={reduced ? {} : { opacity: [1, 0.25, 1] }}
                 transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
@@ -284,15 +301,29 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
           )}
 
           {!step && (
-            <button type="button" onClick={restart} style={primary}>
+            <CaseStudyLink onClick={restart} style={pill}>
               Start again
-            </button>
+            </CaseStudyLink>
           )}
         </div>
       </div>
 
       {(demo.live || shown.kind !== "app") && !narrow && (
-        <div ref={demo.stageRef} style={{ flex: 1, position: "relative", overflowX: "auto", overflowY: "hidden", background: STAGE_BG }}>
+        // The stage sits above the panel and casts the library's soft shadow
+        // onto it, so the panel reads as the page underneath rather than a
+        // column beside it.
+        <div
+          ref={demo.stageRef}
+          style={{
+            flex: 1,
+            position: "relative",
+            zIndex: 1,
+            overflowX: "auto",
+            overflowY: "hidden",
+            background: STAGE_BG,
+            boxShadow: "var(--ui-shadow-float-1, 0 0 17px 0 rgb(0 0 0 / 0.1))",
+          }}
+        >
           {/* The app sits underneath whatever the step displays, so it keeps
               running while an image or an embed covers it. Keyed by its src,
               so arriving at a different app is always a fresh document. */}
@@ -314,8 +345,11 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
         </div>
       )}
 
-      {/* Only a step that means to show its app complains about not having one. */}
-      {shown.kind === "app" && !demo.live && !narrow && <StageNotice blocked={demo.blocked!} src={app?.src} />}
+      {/* Only a step that means to show its app complains about not having
+          one, and only about what the reader can do something about: a step
+          running no app is an unfilled field, so its stage is left empty. The
+          builder is where the author hears about that. */}
+      {shown.kind === "app" && !demo.live && !narrow && demo.blocked !== "no-app" && <StageNotice blocked={demo.blocked!} src={app?.src} />}
 
       {/* A slide covers the whole viewport, panel included. It is drawn over
           the frame rather than instead of it, so the app underneath keeps
@@ -331,7 +365,7 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
             exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.995 }}
             transition={{ duration: reduced ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }}
             onClick={next}
-            style={{ position: "absolute", inset: 0, cursor: "pointer", background: "#f4f3f1" }}
+            style={{ position: "absolute", inset: 0, zIndex: 2, cursor: "pointer", background: PAGE_BG }}
           >
             <SlideLayer slide={slide} crossing={opened.current} reduced={!!reduced} logoSrc={content.preview?.logo} footnote={i === 0 ? NAV_HINT : undefined} onNext={next} />
 
@@ -359,7 +393,9 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
           </Segment>
         </SegmentedControl>
         <SegmentedControl size="sm" tone="white" actions aria-label="Next">
-          <Segment icon={<ArrowRight />} hideLabel disabled={!canNext} onClick={next}>
+          {/* The way on, so it carries the accent: the one control the reader
+              is most likely looking for. */}
+          <Segment icon={<ArrowRight />} hideLabel disabled={!canNext} onClick={next} style={{ background: RED, color: "#fff" }}>
             Next step
           </Segment>
         </SegmentedControl>
@@ -388,30 +424,89 @@ export function WalkthroughPlayer({ content, apps = [], startIndex = 0, projectI
   );
 }
 
-const primary: React.CSSProperties = {
-  appearance: "none",
-  border: 0,
-  background: RED,
-  color: "#fff",
-  font: "inherit",
-  fontSize: 14,
-  fontWeight: 600,
-  padding: "10px 16px",
-  borderRadius: 8,
-  cursor: "pointer",
-};
+
+/** The project's contents: a jump to each listed step, with the section the
+ * reader is in marked. */
+function Contents({ title, entries, current, onJump }: { title?: string; entries: ContentsEntry[]; current: number; onJump: (index: number) => void }) {
+  const heading = title?.trim();
+  return (
+    <nav aria-label={heading || "Contents"} style={{ marginTop: 26 }}>
+      {heading && (
+        <div style={{ ...eyebrow, color: MUTED, fontSize: 12 }}>
+          <Paragraphs text={heading} />
+        </div>
+      )}
+      <ol style={{ listStyle: "none", margin: 0, padding: 0, borderLeft: `1px solid ${LINE}` }}>
+        {entries.map((entry, n) => {
+          const here = n === current;
+          return (
+            <li key={entry.index}>
+              <button
+                type="button"
+                onClick={() => onJump(entry.index)}
+                aria-current={here ? "step" : undefined}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  font: "inherit",
+                  fontSize: 14,
+                  lineHeight: 1.35,
+                  fontWeight: here ? 650 : 450,
+                  color: here ? INK : MUTED,
+                  background: "none",
+                  border: 0,
+                  // The marker sits on the list's rule, so the current entry
+                  // reads as the rule lit at that point.
+                  borderLeft: `2px solid ${here ? RED : "transparent"}`,
+                  marginLeft: -1,
+                  padding: "6px 0 6px 14px",
+                  cursor: here ? "default" : "pointer",
+                }}
+              >
+                <Paragraphs text={entry.label} />
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
 
 // The toolbar's corner: its inset from the viewport's edges, and how much of
 // the panel's foot that leaves it (an sm control is 24 tall, the bar's own
 // inset 4 on each side).
+const eyebrow: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: RED,
+  marginBottom: 10,
+};
+
 const TOOLBAR_INSET = 16;
-const TOOLBAR_CLEAR = TOOLBAR_INSET + 32;
+const TOOLBAR_H = 32;
+
+/** The panel's foot: the toolbar's row, with what moves the reader on at the
+ * end the toolbar leaves free. */
+const foot: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  minHeight: TOOLBAR_H,
+  marginTop: 22,
+};
+/** The slide's Next pill, as tall as the toolbar so the two share a line. */
+const pill: React.CSSProperties = { fontFamily: "inherit", height: TOOLBAR_H, padding: "0 16px", boxSizing: "border-box" };
 
 const toolbarAt: React.CSSProperties = {
   position: "absolute",
   left: TOOLBAR_INSET,
   bottom: TOOLBAR_INSET,
-  zIndex: 1,
+  // Over the stage (1) and a slide (2) alike.
+  zIndex: 3,
 };
 
 /** What the first slide says at its foot, since a deck gives no other sign of

@@ -1,0 +1,13 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Button Icon">
+<g id="Holder" opacity="0">
+</g>
+<path id="Button Icon bg" opacity="0" d="M7 7H13V13H7V7Z" fill="#BCBCE8"/>
+<g id="Icon - Print">
+<g id="Icon">
+<path d="M15.3333 15.3333V14H14V15.3333H15.3333Z" fill="#959CA4"/>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M10.2761 2H4V10H2V18H18V10H16V7.72386L10.2761 2ZM14.6667 10H5.33333V3.33333H9.33333V8.66667H14.6667V10ZM16.6667 11.3333V16.6667H3.33333V11.3333H16.6667ZM13.7239 7.33333L10.6667 4.27614V7.33333H13.7239Z" fill="#959CA4"/>
+</g>
+</g>
+</g>
+</svg>

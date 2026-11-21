@@ -1,0 +1,11 @@
+<svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle cx="22" cy="22" r="22" fill="#1613B7"/>
+<!-- Lucide "text-search", at the original database icon's size (22.6px, 1.88px stroke), centred. -->
+<g transform="translate(10.7 10.7) scale(0.942)" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<path d="M21 5H3"/>
+<path d="M10 12H3"/>
+<path d="M10 19H3"/>
+<circle cx="17" cy="15" r="3"/>
+<path d="m21 19-1.9-1.9"/>
+</g>
+</svg>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BotMessageSquare, Copy, Eye, EyeOff, Globe, Layers, LayoutGrid, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { BotMessageSquare, Copy, Eye, EyeOff, Globe, Layers, LayoutGrid, Pencil, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button, ButtonRound, Card, Checkbox, InputText, Modal, Tag } from "@tomcoggia/ui";
 import {
   CaseStudyProvider, ProjectBuilder, ProjectPlayer, SlideView,
@@ -7,7 +7,7 @@ import {
 } from "../src/index.js";
 import {
   appsUsage, beaconProject, canEdit, createProject, deleteApp, deleteProject, duplicateProject, getProject, ingestApp,
-  getAsk, listApps, listProjects, moveProject, patchApp, projectAssets, publishProject, pullAsk, renameProject, saveProject, setAsk,
+  getAsk, listApps, listProjects, moveProject, patchApp, projectAssets, publishProject, pullAsk, reingestApp, renameProject, saveProject, setAsk,
   type AppUse, type AskInfo, type ProjectRow,
 } from "./store";
 import type { IngestedApp } from "../src/index.js";
@@ -654,7 +654,7 @@ function AppsScreen() {
 
       <p className="apps__intro">
         The pool every project draws from. Each app is a copy of a built output, frozen at the moment it was ingested,
-        so a demo can&rsquo;t break because the app it runs moved on. Everything here is shared: renaming, resizing and
+        so a demo can&rsquo;t break because the app it runs moved on &mdash; until you re-ingest it from its build. Everything here is shared: renaming, resizing and
         hiding reach every project at once, and deleting leaves every step that ran it running nothing.
       </p>
 
@@ -669,6 +669,7 @@ function AppsScreen() {
             app={app}
             used={usage[app.id] ?? []}
             onPatch={(patch) => act(() => patchApp(app.id, patch))}
+            onReingest={(path) => act(() => reingestApp(app.id, path))}
             onDelete={() => act(() => deleteApp(app.id))}
           />
         ))}
@@ -727,13 +728,15 @@ function IngestForm({ onIngest }: { onIngest: (path: string, label: string) => v
   );
 }
 
-function AppCard({ app, used, onPatch, onDelete }: {
+function AppCard({ app, used, onPatch, onReingest, onDelete }: {
   app: IngestedApp;
   used: AppUse[];
   onPatch: (patch: Partial<IngestedApp>) => void;
+  onReingest: (path: string) => Promise<void>;
   onDelete: () => void;
 }) {
   const [renaming, setRenaming] = useState(false);
+  const [reingesting, setReingesting] = useState(false);
   const steps = used.reduce((n, use) => n + use.steps.length, 0);
   return (
     <Card variant="flat" className="app">
@@ -791,7 +794,27 @@ function AppCard({ app, used, onPatch, onDelete }: {
 
       <Usage used={used} steps={steps} />
 
+      {reingesting && (
+        <ReingestForm
+          app={app}
+          steps={steps}
+          onCancel={() => setReingesting(false)}
+          onReingest={(path) => onReingest(path).then(() => setReingesting(false))}
+        />
+      )}
+
       <div className="tile__actions">
+        {!reingesting && (
+          <Button
+            size="sm"
+            variant="tertiary"
+            icon={<RefreshCw size={14} />}
+            onClick={() => setReingesting(true)}
+            title="Replace its files with a fresh copy of its build. Its id, name and sizes stay, so every step running it runs the new copy"
+          >
+            Re-ingest
+          </Button>
+        )}
         <Button
           size="sm"
           variant="tertiary"
@@ -811,6 +834,55 @@ function AppCard({ app, used, onPatch, onDelete }: {
         />
       </div>
     </Card>
+  );
+}
+
+/** Where to copy a fresh build from: the folder it came from, unless the
+ * author points somewhere else. An app ingested before the folder was
+ * recorded has none, so it starts empty. */
+function ReingestForm({ app, steps, onCancel, onReingest }: {
+  app: IngestedApp;
+  steps: number;
+  onCancel: () => void;
+  onReingest: (path: string) => Promise<void>;
+}) {
+  const [path, setPath] = useState(app.source ?? "");
+  const [building, setBuilding] = useState(false);
+  return (
+    <form
+      className="app__reingest"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!path.trim() || building) return;
+        setBuilding(true);
+        onReingest(path.trim()).finally(() => setBuilding(false));
+      }}
+    >
+      <InputText
+        id={`reingest-${app.id}`}
+        size="md"
+        label="Built folder on this machine"
+        value={path}
+        onChange={(e) => setPath(e.target.value)}
+        placeholder="/Users/you/Sites/provider-portal/dist"
+        autoFocus
+      />
+      <p className="new__hint">
+        The app&rsquo;s built folder, the one with <code>index.html</code> in it. Re-ingest builds the app from its
+        latest source into that folder first, so there&rsquo;s nothing to build by hand.{" "}
+        {steps
+          ? `The ${steps} ${steps === 1 ? "step" : "steps"} running it get the new copy at once; any that point at an element by path rather than by a data-walkthrough mark are worth checking after.`
+          : "No step runs it yet."}
+      </p>
+      <div className="app__reingest-actions">
+        <Button size="sm" variant="primary" type="submit" icon={<RefreshCw size={14} />} disabled={!path.trim() || building}>
+          {building ? "Building…" : "Re-ingest"}
+        </Button>
+        <Button size="sm" variant="tertiary" type="button" onClick={onCancel} disabled={building}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }
 

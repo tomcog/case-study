@@ -27,6 +27,10 @@ export interface IngestedApp {
      * from new use, and deleting is the only thing that breaks a project. */
     hidden?: boolean;
     ingestedAt?: number;
+    /** The built folder it was ingested from, on the author's machine, which
+     * re-ingesting copies from again. Only ProjectBuilder's dev server lists
+     * it; a published pool never carries it. */
+    source?: string;
 }
 /** Bring any saved project up to the current shape. Never throws: anything
  * that isn't an object falls back to one empty step, and an object without

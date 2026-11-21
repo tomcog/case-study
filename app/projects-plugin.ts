@@ -1,6 +1,7 @@
 import type { Plugin } from "vite";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
+import { exec } from "node:child_process";
 
 // ─── Project files and ingested apps ───────────────────────────────
 // Every project lives in projects/<id>/: project.json plus an images/ folder.
@@ -33,6 +34,7 @@ import { basename, extname, join, resolve } from "node:path";
 //   GET  /apps/<id>/…                               an app's files, straight from disk
 //   GET  /__apps/usage                              which projects run each app, drafts included
 //   POST /__apps/ingest   { path, label }           → { id }  copies a built folder in
+//   POST /__apps/reingest { id, path? }             → builds the app, then replaces its files from that folder (or the one it came from)
 //   POST /__apps/rename   { id, label|minWidth|maxWidth|minWindow|hidden } → patches app.json (the id never changes)
 //   POST /__apps/delete   { id }                    → removes the folder
 //
@@ -83,8 +85,9 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
 
   /** One row per ingested app. The entry is whatever the build calls its
    * HTML, which is index.html everywhere so far but is recorded rather than
-   * assumed. */
-  function apps() {
+   * assumed. `source` is a path on the author's machine, so only the dev
+   * server lists it; the build's index leaves it out. */
+  function apps({ source = false } = {}) {
     return appIds()
       .map((id) => {
         const meta = readApp(id);
@@ -97,6 +100,7 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
           minWindow: meta.minWindow,
           hidden: meta.hidden === true ? true : undefined,
           ingestedAt: meta.ingestedAt ?? statSync(appFile(id)).mtimeMs,
+          source: source ? meta.source : undefined,
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
@@ -109,18 +113,97 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
     return id;
   }
 
-  /** Copy a built folder into the pool. The source is a path on this machine,
-   * since ingesting is a dev-only act by the person running the builder. */
-  function ingest(input: any): [number, unknown] {
-    const from = resolve(String(input.path ?? "").replace(/^~/, process.env.HOME ?? "~"));
-    if (!existsSync(from) || !statSync(from).isDirectory()) return [400, { error: `No folder at ${from}` }];
+  /** A built folder to copy in, or why it can't be. The path is on this
+   * machine, since ingesting is a dev-only act by the person running the
+   * builder. */
+  function builtFolder(path: unknown): { from: string; entry: string } | { error: string } {
+    const from = resolve(String(path ?? "").replace(/^~/, process.env.HOME ?? "~"));
+    if (!existsSync(from) || !statSync(from).isDirectory()) return { error: `No folder at ${from}` };
+    if (from === appsDir || from.startsWith(appsDir + "/")) return { error: "That folder is already in the pool — point at the app's own build" };
     const entry = ["index.html", "index.htm"].find((name) => existsSync(join(from, name)));
-    if (!entry) return [400, { error: "That folder has no index.html — point at a built output folder" }];
-    const label = String(input.label ?? basename(from)).trim() || basename(from);
-    const id = freeAppId(label);
+    if (!entry) return { error: "That folder has no index.html — point at a built output folder" };
+    return { from, entry };
+  }
+
+  const copyIn = (from: string, id: string) =>
     cpSync(from, join(appsDir, id), { recursive: true, filter: (src) => basename(src) !== ".DS_Store" });
-    writeFileSync(appFile(id), `${JSON.stringify({ label, entry, ingestedAt: Date.now() }, null, 2)}\n`);
+
+  /** Copy a built folder into the pool, remembering where it came from so it
+   * can be re-ingested from there. */
+  function ingest(input: any): [number, unknown] {
+    const built = builtFolder(input.path);
+    if ("error" in built) return [400, built];
+    const label = String(input.label ?? basename(built.from)).trim() || basename(built.from);
+    const id = freeAppId(label);
+    copyIn(built.from, id);
+    writeFileSync(appFile(id), `${JSON.stringify({ label, entry: built.entry, source: built.from, ingestedAt: Date.now() }, null, 2)}\n`);
     return [200, { id }];
+  }
+
+  /** The project a built folder came out of: the nearest folder above it
+   * whose package.json has a build script. None means a build that was
+   * handed over rather than made here, which is copied as it is. */
+  function projectOf(built: string): { dir: string; script: string } | undefined {
+    for (let dir = dirname(built); dir !== dirname(dir); dir = dirname(dir)) {
+      const pkg = join(dir, "package.json");
+      if (!existsSync(pkg)) continue;
+      try {
+        const script = JSON.parse(readFileSync(pkg, "utf8")).scripts?.build;
+        if (script) return { dir, script };
+      } catch {}
+    }
+  }
+
+  /** Run the app's own build, so re-ingesting takes in its latest source
+   * rather than whatever was last built. When the script ends in `vite build`
+   * the extra arguments reach Vite, which holds the ingest contract for the
+   * app (`base: "./"`) and writes to the folder being ingested, wherever its
+   * own config points. Any other build is run as it is; one that writes
+   * somewhere else leaves the folder as it was, and copying that would look
+   * like success.
+   *
+   * The build runs with `NODE_ENV=production`, because this server is a Vite
+   * dev server and would otherwise hand the app its own `development`. React's
+   * JSX transform reads that rather than the build mode, so an inherited
+   * `development` ingests a dev build: slower, larger, and carrying the
+   * author's absolute source paths in every element. */
+  function buildApp(from: string, entry: string): Promise<string | undefined> {
+    const found = projectOf(from);
+    if (!found) return Promise.resolve(undefined);
+    const project = found.dir;
+    const command = /\bvite build\s*$/.test(found.script)
+      ? `npm run build -- --base ./ --outDir ${JSON.stringify(from)} --emptyOutDir`
+      : "npm run build";
+    const started = Date.now();
+    return new Promise((done) => {
+      const env = { ...process.env, NODE_ENV: "production" };
+      exec(command, { cwd: project, env, timeout: 5 * 60_000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
+        if (err) {
+          const tail = `${stdout}${stderr}`.trim().split("\n").slice(-12).join("\n");
+          return done(`The build in ${project} failed:\n${tail}`);
+        }
+        const fresh = existsSync(join(from, entry)) && statSync(join(from, entry)).mtimeMs >= started - 1000;
+        done(fresh ? undefined : `The build in ${project} ran but didn't write to ${from}. Point Re-ingest at the folder it builds into`);
+      });
+    });
+  }
+
+  /** Build the app, then swap its files for the fresh copy, keeping its id
+   * and app.json, so every step running it runs the new copy and keeps its
+   * label, sizes and hidden flag. Everything else in the folder goes first,
+   * or the old build's hashed assets would pile up beside the new ones. */
+  async function reingest(id: string, input: any): Promise<[number, unknown]> {
+    const meta = readApp(id);
+    const built = builtFolder(input.path || meta.source);
+    if ("error" in built) return [400, built];
+    const failed = await buildApp(built.from, built.entry);
+    if (failed) return [422, { error: failed }];
+    for (const name of readdirSync(join(appsDir, id))) {
+      if (name !== "app.json") rmSync(join(appsDir, id, name), { recursive: true, force: true });
+    }
+    copyIn(built.from, id);
+    writeFileSync(appFile(id), `${JSON.stringify({ ...meta, entry: built.entry, source: built.from, ingestedAt: Date.now() }, null, 2)}\n`);
+    return [200, { ok: true }];
   }
 
   function handleApps(path: string, input: any): [number, unknown] {
@@ -374,7 +457,7 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
         if (req.method === "GET" && path.startsWith("/apps/")) res.setHeader("Access-Control-Allow-Origin", "*");
 
         if (req.method === "GET" && path === "/projects/index.json") return reply(200, index({ drafts: true }));
-        if (req.method === "GET" && path === "/apps/index.json") return reply(200, apps());
+        if (req.method === "GET" && path === "/apps/index.json") return reply(200, apps({ source: true }));
 
         if (req.method === "GET" && path.startsWith("/apps/")) {
           const file = join(appsDir, decodeURIComponent(path.slice("/apps/".length)));
@@ -413,7 +496,16 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
         req.on("end", () => {
           try {
             const input = JSON.parse(body);
-            // Pulling waits on Google; everything else is a local file write.
+            // Pulling waits on Google and re-ingesting on the app's build;
+            // everything else is a local file write.
+            if (path === "/__apps/reingest") {
+              if (!ID.test(input.id ?? "") || !existsSync(appFile(input.id))) return reply(404, { error: "No such app" });
+              reingest(input.id, input).then(
+                (result) => reply(...result),
+                (err) => reply(500, { error: (err as Error).message }),
+              );
+              return;
+            }
             if (path === "/__projects/ask-pull") {
               if (!ID.test(input.id ?? "") || !existsSync(projectFile(input.id))) return reply(404, { error: "No such project" });
               pullAsk(input.id).then(
@@ -443,6 +535,11 @@ export function projectsPlugin(dir: string, appsDir: string): Plugin {
 
       if (!existsSync(appsDir)) return;
       cpSync(appsDir, join(outDir, "apps"), { recursive: true, filter: (src) => basename(src) !== ".DS_Store" });
+      // Where an app was ingested from is a path on the author's machine.
+      for (const id of appIds()) {
+        const { source, ...meta } = readApp(id);
+        if (source) writeFileSync(join(outDir, "apps", id, "app.json"), `${JSON.stringify(meta, null, 2)}\n`);
+      }
       writeFileSync(join(outDir, "apps", "index.json"), `${JSON.stringify(apps(), null, 2)}\n`);
     },
   };

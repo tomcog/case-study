@@ -32,6 +32,7 @@ export interface Screen {
     imageUrl?: string;
     imageUrl2?: string;
     bodyImage?: string;
+    list?: string[];
     overlay?: boolean;
     mono?: boolean;
     videoUrl?: string;
@@ -76,10 +77,6 @@ export declare function themeColors(screen: Screen): {
  * just like an image theme bleeds its picture — instead of showing the plain
  * light/dark theme color in the letterbox margins. */
 export declare function bleedBg(screen: Screen): string;
-export declare const DEFAULT_OVERVIEW_ITEMS: OverviewItem[];
-export declare const DEFAULT_GALLERY: GalleryImage[];
-export declare const DEFAULT_ANNOTATIONS: OverviewItem[];
-export declare const DEFAULT_STAT: Metric;
 export declare const EASE: readonly [0.22, 1, 0.36, 1];
 export declare const STAGE_W = 1280;
 export declare const STAGE_H = 720;

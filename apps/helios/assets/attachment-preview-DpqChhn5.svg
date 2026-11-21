@@ -1,0 +1,15 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Button Icon">
+<g id="Holder" opacity="0">
+</g>
+<path id="Button Icon bg" opacity="0" d="M7 7H13V13H7V7Z" fill="#BCBCE8"/>
+<g id="Icon - Order preview" clip-path="url(#clip0_0_249)">
+<path id="Icon" d="M18 17.0067L14.9645 13.98C15.3122 13.4533 15.5194 12.82 15.5194 12.1467C15.5194 10.3067 14.0217 8.81333 12.1763 8.81333C10.331 8.81333 8.83326 10.3067 8.83326 12.1467C8.83326 13.9867 10.331 15.48 12.1763 15.48C12.8583 15.48 13.4868 15.2733 14.015 14.9267L17.0506 17.9533L17.9933 17.0133L18 17.0067ZM12.1763 14.1467C11.0731 14.1467 10.1705 13.2467 10.1705 12.1467C10.1705 11.0467 11.0731 10.1467 12.1763 10.1467C13.2796 10.1467 14.1822 11.0467 14.1822 12.1467C14.1822 13.2467 13.2796 14.1467 12.1763 14.1467ZM14.0351 7.33333V2H7.74342L2 7.72667V18H12.0293V16.6667H3.33723V8.66667H8.68617V3.33333H12.6979V7.33333H14.0351ZM7.34893 7.33333H4.27998L7.34893 4.27333V7.33333Z" fill="#1613B7"/>
+</g>
+</g>
+<defs>
+<clipPath id="clip0_0_249">
+<rect width="16" height="16" fill="white" transform="translate(2 2)"/>
+</clipPath>
+</defs>
+</svg>

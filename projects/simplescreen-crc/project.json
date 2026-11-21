@@ -25,33 +25,6 @@
           "eyebrow": "Case Study",
           "title": "SimpleScreen CRC",
           "body": "",
-          "items": [
-            {
-              "id": "o1",
-              "label": "The Problem",
-              "body": "What problem did you set out to solve, and for whom?"
-            },
-            {
-              "id": "o2",
-              "label": "The Solution",
-              "body": "What did you design, and what changed as a result?"
-            },
-            {
-              "id": "o3",
-              "label": "My Role",
-              "body": "Research, Interaction Design, Prototyping"
-            },
-            {
-              "id": "o4",
-              "label": "Timeline",
-              "body": "6 months · 2024"
-            },
-            {
-              "id": "o5",
-              "label": "Tools",
-              "body": "Figma, Miro, FigJam, Jira"
-            }
-          ],
           "showLogo": false,
           "imageUrl": "/projects/simplescreen-crc/images/Lab-testing-scaled.jpg",
           "overlay": true,
@@ -116,17 +89,34 @@
       }
     },
     {
-      "id": "step-mvm0x64e-70",
-      "eyebrow": "Eyebrow",
-      "title": "Title",
-      "body": "Body",
+      "id": "step-mvps65wb-355",
       "advance": {
         "on": "manual"
       },
-      "imageUrl": "/projects/simplescreen-crc/images/bck-for-site.png",
       "content": {
-        "kind": "image",
-        "src": ""
+        "kind": "slide",
+        "screen": {
+          "id": "s-1793050938270-678",
+          "layout": "basic2",
+          "basicTheme": "light",
+          "theme": "light",
+          "bg": "#ffffff",
+          "fg": "#1a1a1a",
+          "accent": "#E51A38",
+          "eyebrow": "SimpleScreen CRC",
+          "title": "The lifecycle",
+          "body": "In the simplest terms:",
+          "basicTextSide": "left",
+          "basicImage": "fit",
+          "imageUrl": "/projects/simplescreen-crc/images/SimpleScreen-lifecycle---Stacked.svg",
+          "list": [
+            "Provider orders the test",
+            "Blood is collected and shipped to Freenome",
+            "Blood sample is matched to the patient order",
+            "Assay performed and a result is obtained",
+            "Test result is sent to the provider"
+          ]
+        }
       }
     },
     {
@@ -148,27 +138,26 @@
         "on": "manual"
       },
       "app": "provider-portal",
-      "eyebrow": "SimpleScreen CRC\n\n"
+      "eyebrow": "SimpleScreen CRC\n\n",
+      "title": "Full order details",
+      "body": "This is a description of the panel"
     },
     {
       "id": "s-quote",
       "advance": {
         "on": "manual"
       },
-      "content": {
-        "kind": "slide",
-        "screen": {
-          "id": "s-quote",
-          "layout": "quote",
-          "theme": "light",
-          "bg": "#ffffff",
-          "fg": "#1a1a1a",
-          "accent": "#E51A38",
-          "eyebrow": "From the field",
-          "title": "For the first time, I could place an order without second-guessing a single step.",
-          "body": "Dr. Lena Ortiz, Oncologist"
-        }
-      }
+      "eyebrow": "SimpleScreen CRC",
+      "title": "Starting the day",
+      "body": "For a lab worker...",
+      "app": "trf-queue"
+    },
+    {
+      "id": "step-mvps1xao-886",
+      "advance": {
+        "on": "manual"
+      },
+      "app": "trf-queue"
     },
     {
       "id": "s4",

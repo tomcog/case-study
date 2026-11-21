@@ -25,24 +25,17 @@
 //
 // An ingested app has to hold up two rules, and ingesting one means making
 // them true of it:
-//   1. hash routes, so a starting screen is an assignment rather than a load
+//   1. hash routes, so a step's screen is an assignment rather than a load
 //   2. built with base "./", since it is served from its own folder
 // Anything in it can then be pointed at: picking keeps an element's
 // data-walkthrough="<id>" when it has one, and its path in the page when it
 // doesn't (see driver.ts). A mark is still worth adding to anything a demo
 // leans on, since it survives a re-ingest that moves the element.
 import { stripPauses } from "../ui/renderStyledText.js";
-/** What a new project starts as: one step, running nothing. */
+/** What a new project starts as: one step, running nothing, with no copy —
+ * an unfilled field is left out of the layout rather than shown as a stand-in. */
 export const DEFAULT_WALKTHROUGH = {
-    steps: [
-        {
-            id: "step-1",
-            eyebrow: "Step one",
-            title: "Start here",
-            body: "Pick an app for this step to run, then describe what the reader should do first.",
-            advance: { on: "manual" },
-        },
-    ],
+    steps: [{ id: "step-1", advance: { on: "manual" } }],
 };
 /** What a step shows, defaulted. */
 export const contentOf = (step) => step?.content ?? { kind: "app" };
@@ -59,6 +52,26 @@ export function stepLabel(step) {
     const slide = slideOf(step);
     const plain = (text) => text && stripPauses(text);
     return slide ? { eyebrow: plain(slide.eyebrow), title: plain(slide.title) } : { eyebrow: step?.eyebrow, title: step?.title };
+}
+/** The project's contents: its listed steps, in order, each named by its list
+ * label or else its title. Derived every time, like `appRuns`, so it can't fall
+ * out of step with the steps. A listed step with nothing to call it is left out
+ * rather than drawn as a blank line. */
+export function contentsOf(steps) {
+    return steps.flatMap((step, index) => {
+        if (!step.listed)
+            return [];
+        // One line in a list: a title's line breaks fold into spaces.
+        const label = (step.listLabel || stepLabel(step).title || "").replace(/\s+/g, " ").trim();
+        return label ? [{ index, label }] : [];
+    });
+}
+/** Which entry the reader is in: the last listed step at or before where they
+ * are, or -1 before the first. */
+export function currentEntry(contents, at) {
+    let current = -1;
+    contents.forEach((entry, n) => entry.index <= at && (current = n));
+    return current;
 }
 /** Whether what's on screen can be read into — marks, live geometry, advancing
  * on what the reader does. Only a running app can; an embed is another origin

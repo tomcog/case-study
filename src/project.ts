@@ -40,6 +40,10 @@ export interface IngestedApp {
    * from new use, and deleting is the only thing that breaks a project. */
   hidden?: boolean;
   ingestedAt?: number;
+  /** The built folder it was ingested from, on the author's machine, which
+   * re-ingesting copies from again. Only ProjectBuilder's dev server lists
+   * it; a published pool never carries it. */
+  source?: string;
 }
 
 /** The walkthrough shapes before version 4, kept only so they can be folded

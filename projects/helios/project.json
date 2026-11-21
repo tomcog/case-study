@@ -1,0 +1,105 @@
+{
+  "steps": [
+    {
+      "id": "step-mvrcgw5v-499",
+      "advance": {
+        "on": "manual"
+      },
+      "content": {
+        "kind": "slide",
+        "screen": {
+          "id": "s-1793145401571-394",
+          "layout": "cover",
+          "basicTheme": "image",
+          "theme": "light",
+          "bg": "#ffffff",
+          "fg": "#1a1a1a",
+          "accent": "#E51A38",
+          "eyebrow": "Freenome",
+          "title": "Helios",
+          "body": "A clinical assay quality control tracker to visualize and monitor lab performance, sample throughput, and assay integrity",
+          "linkAction": "next",
+          "linkLabel": "Check out Helios",
+          "imageUrl": "/projects/helios/images/Screenshot-2026-10-27-at-6.33.53-PM.png",
+          "mono": true
+        }
+      }
+    },
+    {
+      "id": "step-1",
+      "eyebrow": "Helios",
+      "title": "Genomics / Daily operations",
+      "body": "This is a fully interactive prototype, so please click around and check it out.",
+      "advance": {
+        "on": "manual",
+        "button": false
+      },
+      "app": "helios",
+      "listed": true,
+      "showContents": true,
+      "callouts": []
+    },
+    {
+      "id": "step-mvrbmido-838",
+      "eyebrow": "Helios",
+      "title": "Genomics / Methyl QC failures",
+      "advance": {
+        "on": "manual",
+        "button": false
+      },
+      "app": "helios",
+      "start": "#/genomics-methyl-qc",
+      "listed": true,
+      "showContents": true
+    },
+    {
+      "id": "step-mvrbstn7-916",
+      "eyebrow": "Helios",
+      "title": "Proteomics / Daily operations",
+      "advance": {
+        "on": "manual",
+        "button": false
+      },
+      "app": "helios",
+      "start": "#/proteomics-daily",
+      "listed": true,
+      "showContents": true
+    },
+    {
+      "id": "step-mvrn2h5q-401",
+      "app": "helios",
+      "eyebrow": "Helios",
+      "title": "Proteomics / Bead count failure",
+      "advance": {
+        "on": "manual",
+        "button": false
+      },
+      "start": "#/proteomics-bead-count",
+      "listed": true,
+      "showContents": true
+    },
+    {
+      "id": "step-mvrn356z-111",
+      "app": "helios",
+      "eyebrow": "Helios",
+      "title": "Proteomics / Longitudinal monitoring",
+      "advance": {
+        "on": "manual",
+        "button": false
+      },
+      "start": "#/proteomics-longitudinal",
+      "listed": true,
+      "showContents": true
+    }
+  ],
+  "schemaVersion": 6,
+  "title": "Helios",
+  "draft": false,
+  "preview": {
+    "eyebrow": "Freenome",
+    "title": "Helios",
+    "body": "A clinical assay quality control tracker to visualize and monitor lab performance, sample throughput, and assay integrity",
+    "image": "/projects/helios/images/Screenshot-2026-10-27-at-6.33.53-PM.png"
+  },
+  "contentsTitle": "Helios Sections"
+}

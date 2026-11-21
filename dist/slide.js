@@ -5,9 +5,9 @@ import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-run
 // a new one starts as, the one way of putting it on screen, and the one set
 // of controls it is edited with, so no two of them can drift apart.
 import { RED, DEFAULT_ACCENT } from "./theme.js";
-import { ACCENT, THEMES, DEFAULT_OVERVIEW_ITEMS, DEFAULT_GALLERY, DEFAULT_ANNOTATIONS, DEFAULT_STAT, screenTheme, bleedBg, backdropFor, Stage, ScreenView, } from "./core.js";
-import { Segment, SegmentedControl } from "@tomcoggia/ui";
-import { MetricsEditor, ImageField, OverviewEditor, GalleryEditor, StatEditor, Field, ColorInput, CopyInput, inputStyle, } from "./editors.js";
+import { ACCENT, THEMES, screenTheme, bleedBg, backdropFor, Stage, ScreenView, } from "./core.js";
+import { Checkbox, Segment, SegmentedControl } from "@tomcoggia/ui";
+import { MetricsEditor, ImageField, OverviewEditor, GalleryEditor, StatEditor, Field, ColorInput, ListEditor, CopyInput, inputStyle, } from "./editors.js";
 const LAYOUTS = [
     { value: "cover", label: "Title Card" },
     { value: "overview", label: "Intro" },
@@ -20,20 +20,6 @@ const LAYOUTS = [
     { value: "bento", label: "Bento" },
     { value: "video", label: "Video" },
 ];
-// Patch applied when switching layouts — seeds a layout's list content on first
-// use so the canvas shows a fully-composed example instead of an empty shell.
-function layoutPatch(layout, screen) {
-    const patch = { layout };
-    if (layout === "overview" && !screen.items)
-        patch.items = DEFAULT_OVERVIEW_ITEMS;
-    if (layout === "showcase" && !screen.items)
-        patch.items = DEFAULT_ANNOTATIONS;
-    if (layout === "gallery" && !screen.images)
-        patch.images = DEFAULT_GALLERY;
-    if (layout === "bento" && !screen.metrics?.length)
-        patch.metrics = [DEFAULT_STAT];
-    return patch;
-}
 export function newScreen() {
     return {
         id: `s-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -43,9 +29,6 @@ export function newScreen() {
         bg: THEMES.light.bg,
         fg: THEMES.light.fg,
         accent: DEFAULT_ACCENT,
-        eyebrow: "Section",
-        title: "New screen",
-        body: "Describe this step of the story.",
     };
 }
 /** A slide on screen: the stage scaled to its parent, the bleed and backdrop
@@ -64,11 +47,11 @@ export function SlideView({ screen, play = false, reduced = false, logoSrc, onAn
  * Lifted out of the builder so a step displaying a slide edits it with exactly
  * the same controls, rather than a second set that drifts. */
 export function SlideFields({ screen, update, logoSrc }) {
-    return (_jsxs(_Fragment, { children: [_jsx(Field, { label: "Layout", collapsible: true, children: _jsx("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }, children: LAYOUTS.map((l) => (_jsx("button", { onClick: () => update(layoutPatch(l.value, screen)), style: {
+    return (_jsxs(_Fragment, { children: [_jsx(Field, { label: "Layout", collapsible: true, children: _jsx("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }, children: LAYOUTS.map((l) => (_jsx("button", { onClick: () => update({ layout: l.value }), style: {
                             fontSize: 12, padding: "8px 6px", borderRadius: 6, cursor: "pointer",
                             border: screen.layout === l.value ? `1.5px solid ${ACCENT}` : "1px solid #dcd8d2",
                             background: screen.layout === l.value ? "#fff5f6" : "#fff", color: "#1a1a1a",
-                        }, children: l.label }, l.value))) }) }), _jsx(Field, { label: "Eyebrow", children: _jsx(CopyInput, { value: screen.eyebrow ?? "", onChange: (e) => update({ eyebrow: e.target.value }), rows: 1, style: { ...inputStyle, resize: "vertical" } }) }), _jsx(Field, { label: "Title", children: _jsx(CopyInput, { value: screen.title ?? "", onChange: (e) => update({ title: e.target.value }), rows: 2, style: { ...inputStyle, resize: "vertical" } }) }), !["metrics", "gallery", "showcase"].includes(screen.layout) && (_jsx(Field, { label: screen.layout === "bento" ? "Body (text cell)" : "Body", children: _jsx(CopyInput, { value: screen.body ?? "", onChange: (e) => update({ body: e.target.value }), rows: 4, style: { ...inputStyle, resize: "vertical" } }) })), ["cover", "overview", "basic1", "basic2"].includes(screen.layout) && (_jsx(ImageField, { label: "Image under the body", value: screen.bodyImage ?? "", onChange: (v) => update({ bodyImage: v || undefined }) })), screen.layout === "video" && (_jsx(Field, { label: "Video URL", children: _jsx("input", { value: screen.videoUrl ?? "", onChange: (e) => update({ videoUrl: e.target.value }), placeholder: "YouTube / Vimeo / .mp4 URL", style: inputStyle }) })), screen.layout === "metrics" && (_jsx(MetricsEditor, { metrics: screen.metrics ?? [], onChange: (metrics) => update({ metrics }) })), screen.layout === "overview" && (_jsx(OverviewEditor, { label: "Data points", items: screen.items ?? [], onChange: (items) => update({ items }) })), screen.layout === "gallery" && (_jsx(GalleryEditor, { images: screen.images ?? [], onChange: (images) => update({ images }) })), screen.layout === "showcase" && (_jsxs(_Fragment, { children: [_jsx(ImageField, { value: screen.imageUrl ?? "", onChange: (v) => update({ imageUrl: v }) }), _jsx(OverviewEditor, { label: "Annotations", items: screen.items ?? [], onChange: (items) => update({ items }) })] })), screen.layout === "bento" && (_jsxs(_Fragment, { children: [_jsx(ImageField, { label: "Large image", value: screen.imageUrl ?? "", onChange: (v) => update({ imageUrl: v }) }), _jsx(ImageField, { label: "Small image", value: screen.imageUrl2 ?? "", onChange: (v) => update({ imageUrl2: v }) }), _jsx(StatEditor, { stat: screen.metrics?.[0], onChange: (stat) => update({ metrics: [stat] }) })] })), (screen.layout === "basic1" || screen.layout === "basic2" || screen.layout === "cover" || screen.layout === "overview" || screen.layout === "quote") && (_jsxs(_Fragment, { children: [_jsx(Field, { label: "Theme", children: _jsx("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }, children: (screen.layout === "basic2"
+                        }, children: l.label }, l.value))) }) }), _jsx(Field, { label: "Eyebrow", children: _jsx(CopyInput, { value: screen.eyebrow ?? "", onChange: (e) => update({ eyebrow: e.target.value }), placeholder: "(none)", rows: 1, style: { ...inputStyle, resize: "vertical" } }) }), _jsx(Field, { label: "Title", children: _jsx(CopyInput, { value: screen.title ?? "", onChange: (e) => update({ title: e.target.value }), placeholder: "(none)", rows: 2, style: { ...inputStyle, resize: "vertical" } }) }), !["metrics", "gallery", "showcase"].includes(screen.layout) && (_jsx(Field, { label: screen.layout === "bento" ? "Body (text cell)" : "Body", children: _jsx(CopyInput, { value: screen.body ?? "", onChange: (e) => update({ body: e.target.value }), placeholder: "(none)", rows: 4, style: { ...inputStyle, resize: "vertical" } }) })), ["cover", "overview", "basic1", "basic2"].includes(screen.layout) && (_jsxs(_Fragment, { children: [_jsx(Field, { label: "", children: _jsx(Checkbox, { size: "md", label: "List", checked: screen.list !== undefined, onChange: (e) => update({ list: e.target.checked ? [""] : undefined }) }) }), screen.list && _jsx(ListEditor, { items: screen.list, onChange: (list) => update({ list }) }), _jsx(Field, { label: "", children: _jsx(Checkbox, { size: "md", label: "Image", checked: screen.bodyImage !== undefined, onChange: (e) => update({ bodyImage: e.target.checked ? "" : undefined }) }) }), screen.bodyImage !== undefined && _jsx(ImageField, { label: "", value: screen.bodyImage, onChange: (v) => update({ bodyImage: v }) })] })), screen.layout === "video" && (_jsx(Field, { label: "Video URL", children: _jsx("input", { value: screen.videoUrl ?? "", onChange: (e) => update({ videoUrl: e.target.value }), placeholder: "YouTube / Vimeo / .mp4 URL", style: inputStyle }) })), screen.layout === "metrics" && (_jsx(MetricsEditor, { metrics: screen.metrics ?? [], onChange: (metrics) => update({ metrics }) })), screen.layout === "overview" && (_jsx(OverviewEditor, { label: "Data points", items: screen.items ?? [], onChange: (items) => update({ items }) })), screen.layout === "gallery" && (_jsx(GalleryEditor, { images: screen.images ?? [], onChange: (images) => update({ images }) })), screen.layout === "showcase" && (_jsxs(_Fragment, { children: [_jsx(ImageField, { value: screen.imageUrl ?? "", onChange: (v) => update({ imageUrl: v }) }), _jsx(OverviewEditor, { label: "Annotations", items: screen.items ?? [], onChange: (items) => update({ items }) })] })), screen.layout === "bento" && (_jsxs(_Fragment, { children: [_jsx(ImageField, { label: "Large image", value: screen.imageUrl ?? "", onChange: (v) => update({ imageUrl: v }) }), _jsx(ImageField, { label: "Small image", value: screen.imageUrl2 ?? "", onChange: (v) => update({ imageUrl2: v }) }), _jsx(StatEditor, { stat: screen.metrics?.[0], onChange: (stat) => update({ metrics: [stat] }) })] })), (screen.layout === "basic1" || screen.layout === "basic2" || screen.layout === "cover" || screen.layout === "overview" || screen.layout === "quote") && (_jsxs(_Fragment, { children: [_jsx(Field, { label: "Theme", children: _jsx("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }, children: (screen.layout === "basic2"
                                 ? [["light", "Light", "#ffffff"], ["dark", "Dark", "#000000"], ["red", "Red", RED]]
                                 : [["light", "Light", "#ffffff"], ["dark", "Dark", "#000000"], ["red", "Red", RED], ["image", "Image", "linear-gradient(135deg,#9a9a9a,#d8d8d8)"]]).map(([val, label, swatch]) => {
                                 const active = (screen.basicTheme ?? "light") === val;

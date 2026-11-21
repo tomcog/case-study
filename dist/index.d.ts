@@ -25,6 +25,6 @@ export { AskRail } from "./ask/AskRail.js";
 export { AskChat, ASK_SUGGESTIONS } from "./ask/AskChat.js";
 export type { AskChatProps } from "./ask/AskChat.js";
 export { AskMark } from "./ask/AskMark.js";
-export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, isLive, slideOf, stepLabel, stepMarks } from "./walkthrough/types.js";
+export { DEFAULT_WALKTHROUGH, appRuns, bootsApp, contentOf, contentsOf, currentEntry, isLive, slideOf, stepLabel, stepMarks } from "./walkthrough/types.js";
 export type { Driver, MarkRect, MarkRects, PickHit } from "./walkthrough/driver.js";
-export type { WalkthroughContent as ProjectFile, WalkthroughStep as Step, StepContent, StepAction, AppRun, Area, StepAdvance, Spotlight, Callout, } from "./walkthrough/types.js";
+export type { WalkthroughContent as ProjectFile, WalkthroughStep as Step, StepContent, StepAction, AppRun, ContentsEntry, Area, StepAdvance, Spotlight, Callout, } from "./walkthrough/types.js";
