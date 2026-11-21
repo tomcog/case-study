@@ -102,7 +102,7 @@
   "preview": {
     "eyebrow": "Analytics",
     "title": "Helios",
-    "body": "A clinical assay quality control tracker to visualize and monitor lab performance, sample throughput, and assay integrity",
+    "body": "A clinical assay quality control tracker to monitor lab performance, sample throughput, and assay integrity",
     "image": "/projects/helios/images/Screenshot-2026-10-27-at-6.33.53-PM.png"
   },
   "contentsTitle": "Helios Sections"
